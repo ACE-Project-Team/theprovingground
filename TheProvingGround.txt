@@ -1,15 +1,8 @@
-"BaiknorII"
+"theprovingground"
 {
-	"base"		"sandbox"
-	"title"		"The Proving Ground"
-	"maps"		"^gm_"
+	"base"			"sandbox"
+	"title"			"The Proving Ground"
+	"author"		"RDC"
+	"maps"			"^gm_"
 	"menusystem"	"1"
-	"workshopid"	"15895"
-
-	"settings"
-	{
-		
-
-	}
-
 }

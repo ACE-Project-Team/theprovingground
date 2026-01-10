@@ -1,232 +1,132 @@
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
-
 include("shared.lua")
 
-
 function ENT:Initialize()
-
-	self:SetModel( "models/props_gameplay/cap_point_base.mdl" )
-	self:SetMoveType(MOVETYPE_VPHYSICS);
-	self:PhysicsInit(SOLID_VPHYSICS);
-	self:SetUseType(SIMPLE_USE);
-	self:SetSolid(SOLID_VPHYSICS);
-	local phys = self:GetPhysicsObject()
-	phys:SetMass(500000)
-
-	self.phys = phys
-	self.LastTime = CurTime()
---	if ( IsValid( phys ) ) then phys:Wake() end
-	self.TimerVar = 0 --Variable that counts up, the entity does the major part of its thinking every 5 iterations
-
-	self.pos = self:GetPos()
-
-	self.CapInProgress = 0 --Used for scoreboard to display if a point is being captured
-	self.capProgress = 0 --Variable used to track cap ownership
-	self.capAt = 10 --Number point is considered captured at in seconds for a neutral point
-	self.capMax = 15 --Max time to capture a point that is fully captured
-	self.CapOwnership = 0 --who owns the point, 1 for freedom, -1 for duty, 0 for neutral
-
-	self.CapLastState = 0 --Used for playing sounds, tells the last capture state of the point
-	self.IsBeingCaptured = 0 --Used for playing the cap alarm noise
-
-	self.PointID = -1 --Adjusted by the spawn command, this adjusts the output signal.
-	self.PointName = self.PointName or "Unnamed Point"
-
-	local physObj = self:GetPhysicsObject()
-
-	if physObj:IsValid( ) then physObj:EnableMotion( false ) end
-
-	self:SetNotSolid( true )
-
+    self:SetModel("models/props_gameplay/cap_point_base.mdl")
+    self:SetMoveType(MOVETYPE_NONE)
+    self:SetSolid(SOLID_NONE)
+    
+    local phys = self:GetPhysicsObject()
+    if IsValid(phys) then
+        phys:EnableMotion(false)
+    end
+    
+    self.PointID = 0
+    self.PointName = "Unnamed Point"
+    
+    self.CapProgress = 0
+    self.CapOwnership = 0  -- -1 = Red, 0 = Neutral, 1 = Green
+    self.LastCapState = 0
+    
+    self.CapTimeNeutral = TPG.Config.capTimeNeutral
+    self.CapTimeMax = TPG.Config.capTimeMax
+    
+    self.ThinkTimer = 0
 end
-
 
 function ENT:Think()
-	self.TimerVar = self.TimerVar + 1
-
-	if self.TimerVar >= 5 then
-	self.TimerVar = 0
-
-	local curtime = CurTime()
-	local DelTime = curtime-self.LastTime
-	self.LastTime = CurTime()
-
-	local FreedomOnPoint = 0
-	local DutyOnPoint = 0
-
-	--Player in range check
-	for i, v in ipairs( player.GetAll() ) do
-		--self.pos
-		local pos = v:GetPos()
-		local dist = math.floor(pos:Distance(self.pos)/39.37) --Distance to point in meters
-
-			if dist < 5 then
-		local team = v:Team()
---		print( "PlayerName: "..v:Nick() )
---		print( "Distance: "..dist.."m" )
---		print( "Team: "..team )
-
-			if v:Alive() and not v:InVehicle() then
-
-					if team == 1 then
-						FreedomOnPoint = FreedomOnPoint + 1
-					elseif team == 2 then
-						DutyOnPoint = DutyOnPoint	 + 1			
-					end
-					
-			end
-
-
-			end
-
-
-
-	end
-
-	local balance = math.Clamp(FreedomOnPoint - DutyOnPoint,-3,3) --3 capping at once max still allow everyone to override.
-	
-	if balance != 0 then
-	
-	self.capProgress = self.capProgress + balance
-
-	if self.capProgress > self.capAt then --Freedom Cap
-		
-		self.capProgress = math.min(self.capProgress,self.capMax)
-
-	
-		if balance < -1 then --1 or more players more than current cap holder.
-		self.CapOwnership = 0	
-		else
-		self.CapOwnership = 1	
-		end
-
-
-	elseif self.capProgress < -self.capAt then --Duty Cap
-	
-		self.capProgress = math.max(self.capProgress,-self.capMax)
-
-
-		if balance > 1 then --2 or more players more than the current cap holder.
-		self.CapOwnership = 0	
-		else
-		self.CapOwnership = -1	
-		end
-
-
-
-	else --Neutralized
-
-		self.CapOwnership = 0
-
-
-		
-	end
-
-	else --If nobody is on the point
-
-		if self.CapOwnership == 1 then
-		self.capProgress = math.min(self.capProgress+0.5,self.capMax)
-		elseif self.CapOwnership == -1 then
-		self.capProgress = math.Max(self.capProgress-0.5,-self.capMax) 
-		else
-		self.capProgress = self.capProgress * 0.5
-		end
-
-	end
-
-
-
-	--Fin
-
-	if self.CapOwnership == 1 then
-
-	self:SetColor( Color(0, 255*self.capProgress/self.capMax, 0, 255) )
-
-	elseif self.CapOwnership == -1 then
-
-	self:SetColor( Color(255*math.abs(self.capProgress/self.capMax), 0, 0, 255) )
-
-	else
-
-		self:SetColor( Color(255*(1-math.abs(self.capProgress/self.capMax)), 255*(1-math.abs(self.capProgress/self.capMax)), 0, 255) )
-
-	end
-
-	--Sound bits
-	local testval = math.ceil(math.abs(balance/3))
-
-	if self.IsBeingCaptured ~= testval and testval > 0 then
-		self:EmitSound(Sound("ambient/alarms/doomsday_lift_alarm.wav"), 100, 100, 1, CHAN_VOICE )	
-	end
-
-	self.IsBeingCaptured = testval
-
-	testval = self.CapOwnership
-
-	if self.CapOwnership == 1 then
-	capOwner = "The Green Terror"
-	OwnerColor = Color( 0, 255, 0 )
-	elseif self.CapOwnership == -1 then
-	capOwner = "The Red Menace"
-	OwnerColor = Color( 255, 0, 0 )
-	end
-
-	if self.CapLastState ~= testval then
-		if testval != 0 then
-			self:EmitSound(Sound("ambient/alarms/warningbell1.wav"), 100, 100, 1, CHAN_VOICE ) --Local capsound
-
-			chatMessageGlobal( "Point ["..self.PointName.."] Has been captured by "..capOwner.."!" , OwnerColor )
-
-				local allplayers = player.GetAll()
-
-					if self.CapOwnership == 1 then
-						capTeam = 1
-					elseif self.CapOwnership == -1 then
-						capTeam = 2
-					end
-
-				for i, ply in ipairs( player.GetAll() ) do --Play an announcer capsound for every player
-			
-				if ply:Team() == capTeam then --Plays local sound for each player
-					ply:SendLua( "LocalPlayer():EmitSound( 'Announcer.Success' )" )
-
-					local dist = (ply:GetPos():Distance( self:GetPos() ))
-
-					--Capture Tracker
-					if dist < 600 then
-						GameVars.PlayerScoreTrackers[ply] = GameVars.PlayerScoreTrackers[ply] or {} --Create if table does not exist
-						GameVars.PlayerScoreTrackers[ply][4] = (GameVars.PlayerScoreTrackers[ply][4] or 0) + 1
-					end
-
-				else
-					ply:SendLua( "LocalPlayer():EmitSound( 'Announcer.Failure' )" )
-
-				end
-			
-			end
-
-		else
-			self:EmitSound(Sound("ambient/energy/whiteflash.wav"), 100, 100, 1, CHAN_VOICE )	
-
-			chatMessageGlobal( "Point ["..self.PointName.."] Has been neutralized!" , Color( 0, 0, 0 ) )
-
-		end
-	end
-
-	self.CapLastState = self.CapOwnership
-
-	--print(self.capProgress)
-
-
-	end
-
-
+    self.ThinkTimer = self.ThinkTimer + 1
+    if self.ThinkTimer < 5 then return end
+    self.ThinkTimer = 0
+    
+    local greenOnPoint = 0
+    local redOnPoint = 0
+    local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters)
+    
+    -- Count players on point
+    for _, ply in ipairs(player.GetAll()) do
+        if not ply:Alive() or ply:InVehicle() then continue end
+        
+        local dist = ply:GetPos():Distance(self:GetPos())
+        if dist > capRadius then continue end
+        
+        local teamId = ply:Team()
+        if teamId == TEAM_GREEN then
+            greenOnPoint = greenOnPoint + 1
+        elseif teamId == TEAM_RED then
+            redOnPoint = redOnPoint + 1
+        end
+    end
+    
+    -- Calculate capture balance
+    local balance = math.Clamp(greenOnPoint - redOnPoint, -TPG.Config.capMaxPlayers, TPG.Config.capMaxPlayers)
+    
+    if balance ~= 0 then
+        self.CapProgress = self.CapProgress + balance
+        
+        if self.CapProgress > self.CapTimeNeutral then
+            self.CapProgress = math.min(self.CapProgress, self.CapTimeMax)
+            self.CapOwnership = (balance < -1) and 0 or 1
+        elseif self.CapProgress < -self.CapTimeNeutral then
+            self.CapProgress = math.max(self.CapProgress, -self.CapTimeMax)
+            self.CapOwnership = (balance > 1) and 0 or -1
+        else
+            self.CapOwnership = 0
+        end
+    else
+        -- Decay towards current owner
+        if self.CapOwnership == 1 then
+            self.CapProgress = math.min(self.CapProgress + 0.5, self.CapTimeMax)
+        elseif self.CapOwnership == -1 then
+            self.CapProgress = math.max(self.CapProgress - 0.5, -self.CapTimeMax)
+        else
+            self.CapProgress = self.CapProgress * 0.5
+        end
+    end
+    
+    -- Update color
+    self:UpdateColor()
+    
+    -- Check for capture state change
+    if self.CapOwnership ~= self.LastCapState then
+        self:OnCaptureStateChanged()
+        self.LastCapState = self.CapOwnership
+    end
+    
+    self:NextThink(CurTime())
+    return true
 end
 
-
-function ENT:OnRemove()
+function ENT:UpdateColor()
+    local ratio = math.abs(self.CapProgress / self.CapTimeMax)
+    
+    if self.CapOwnership == 1 then
+        self:SetColor(Color(0, 255 * ratio, 0, 255))
+    elseif self.CapOwnership == -1 then
+        self:SetColor(Color(255 * ratio, 0, 0, 255))
+    else
+        local neutralRatio = 1 - math.abs(self.CapProgress / self.CapTimeMax)
+        self:SetColor(Color(255 * neutralRatio, 255 * neutralRatio, 0, 255))
+    end
 end
 
-
-
+function ENT:OnCaptureStateChanged()
+    if self.CapOwnership == 0 then
+        -- Neutralized
+        self:EmitSound("ambient/energy/whiteflash.wav", 100, 100, 1)
+        TPG.Util.ChatBroadcast("[" .. self.PointName .. "] has been neutralized!", Color(255, 255, 0))
+    else
+        -- Captured
+        self:EmitSound("ambient/alarms/warningbell1.wav", 100, 100, 1)
+        
+        local capTeam = (self.CapOwnership == 1) and TEAM_GREEN or TEAM_RED
+        local teamData = TPG.GetTeamData(capTeam)
+        
+        TPG.Util.ChatBroadcast("[" .. self.PointName .. "] captured by " .. teamData.name .. "!", teamData.color)
+        
+        -- Play sounds and track captures
+        for _, ply in ipairs(player.GetAll()) do
+            if ply:Team() == capTeam then
+                TPG.Util.PlaySound(ply, "Announcer.Success")
+            else
+                TPG.Util.PlaySound(ply, "Announcer.Failure")
+            end
+        end
+        
+        -- Track capture for commendations
+        if TPG.Objectives and TPG.Objectives.OnCapture then
+            TPG.Objectives.OnCapture(self, capTeam)
+        end
+    end
+end
