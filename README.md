@@ -1,10 +1,7 @@
-# Garrysmod_Baiknor2
-A recreation of the Baiknor combined arms gamemode
+# The Proving Ground
+A gamemode heavily inspired by the Baiknor combined arms gamemode, but for ACE
 
 To install:
-Add SVN or file to server or client gamemodes folder not addons 
-folder located at
 Garrysmod/garrysmod/gamemodes
 
-use this link in your svn:
-"https://github.com/RedDeadlyCreeper/TheProvingGround/trunk"
+WIP
