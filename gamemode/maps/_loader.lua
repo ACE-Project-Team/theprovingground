@@ -881,7 +881,12 @@ function TPG.Maps.Load(mapName)
     -- Check if we have an inline config for this map
     if TPG.Maps.Configs[mapName] then
         TPG.Maps.Current = table.Merge(table.Copy(TPG.Maps.Default), TPG.Maps.Configs[mapName])
+        
+        -- Debug: verify limits loaded correctly
+        local limits = TPG.Maps.Current.limits
         print("[TPG] Loaded map config: " .. mapName)
+        print("[TPG] Limits - Props: " .. limits.props .. ", Weight: " .. limits.weight .. "T, Points: " .. limits.points)
+        
         return TPG.Maps.Current
     end
     
