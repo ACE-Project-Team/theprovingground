@@ -139,10 +139,31 @@ hook.Add("HUDPaint", "TPG_HUD", function()
     UpdateObjectiveCache()
     
     local pointCount = #objectiveCache
-    for i, obj in ipairs(objectiveCache) do
-        if IsValid(obj) then
-            -- Mini indicator at top
-            draw.RoundedBox(3, sw / 2 - 30 * pointCount / 2 + 2 + ((i - 1) * 30), 115, 20, 20, obj:GetColor())
+    if pointCount > 0 then
+        local startX = sw / 2 - (pointCount * 30) / 2
+        
+        for i, obj in ipairs(objectiveCache) do
+            if IsValid(obj) then
+                local pointColor = obj:GetColor()
+                local pointName = obj:GetNWString("PointName", "?")
+                local initial = string.upper(string.sub(pointName, 1, 1))
+                
+                local boxX = startX + ((i - 1) * 30) + 5
+                local boxY = 115
+                
+                -- Calculate contrast color for text
+                local luminance = (0.299 * pointColor.r + 0.587 * pointColor.g + 0.114 * pointColor.b) / 255
+                local textColor = luminance > 0.5 and Color(0, 0, 0) or Color(255, 255, 255)
+                
+                -- Draw outline
+                draw.RoundedBox(4, boxX - 1, boxY - 1, 22, 22, Color(0, 0, 0, 200))
+                
+                -- Draw colored box
+                draw.RoundedBox(3, boxX, boxY, 20, 20, pointColor)
+                
+                -- Draw initial letter with proper contrast
+                draw.SimpleText(initial, "DermaDefaultBold", boxX + 10, boxY + 10, textColor, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            end
         end
     end
     

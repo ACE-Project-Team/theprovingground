@@ -12,6 +12,7 @@ function ENT:Initialize()
         phys:EnableMotion(false)
     end
     
+    -- These will be set after spawn by sv_objectives.lua
     self.PointID = 0
     self.PointName = "Unnamed Point"
     
@@ -19,10 +20,16 @@ function ENT:Initialize()
     self.CapOwnership = 0  -- -1 = Red, 0 = Neutral, 1 = Green
     self.LastCapState = 0
     
-    self.CapTimeNeutral = TPG.Config.capTimeNeutral
-    self.CapTimeMax = TPG.Config.capTimeMax
+    self.CapTimeNeutral = TPG.Config.capTimeNeutral or 10
+    self.CapTimeMax = TPG.Config.capTimeMax or 15
     
     self.ThinkTimer = 0
+end
+
+-- Call this after setting PointID and PointName
+function ENT:SetupNetworking()
+    self:SetNWInt("PointID", self.PointID)
+    self:SetNWString("PointName", self.PointName)
 end
 
 function ENT:Think()
@@ -32,7 +39,7 @@ function ENT:Think()
     
     local greenOnPoint = 0
     local redOnPoint = 0
-    local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters)
+    local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters or 5)
     
     -- Count players on point
     for _, ply in ipairs(player.GetAll()) do
@@ -50,7 +57,8 @@ function ENT:Think()
     end
     
     -- Calculate capture balance
-    local balance = math.Clamp(greenOnPoint - redOnPoint, -TPG.Config.capMaxPlayers, TPG.Config.capMaxPlayers)
+    local maxPlayers = TPG.Config.capMaxPlayers or 3
+    local balance = math.Clamp(greenOnPoint - redOnPoint, -maxPlayers, maxPlayers)
     
     if balance ~= 0 then
         self.CapProgress = self.CapProgress + balance
@@ -75,8 +83,10 @@ function ENT:Think()
         end
     end
     
-    -- Update color
+    -- Update color and network state
     self:UpdateColor()
+    self:SetNWInt("CapOwnership", self.CapOwnership)
+    self:SetNWFloat("CapProgress", self.CapProgress)
     
     -- Check for capture state change
     if self.CapOwnership ~= self.LastCapState then

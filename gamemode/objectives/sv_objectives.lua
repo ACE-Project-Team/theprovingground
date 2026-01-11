@@ -25,10 +25,17 @@ function TPG.Objectives.SpawnAll(objectiveList)
         if IsValid(ent) then
             ent:SetPos(objData.pos)
             ent:Spawn()
+            
+            -- Set point data
             ent.PointID = i
             ent.PointName = objData.name or ("Point " .. i)
             
+            -- Network to clients
+            ent:SetupNetworking()
+            
             TPG.State.objectives[i] = ent
+            
+            print("[TPG] Spawned objective " .. i .. ": " .. ent.PointName)
         end
     end
     
@@ -42,9 +49,8 @@ function TPG.Objectives.SpawnSafezones()
         local greenMarker = ents.Create("tpg_safezonemarker")
         if IsValid(greenMarker) then
             greenMarker:SetPos(greenSpawn)
-            greenMarker.Scale = (TPG.Config.safezoneRadius or 750) * 2
             greenMarker:Spawn()
-            greenMarker:SetColor(TPG.GetTeamData(TEAM_GREEN).color)
+            greenMarker:SetColor(Color(0, 255, 0, 100))
         end
     end
     
@@ -54,9 +60,8 @@ function TPG.Objectives.SpawnSafezones()
         local redMarker = ents.Create("tpg_safezonemarker")
         if IsValid(redMarker) then
             redMarker:SetPos(redSpawn)
-            redMarker.Scale = (TPG.Config.safezoneRadius or 750) * 2
             redMarker:Spawn()
-            redMarker:SetColor(TPG.GetTeamData(TEAM_RED).color)
+            redMarker:SetColor(Color(255, 0, 0, 100))
         end
     end
 end

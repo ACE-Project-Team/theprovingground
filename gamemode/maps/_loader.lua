@@ -12,8 +12,8 @@ TPG.Maps.Default = {
     },
     limits = {
         weight = 200,
-        props = 300,
-        points = 100000,
+        props = 500,
+        points = 30000,
     },
     safezoneRadius = 750,
     winsToMapVote = 2,
@@ -78,7 +78,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 100,
             props = 300,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
@@ -141,7 +141,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 120,
             props = 300,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
@@ -236,7 +236,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 120,
             props = 300,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
@@ -527,7 +527,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 120,
             props = 300,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
@@ -558,7 +558,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 120,
             props = 300,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
@@ -654,7 +654,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 120,
             props = 250,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
@@ -718,7 +718,7 @@ TPG.Maps.Configs = {
         limits = {
             weight = 120,
             props = 300,
-            points = 5000,
+            points = 25000,
         },
         safezoneRadius = 750,
         
