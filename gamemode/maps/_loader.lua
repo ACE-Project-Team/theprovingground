@@ -1,5 +1,8 @@
 --[[
     Map Configuration Loader
+    
+    Balance formula: 150 ACE points per ton of weight limit
+    Props: 1.5x multiplier applied to all maps
 ]]
 
 TPG.Maps = TPG.Maps or {}
@@ -12,8 +15,8 @@ TPG.Maps.Default = {
     },
     limits = {
         weight = 200,
-        props = 500,
-        points = 30000,
+        props = 750,      -- Was 500, now 1.5x
+        points = 30000,   -- 200t × 150 = 30000
     },
     safezoneRadius = 750,
     winsToMapVote = 2,
@@ -36,7 +39,7 @@ TPG.Maps.Default = {
     },
 }
 
--- Inline map configurations (no separate files needed)
+-- Inline map configurations
 TPG.Maps.Configs = {
     ["gm_construct"] = {
         spawns = {
@@ -45,8 +48,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 200,
-            points = 100000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         winsToMapVote = 5,
@@ -77,8 +80,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 100,
-            props = 300,
-            points = 25000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 15000,   -- 100t × 150
         },
         safezoneRadius = 750,
         
@@ -109,8 +112,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 60,
-            props = 150,
-            points = 2500,
+            props = 225,      -- Was 150, now 1.5x
+            points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
         
@@ -140,8 +143,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 300,
-            points = 25000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         
@@ -171,8 +174,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 40,
-            props = 150,
-            points = 2000,
+            props = 225,      -- Was 150, now 1.5x
+            points = 6000,    -- 40t × 150
         },
         safezoneRadius = 750,
         
@@ -203,8 +206,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 40,
-            props = 150,
-            points = 2000,
+            props = 225,      -- Was 150, now 1.5x
+            points = 6000,    -- 40t × 150
         },
         safezoneRadius = 750,
         
@@ -235,8 +238,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 300,
-            points = 25000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         
@@ -267,8 +270,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 80,
-            props = 250,
-            points = 4000,
+            props = 375,      -- Was 250, now 1.5x
+            points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
         
@@ -299,8 +302,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 160,
-            props = 300,
-            points = 6000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 24000,   -- 160t × 150
         },
         safezoneRadius = 750,
         
@@ -332,8 +335,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 80,
-            props = 250,
-            points = 4000,
+            props = 375,      -- Was 250, now 1.5x
+            points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
         
@@ -364,8 +367,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 100,
-            props = 250,
-            points = 4500,
+            props = 375,      -- Was 250, now 1.5x
+            points = 15000,   -- 100t × 150
         },
         safezoneRadius = 750,
         
@@ -398,8 +401,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 60,
-            props = 200,
-            points = 3000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
         
@@ -430,8 +433,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 80,
-            props = 250,
-            points = 4000,
+            props = 375,      -- Was 250, now 1.5x
+            points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
         
@@ -462,8 +465,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 60,
-            props = 200,
-            points = 3000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
         
@@ -494,8 +497,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 80,
-            props = 200,
-            points = 4000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
         
@@ -526,8 +529,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 300,
-            points = 25000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         
@@ -557,8 +560,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 300,
-            points = 25000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         
@@ -589,8 +592,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 60,
-            props = 200,
-            points = 3000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
         
@@ -621,8 +624,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 160,
-            props = 300,
-            points = 6000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 24000,   -- 160t × 150
         },
         safezoneRadius = 750,
         
@@ -653,8 +656,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 250,
-            points = 25000,
+            props = 375,      -- Was 250, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         
@@ -685,8 +688,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 100,
-            props = 300,
-            points = 4500,
+            props = 450,      -- Was 300, now 1.5x
+            points = 15000,   -- 100t × 150
         },
         safezoneRadius = 750,
         
@@ -717,8 +720,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 120,
-            props = 300,
-            points = 25000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
         
@@ -749,8 +752,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 80,
-            props = 200,
-            points = 4000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
         
@@ -781,8 +784,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 60,
-            props = 200,
-            points = 3000,
+            props = 300,      -- Was 200, now 1.5x
+            points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
         
@@ -813,8 +816,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 80,
-            props = 300,
-            points = 4000,
+            props = 450,      -- Was 300, now 1.5x
+            points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
         
@@ -845,8 +848,8 @@ TPG.Maps.Configs = {
         },
         limits = {
             weight = 40,
-            props = 150,
-            points = 2000,
+            props = 225,      -- Was 150, now 1.5x
+            points = 6000,    -- 40t × 150
         },
         safezoneRadius = 750,
         

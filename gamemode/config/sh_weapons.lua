@@ -41,7 +41,7 @@ TPG.Weapons = {
             name = "None", 
             class = nil, 
             speedBonus = 20,
-            fallbackClass = "weapon_ace_at4",  -- Light disposable AT
+            fallbackClass = "weapon_ace_at4",
         },
         [1] = { id = 1, name = "AT-4",          class = "weapon_ace_at4",           speedBonus = 0 },
         [2] = { id = 2, name = "AT-4 Tandem",   class = "weapon_ace_at4t",          speedBonus = 0 },
@@ -70,12 +70,14 @@ TPG.Weapons = {
         "weapon_crowbar",
     },
     
-    -- Given when player joins a team
+    -- Given when player joins a team (includes utility tools)
     TeamTools = {
         "gmod_tool",
+        "weapon_ace_minedetector",
     },
 }
 
+-- Rest of the file remains unchanged...
 function TPG.GetWeapon(category, weaponId)
     local cat = TPG.Weapons[category]
     if not cat then return nil end
