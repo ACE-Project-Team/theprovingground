@@ -83,11 +83,11 @@ function TPG.Objectives.ProcessScoring()
     local capMul = gameTypeConfig.capMultiplier or gameType.defaultCapMul or 0.02
     
     if totalCapValue < 0 then
-        -- Green owns more points, drain red
-        TPG.State.AddScore(TEAM_RED, totalCapValue * capMul)
-    elseif totalCapValue > 0 then
         -- Red owns more points, drain green
-        TPG.State.AddScore(TEAM_GREEN, -totalCapValue * capMul)
+        TPG.State.AddScore(TEAM_GREEN, totalCapValue * capMul)
+    elseif totalCapValue > 0 then
+        -- Green owns more points, drain red
+        TPG.State.AddScore(TEAM_RED, -totalCapValue * capMul)
     end
 end
 
