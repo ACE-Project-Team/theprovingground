@@ -15,6 +15,7 @@ AddCSLuaFile("config/sh_armor.lua")
 AddCSLuaFile("config/sh_weapons.lua")
 AddCSLuaFile("config/sh_gametypes.lua")
 AddCSLuaFile("core/sh_utils.lua")
+AddCSLuaFile("objectives/sh_controlpoint.lua")
 AddCSLuaFile("maps/_loader.lua")
 
 -- Client UI
