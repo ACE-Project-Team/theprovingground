@@ -21,8 +21,19 @@ TPG.Teams = {
 }
 
 function TPG.SetupTeams()
+    TPG._ownTeams = TPG._ownTeams or {}
+
     for id, data in pairs(TPG.Teams) do
-        team.SetUp(id, data.name, data.color)
+        -- Safety net: never clobber a team another addon already registered
+        -- (e.g. ULX UTeam role-teams). We only ever overwrite IDs we set up
+        -- ourselves; if something else holds this ID, skip and warn.
+        if team.Valid(id) and not TPG._ownTeams[id] then
+            ErrorNoHalt("[TPG] Team ID " .. id .. " is already in use by another addon; " ..
+                "skipping to avoid overwriting roles. Adjust TEAM_* in shared.lua.\n")
+        else
+            team.SetUp(id, data.name, data.color)
+            TPG._ownTeams[id] = true
+        end
     end
 end
 

@@ -103,6 +103,11 @@ function TPG.State.ResetRound()
             data.stats = { kills = 0, killsPerTon = 0, objectiveKills = 0, captures = 0 }
         end
     end
+
+    -- Economy: reset wallets for the new round (only acts if active)
+    if TPG.Economy and TPG.Economy.OnRoundReset then
+        TPG.Economy.OnRoundReset()
+    end
 end
 
 -- Hook for player connect/disconnect

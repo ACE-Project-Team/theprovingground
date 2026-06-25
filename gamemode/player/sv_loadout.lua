@@ -25,11 +25,19 @@ function TPG.Loadout.Apply(ply)
         ply:Give(class)
     end
     
-    -- Get loadout from PData
-    local primaryId = TPG.Util.GetPData(ply, "Primary", 1)
-    local secondaryId = TPG.Util.GetPData(ply, "Secondary", 0)
-    local specialId = TPG.Util.GetPData(ply, "Special", 1)
-    local armorId = TPG.Util.GetPData(ply, "Armor", 1)
+    -- Get loadout from PData. Ids are weapon class strings now; a legacy
+    -- numeric save (from the old index-based system) falls back to the default.
+    local dl = TPG.WeaponConfig.DefaultLoadout
+    local function loadoutId(key, default)
+        local v = TPG.Util.GetPData(ply, key, default)
+        if type(v) ~= "string" then return default end
+        return v
+    end
+
+    local primaryId   = loadoutId("Primary",   dl.Primary)
+    local secondaryId = loadoutId("Secondary", dl.Secondary)
+    local specialId   = loadoutId("Special",   dl.Special)
+    local armorId     = TPG.Util.GetPData(ply, "Armor", 1)
     
     -- Give weapons
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
@@ -54,7 +62,7 @@ end
 
 function TPG.Loadout.GiveWeapon(ply, category, weaponId)
     local weapon = TPG.GetWeapon(category, weaponId)
-    if not weapon then return end
+    if not weapon or weapon.enabled == false then return end
     
     -- Single weapon
     if weapon.class then

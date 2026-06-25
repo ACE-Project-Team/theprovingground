@@ -10,6 +10,8 @@ TPG.UI.State = {
     gameType = GAMEMODE_CP,
     objectives = {},
     mapVote = {},
+    voteTally = {},
+    voteEnd = 0,
 }
 
 -- Receive state sync
@@ -41,10 +43,33 @@ end)
 
 net.Receive("TPG_SyncMapVote", function()
     local count = net.ReadUInt(4)
-    TPG.UI.State.mapVote = {}
+    local seconds = net.ReadUInt(8)
+
+    local maps = {}
     for i = 1, count do
-        TPG.UI.State.mapVote[i] = net.ReadString()
+        maps[i] = {
+            map         = net.ReadString(),
+            displayName = net.ReadString(),
+            category    = net.ReadUInt(2),
+            points      = net.ReadUInt(20),
+            weight      = net.ReadUInt(13),
+            props       = net.ReadUInt(12),
+            objectives  = net.ReadUInt(4),
+        }
     end
+
+    TPG.UI.State.mapVote = maps
+    TPG.UI.State.voteTally = {}
+    TPG.UI.State.voteEnd = CurTime() + seconds
+end)
+
+net.Receive("TPG_SyncVoteTally", function()
+    local count = net.ReadUInt(4)
+    local tally = {}
+    for i = 1, count do
+        tally[i] = net.ReadUInt(8)
+    end
+    TPG.UI.State.voteTally = tally
 end)
 
 net.Receive("TPG_ChatMessage", function()

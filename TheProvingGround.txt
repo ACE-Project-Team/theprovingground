@@ -3,6 +3,6 @@
 	"base"			"sandbox"
 	"title"			"The Proving Ground"
 	"author"		"RDC"
-	"maps"			"^gm_"
+	"maps"			"^tpg_"
 	"menusystem"	"1"
 }

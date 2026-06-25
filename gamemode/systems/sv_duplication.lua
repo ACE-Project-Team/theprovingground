@@ -50,8 +50,18 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         local overLimit = false
         local reason = ""
         
-        -- Check points limit
-        if TPG.Config.useACEPoints then
+        -- Points / economy check.
+        -- When the per-player economy is active it REPLACES the shared team
+        -- point budget: the player buys this contraption from their own wallet.
+        local econCharge = nil
+        if TPG.Economy and TPG.Economy.Active then
+            econCharge = TPG.Economy.GetContraptionCost(ents)
+            if not TPG.Economy.CanAfford(ply, econCharge) then
+                overLimit = true
+                reason = "Not enough points: costs " .. math.ceil(econCharge) ..
+                    ", you have " .. TPG.Economy.GetMoney(ply)
+            end
+        elseif TPG.Config.useACEPoints then
             if (teamLimits.points or 0) > (maxLimits.points or 100000) then
                 overLimit = true
                 reason = "Team point limit exceeded (" .. math.ceil(teamLimits.points) .. "/" .. maxLimits.points .. ")"
@@ -83,7 +93,15 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
             end)
             return
         end
-        
+
+        -- Passed all checks. Under the economy, charge the wallet now
+        -- (true purchase -- a destroyed vehicle is not refunded).
+        if econCharge then
+            TPG.Economy.Charge(ply, econCharge)
+            TPG.Util.ChatMessage(ply, "[TPG] Purchased for " .. math.ceil(econCharge) ..
+                " pts. Balance: " .. TPG.Economy.GetMoney(ply), Color(0, 255, 0))
+        end
+
         -- Calculate weight for cooldown
         local totalWeight = 0
         for _, ent in pairs(ents) do

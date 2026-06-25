@@ -877,25 +877,43 @@ TPG.Maps.Configs = {
 -- Currently loaded map config
 TPG.Maps.Current = nil
 
+-- Global limit multipliers, applied on top of every map's authored values.
+-- Reference: one strong tank ~= 11,000 points.
+--   points x2.0 -> maps that previously fit ~1 strong tank now fit 2-3
+--   weight x1.5 -> weight cap raised so those extra tanks physically fit
+--   props  x1.5 -> prop cap raised so it doesn't become the new bottleneck
+-- Tune these three numbers to rebalance all maps at once.
+TPG.Maps.LimitMult = { points = 2.0, weight = 1.5, props = 1.5 }
+
+local function ApplyLimitMult(limits)
+    if not limits then return end
+    local m = TPG.Maps.LimitMult or {}
+    limits.points = math.floor((limits.points or 0) * (m.points or 1))
+    limits.weight = math.floor((limits.weight or 0) * (m.weight or 1))
+    limits.props  = math.floor((limits.props  or 0) * (m.props  or 1))
+end
+
 -- Load map configuration
 function TPG.Maps.Load(mapName)
     mapName = mapName or game.GetMap()
-    
+
     -- Check if we have an inline config for this map
     if TPG.Maps.Configs[mapName] then
         TPG.Maps.Current = table.Merge(table.Copy(TPG.Maps.Default), TPG.Maps.Configs[mapName])
-        
+        ApplyLimitMult(TPG.Maps.Current.limits)
+
         -- Debug: verify limits loaded correctly
         local limits = TPG.Maps.Current.limits
         print("[TPG] Loaded map config: " .. mapName)
         print("[TPG] Limits - Props: " .. limits.props .. ", Weight: " .. limits.weight .. "T, Points: " .. limits.points)
-        
+
         return TPG.Maps.Current
     end
-    
+
     -- Fall back to defaults
     print("[TPG] No config for " .. mapName .. ", using defaults")
     TPG.Maps.Current = table.Copy(TPG.Maps.Default)
+    ApplyLimitMult(TPG.Maps.Current.limits)
     return TPG.Maps.Current
 end
 
@@ -929,4 +947,35 @@ end
 function TPG.Maps.GetLimits()
     local config = TPG.Maps.Get()
     return config.limits
+end
+
+-- Merge default + per-map config (without disturbing the loaded Current) and
+-- apply the limit multipliers, for read-only queries like the vote screen.
+local function mergedConfig(mapName)
+    local cfg = table.Copy(TPG.Maps.Default)
+    if TPG.Maps.Configs[mapName] then
+        cfg = table.Merge(cfg, TPG.Maps.Configs[mapName])
+    end
+    ApplyLimitMult(cfg.limits)
+    return cfg
+end
+
+local function prettifyMapName(mapName)
+    local s = mapName:gsub("^gm_", ""):gsub("_", " ")
+    return s:gsub("(%a)([%w']*)", function(a, b) return a:upper() .. b end)
+end
+
+-- Display info + budgets for a map, used by the map-vote menu.
+function TPG.Maps.GetVoteInfo(mapName)
+    local cfg = mergedConfig(mapName)
+    local limits = cfg.limits or {}
+    local cp = cfg[GAMEMODE_CP]
+    return {
+        map         = mapName,
+        displayName = cfg.displayName or prettifyMapName(mapName),
+        points      = math.floor(limits.points or 0),
+        weight      = math.floor(limits.weight or 0),   -- tons
+        props       = math.floor(limits.props or 0),
+        objectives  = (cp and cp.objectives and #cp.objectives) or 0,
+    }
 end

@@ -94,45 +94,52 @@ function TPG.Voting.StartMapVote()
     TPG.State.voting.endTime = CurTime() + TPG.Config.mapVoteTime
     TPG.State.voting.votes = {}
     
-    -- Generate map choices
+    -- Generate map choices. Each entry carries its category (1=Open, 2=Urban,
+    -- 3=Bonus) so the vote screen can label it.
     local maps = {}
-    
+
     -- 2 open maps
     local openMaps = table.Copy(TPG.Voting.MapLists.Open)
     for i = 1, 2 do
         if #openMaps > 0 then
             local idx = math.random(1, #openMaps)
-            table.insert(maps, openMaps[idx])
+            table.insert(maps, { map = openMaps[idx], category = 1 })
             table.remove(openMaps, idx)
         end
     end
-    
+
     -- 1 urban map
     local urbanMaps = table.Copy(TPG.Voting.MapLists.Urban)
     if #urbanMaps > 0 then
         local idx = math.random(1, #urbanMaps)
-        table.insert(maps, urbanMaps[idx])
+        table.insert(maps, { map = urbanMaps[idx], category = 2 })
         table.remove(urbanMaps, idx)
     end
-    
-    -- 1 bonus (random from either)
+
+    -- 1 bonus (random from either remaining pool)
     local allMaps = table.Add(table.Copy(openMaps), table.Copy(urbanMaps))
     if #allMaps > 0 then
         local idx = math.random(1, #allMaps)
-        table.insert(maps, allMaps[idx])
+        table.insert(maps, { map = allMaps[idx], category = 3 })
     end
-    
+
     TPG.State.voting.maps = maps
-    
+
     -- Sync to clients
     if TPG.Net and TPG.Net.SyncMapVote then
         TPG.Net.SyncMapVote(maps)
     end
-    
-    -- Open vote menu for all players
-    for _, ply in ipairs(player.GetAll()) do
-        ply:ConCommand("tpg_menu_mapvote")
+    if TPG.Voting.BroadcastTally then
+        TPG.Voting.BroadcastTally()
     end
+    
+    -- Open vote menu for all players (slightly deferred so the synced map
+    -- info has arrived before the menu tries to render its cards).
+    timer.Simple(0.25, function()
+        for _, ply in ipairs(player.GetAll()) do
+            if IsValid(ply) then ply:ConCommand("tpg_menu_mapvote") end
+        end
+    end)
     
     TPG.Util.ChatBroadcast("[TPG] " .. TPG.Config.mapVoteTime .. " seconds to vote!", Color(0, 255, 255))
     
@@ -157,15 +164,33 @@ end
 
 function TPG.Voting.CastMapVote(ply, mapIndex)
     if not TPG.State.voting.active then return end
-    if not TPG.State.voting.maps[mapIndex] then return end
-    
+    local choice = TPG.State.voting.maps[mapIndex]
+    if not choice then return end
+
     local pState = TPG.State.GetPlayer(ply)
     pState.votes.map = mapIndex
-    
+
     TPG.Util.ChatBroadcast(
-        "[TPG] " .. ply:Nick() .. " voted for " .. TPG.State.voting.maps[mapIndex],
+        "[TPG] " .. ply:Nick() .. " voted for " .. (choice.map or "?"),
         Color(0, 0, 255)
     )
+
+    TPG.Voting.BroadcastTally()
+end
+
+-- Send the current per-candidate vote counts to all clients.
+function TPG.Voting.BroadcastTally()
+    local counts = {}
+    for i = 1, #TPG.State.voting.maps do counts[i] = 0 end
+
+    for _, ply in ipairs(player.GetAll()) do
+        local v = TPG.State.GetPlayer(ply).votes.map
+        if v and counts[v] then counts[v] = counts[v] + 1 end
+    end
+
+    if TPG.Net and TPG.Net.SyncVoteTally then
+        TPG.Net.SyncVoteTally(counts)
+    end
 end
 
 function TPG.Voting.TallyVotes()
@@ -197,10 +222,11 @@ function TPG.Voting.TallyVotes()
     end
     
     local winningMap = TPG.State.voting.maps[bestMap]
-    
-    TPG.Util.ChatBroadcast("[TPG] Changing to map: " .. winningMap, Color(0, 255, 0))
-    
+    local winningMapName = winningMap and winningMap.map or game.GetMap()
+
+    TPG.Util.ChatBroadcast("[TPG] Changing to map: " .. winningMapName, Color(0, 255, 0))
+
     timer.Simple(3, function()
-        RunConsoleCommand("changelevel", winningMap)
+        RunConsoleCommand("changelevel", winningMapName)
     end)
 end

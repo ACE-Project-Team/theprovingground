@@ -14,31 +14,34 @@ concommand.Add("tpg_team", function(ply, cmd, args)
     TPG.PlayerTeams.AssignPlayer(ply, teamId)
 end)
 
--- Loadout change
+-- Loadout change. Weapons are addressed by class string (validated against the
+-- enabled, discovered set so a crafted command can't hand out arbitrary SWEPs);
+-- armor stays numeric.
 concommand.Add("tpg_loadout", function(ply, cmd, args)
     local category = tonumber(args[1])
-    local weaponId = tonumber(args[2])
-    
-    if not category or not weaponId then return end
-    
-    local key = nil
-    if category == 1 then key = "Primary"
-    elseif category == 2 then key = "Secondary"
-    elseif category == 3 then key = "Special"
-    elseif category == 4 then key = "Armor"
+    if not category then return end
+
+    if category == 4 then
+        local armorId = tonumber(args[2])
+        if armorId and TPG.Armor[armorId] then
+            TPG.Util.SetPData(ply, "Armor", armorId)
+        end
+        return
     end
-    
+
+    local key = ({ [1] = "Primary", [2] = "Secondary", [3] = "Special" })[category]
     if not key then return end
-    
-    if key == "Armor" then
-        if TPG.Armor[weaponId] then
-            TPG.Util.SetPData(ply, "Armor", weaponId)
-        end
-    else
-        if TPG.GetWeapon(key, weaponId) then
-            TPG.Util.SetPData(ply, key, weaponId)
-        end
+
+    local class = args[2]
+    if not class or class == "" then return end
+
+    local weapon = TPG.GetWeapon(key, class)
+    if not weapon or weapon.enabled == false then
+        TPG.Util.ChatMessage(ply, "[TPG] That weapon is not available.", Color(255, 0, 0))
+        return
     end
+
+    TPG.Util.SetPData(ply, key, class)
 end)
 
 -- Easy vehicle entry

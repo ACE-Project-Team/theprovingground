@@ -11,6 +11,7 @@ util.AddNetworkString("TPG_SyncState")
 util.AddNetworkString("TPG_SyncScores")
 util.AddNetworkString("TPG_SyncLimits")
 util.AddNetworkString("TPG_SyncMapVote")
+util.AddNetworkString("TPG_SyncVoteTally")
 
 -- Sync game state to all clients
 function TPG.Net.SyncState()
@@ -51,12 +52,31 @@ function TPG.Net.SyncLimits()
     net.Broadcast()
 end
 
--- Sync map vote options
+-- Sync map vote options (with per-map display info + budgets).
+-- `maps` is a list of { map = <filename>, category = <0-3> }.
 function TPG.Net.SyncMapVote(maps)
     net.Start("TPG_SyncMapVote")
         net.WriteUInt(#maps, 4)
-        for _, mapName in ipairs(maps) do
-            net.WriteString(mapName)
+        net.WriteUInt(TPG.Config.mapVoteTime or 20, 8)
+        for _, entry in ipairs(maps) do
+            local info = TPG.Maps.GetVoteInfo(entry.map)
+            net.WriteString(entry.map)
+            net.WriteString(info.displayName)
+            net.WriteUInt(entry.category or 0, 2)
+            net.WriteUInt(math.min(info.points, 1048575), 20)
+            net.WriteUInt(math.min(info.weight, 8191), 13)
+            net.WriteUInt(math.min(info.props, 4095), 12)
+            net.WriteUInt(math.min(info.objectives, 15), 4)
+        end
+    net.Broadcast()
+end
+
+-- Live vote counts per candidate.
+function TPG.Net.SyncVoteTally(counts)
+    net.Start("TPG_SyncVoteTally")
+        net.WriteUInt(#counts, 4)
+        for _, c in ipairs(counts) do
+            net.WriteUInt(math.min(c, 255), 8)
         end
     net.Broadcast()
 end

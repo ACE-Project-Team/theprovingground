@@ -1,118 +1,194 @@
 --[[
-    Weapon Definitions - ACE Weapons
+    Weapon Discovery Engine
+
+    Builds TPG.Weapons.{Primary,Secondary,Special} at runtime from installed
+    SWEPs (see sh_weapons_config.lua for what gets included). Replaces the old
+    hardcoded list, so any ACE-based weapon pack is supported with no code edits.
+
+    Entries are keyed by weapon CLASS (or a virtual sentinel), so saved loadouts
+    survive list changes. Public API (GetWeapon / GetWeaponList /
+    CalculateSpeedBonus) is unchanged, but ids are now strings instead of ints.
 ]]
 
-TPG.Weapons = {
-    Primary = {
-        [0]  = { id = 0,  name = "None",        class = nil,                        speedBonus = 15 },
-        [1]  = { id = 1,  name = "M16",         class = "weapon_ace_m16",           speedBonus = 0 },
-        [2]  = { id = 2,  name = "AK-47",       class = "weapon_ace_ak47",          speedBonus = 0 },
-        [3]  = { id = 3,  name = "Galil",       class = "weapon_ace_galil",         speedBonus = 0 },
-        [4]  = { id = 4,  name = "FAMAS",       class = "weapon_ace_famas",         speedBonus = 0 },
-        [5]  = { id = 5,  name = "AUG",         class = "weapon_ace_aug",           speedBonus = 0 },
-        [6]  = { id = 6,  name = "SG552",       class = "weapon_ace_sg552",         speedBonus = 0 },
-        [7]  = { id = 7,  name = "M3 Super90",  class = "weapon_ace_m3super90",     speedBonus = 0 },
-        [8]  = { id = 8,  name = "XM1014",      class = "weapon_ace_xm1014",        speedBonus = 0 },
-        [9]  = { id = 9,  name = "P90",         class = "weapon_ace_p90",           speedBonus = 0 },
-        [10] = { id = 10, name = "UMP-45",      class = "weapon_ace_ump45",         speedBonus = 0 },
-        [11] = { id = 11, name = "MP5",         class = "weapon_ace_mp5",           speedBonus = 0 },
-        [12] = { id = 12, name = "TMP",         class = "weapon_ace_tmp",           speedBonus = 0 },
-        [13] = { id = 13, name = "MAC-10",      class = "weapon_ace_mac10",         speedBonus = 0 },
-        [14] = { id = 14, name = "Scout",       class = "weapon_ace_scout",         speedBonus = 0 },
-        [15] = { id = 15, name = "AWP",         class = "weapon_ace_awp",           speedBonus = 0 },
-        [16] = { id = 16, name = "M249 SAW",    class = "weapon_ace_m249saw",       speedBonus = -5 },
-    },
-    
-    Secondary = {
-        [0] = { id = 0, name = "None",          class = nil,                        speedBonus = 10 },
-        [1] = { id = 1, name = "Glock",         class = "weapon_ace_glock",         speedBonus = 0 },
-        [2] = { id = 2, name = "Five-Seven",    class = "weapon_ace_fiveseven",     speedBonus = 0 },
-        [3] = { id = 3, name = "P228",          class = "weapon_ace_p228",          speedBonus = 0 },
-        [4] = { id = 4, name = "USP",           class = "weapon_ace_usp",           speedBonus = 0 },
-        [5] = { id = 5, name = "Desert Eagle",  class = "weapon_ace_deagle",        speedBonus = 0 },
-        [6] = { id = 6, name = "Dual Elites",   class = "weapon_ace_elite",         speedBonus = 0 },
-        [7] = { id = 7, name = "Grenade",       class = "weapon_ace_grenade",       speedBonus = 0 },
-        [8] = { id = 8, name = "Smoke Grenade", class = "weapon_ace_smokegrenade",  speedBonus = 0 },
-    },
-    
-    Special = {
-        [0] = { 
-            id = 0, 
-            name = "None", 
-            class = nil, 
-            speedBonus = 20,
-            fallbackClass = "weapon_ace_at4",
-        },
-        [1] = { id = 1, name = "AT-4",          class = "weapon_ace_at4",           speedBonus = 0 },
-        [2] = { id = 2, name = "AT-4 Tandem",   class = "weapon_ace_at4t",          speedBonus = 0 },
-        [3] = { id = 3, name = "AMR",           class = "weapon_ace_amr",           speedBonus = 0 },
-        [4] = { id = 4, name = "XM25",          class = "weapon_ace_xm25",          speedBonus = 0 },
-        [5] = { id = 5, name = "Javelin",       class = "weapon_ace_javelin",       speedBonus = -5 },
-        [6] = { id = 6, name = "Stinger",       class = "weapon_ace_stinger",       speedBonus = 0 },
-        [7] = {
-            id = 7,
-            name = "Mines",
-            class = nil,
-            speedBonus = 0,
-            multipleClasses = {
-                "weapon_ace_antipersonmine",
-                "weapon_ace_boundingmine",
-                "weapon_ace_antitankmine",
-            },
-        },
-        [8] = { id = 8, name = "Mortar",        class = "weapon_ace_portablemortar", speedBonus = -10 },
-    },
-    
-    -- Always given regardless of loadout
-    Default = {
-        "weapon_physgun",
-        "gmod_camera",
-        "weapon_crowbar",
-    },
-    
-    -- Given when player joins a team (includes utility tools)
-    TeamTools = {
-        "gmod_tool",
-        "weapon_ace_minedetector",
-    },
-}
+TPG.Weapons = TPG.Weapons or {}
 
--- Rest of the file remains unchanged...
-function TPG.GetWeapon(category, weaponId)
-    local cat = TPG.Weapons[category]
-    if not cat then return nil end
-    return cat[weaponId]
+local CATEGORIES = { "Primary", "Secondary", "Special" }
+
+-- Admin-set enable/override state (from data/tpg/weapons.json), applied on top
+-- of discovery. Kept so a re-discover (late-mounted content) re-applies it.
+TPG.Weapons._state = TPG.Weapons._state or nil
+
+local function passesExclude(cfg, class)
+    if cfg.Exclude[class] then return false end
+    local lc = string.lower(class)
+    for _, pat in ipairs(cfg.ExcludePatterns or {}) do
+        if string.find(lc, pat) then return false end
+    end
+    return true
 end
 
-function TPG.GetWeaponClass(category, weaponId)
-    local weapon = TPG.GetWeapon(category, weaponId)
+function TPG.Weapons.Discover()
+    local cfg = TPG.WeaponConfig
+    if not cfg then return end
+
+    local buckets = { Primary = {}, Secondary = {}, Special = {} }
+
+    -- "None" option per category.
+    for _, cat in ipairs(CATEGORIES) do
+        buckets[cat]["none"] = {
+            id = "none", name = "None", class = nil,
+            speedBonus = cfg.NoneSpeed[cat] or 0, cost = 0,
+            base = nil, enabled = true,
+        }
+    end
+
+    -- Discover installed SWEPs.
+    for _, swep in ipairs(weapons.GetList()) do
+        local class = swep.ClassName
+        if not class or not swep.Spawnable then continue end
+
+        local base = swep.Base
+        if not (base and cfg.Bases[base]) then continue end
+        if not passesExclude(cfg, class) then continue end
+
+        local override = cfg.Overrides[class] or {}
+        local cat = override.category or cfg.SlotCategory[swep.Slot or -1]
+        if not cat or not buckets[cat] then continue end
+
+        buckets[cat][class] = {
+            id = class,
+            name = override.name or swep.PrintName or class,
+            class = class,
+            speedBonus = override.speedBonus or cfg.DefaultSpeed[cat] or 0,
+            cost = override.cost or 0,
+            base = base,
+            enabled = true,
+        }
+    end
+
+    -- Virtual entries (multi-class / fallback).
+    for cat, entries in pairs(cfg.Virtual or {}) do
+        if buckets[cat] then
+            for id, data in pairs(entries) do
+                buckets[cat][id] = {
+                    id = id,
+                    name = data.name or id,
+                    class = data.class,
+                    multipleClasses = data.multipleClasses,
+                    fallbackClass = data.fallbackClass,
+                    speedBonus = data.speedBonus or cfg.DefaultSpeed[cat] or 0,
+                    cost = data.cost or 0,
+                    base = "virtual",
+                    enabled = true,
+                }
+            end
+        end
+    end
+
+    TPG.Weapons.Primary   = buckets.Primary
+    TPG.Weapons.Secondary = buckets.Secondary
+    TPG.Weapons.Special   = buckets.Special
+    TPG.Weapons.Default   = cfg.AlwaysGive
+    TPG.Weapons.TeamTools = cfg.TeamTools
+
+    -- Re-apply admin state (enable flags / overrides) after a rebuild.
+    if TPG.Weapons._state then
+        TPG.Weapons.ApplyState(TPG.Weapons._state)
+    end
+end
+
+-- Apply admin enable/override state. Shape:
+--   { bases = { [base]=bool }, weapons = { [id]=bool }, overrides = { [id]={...} } }
+function TPG.Weapons.ApplyState(state)
+    if not state then return end
+    TPG.Weapons._state = state
+
+    for _, cat in ipairs(CATEGORIES) do
+        for id, entry in pairs(TPG.Weapons[cat] or {}) do
+            if id ~= "none" then
+                -- Base toggle (a disabled base hides all its weapons)...
+                if entry.base and state.bases and state.bases[entry.base] == false then
+                    entry.enabled = false
+                else
+                    entry.enabled = true
+                end
+                -- ...overridden by an explicit per-weapon toggle.
+                if state.weapons and state.weapons[id] ~= nil then
+                    entry.enabled = state.weapons[id]
+                end
+                -- Field overrides.
+                local ov = state.overrides and state.overrides[id]
+                if ov then
+                    if ov.speedBonus ~= nil then entry.speedBonus = ov.speedBonus end
+                    if ov.cost ~= nil then entry.cost = ov.cost end
+                    if ov.name ~= nil and ov.name ~= "" then entry.name = ov.name end
+                end
+            end
+        end
+    end
+end
+
+-- Set of SWEP bases actually present (for the admin panel's base toggles).
+function TPG.Weapons.GetDiscoveredBases()
+    local bases = {}
+    for _, cat in ipairs(CATEGORIES) do
+        for _, entry in pairs(TPG.Weapons[cat] or {}) do
+            if entry.base and entry.base ~= "virtual" then
+                bases[entry.base] = true
+            end
+        end
+    end
+    return bases
+end
+
+-- ── Public API (unchanged signatures; ids are now strings) ─────────────────
+function TPG.GetWeapon(category, id)
+    local cat = TPG.Weapons[category]
+    if not cat then return nil end
+    return cat[id]
+end
+
+function TPG.GetWeaponClass(category, id)
+    local weapon = TPG.GetWeapon(category, id)
     return weapon and weapon.class
 end
 
-function TPG.GetWeaponList(category)
+-- Returns only ENABLED entries, sorted by name ("None" first).
+function TPG.GetWeaponList(category, includeDisabled)
     local cat = TPG.Weapons[category]
     if not cat then return {} end
-    
+
     local list = {}
     for id, data in pairs(cat) do
-        if type(id) == "number" then
-            table.insert(list, { id = id, name = data.name })
+        if includeDisabled or data.enabled then
+            list[#list + 1] = { id = id, name = data.name, cost = data.cost, enabled = data.enabled }
         end
     end
-    table.sort(list, function(a, b) return a.id < b.id end)
+
+    table.sort(list, function(a, b)
+        if a.id == "none" then return true end
+        if b.id == "none" then return false end
+        return a.name < b.name
+    end)
     return list
 end
 
 function TPG.CalculateSpeedBonus(primaryId, secondaryId, specialId)
     local bonus = 0
-    
-    local primary = TPG.GetWeapon("Primary", primaryId)
+    local primary   = TPG.GetWeapon("Primary", primaryId)
     local secondary = TPG.GetWeapon("Secondary", secondaryId)
-    local special = TPG.GetWeapon("Special", specialId)
-    
-    if primary then bonus = bonus + (primary.speedBonus or 0) end
+    local special   = TPG.GetWeapon("Special", specialId)
+
+    if primary   then bonus = bonus + (primary.speedBonus or 0)   end
     if secondary then bonus = bonus + (secondary.speedBonus or 0) end
-    if special then bonus = bonus + (special.speedBonus or 0) end
-    
+    if special   then bonus = bonus + (special.speedBonus or 0)   end
     return bonus
 end
+
+-- Build now, and again once everything (incl. late-mounted content) is loaded.
+TPG.Weapons.Discover()
+hook.Add("InitPostEntity", "TPG_DiscoverWeapons", TPG.Weapons.Discover)
+concommand.Add("tpg_weapons_refresh", function(ply)
+    if IsValid(ply) and not ply:IsSuperAdmin() then return end
+    TPG.Weapons.Discover()
+end)
