@@ -6,6 +6,9 @@
 TPG.Rounds = TPG.Rounds or {}
 
 function TPG.Rounds.Setup(skipCleanup)
+    -- Keep ULX UTeam from yanking grouped players (admins) off their TPG team.
+    if TPG.DisableExternalTeamForcing then TPG.DisableExternalTeamForcing() end
+
     -- Load map config
     local mapConfig = TPG.Maps.Load()
     

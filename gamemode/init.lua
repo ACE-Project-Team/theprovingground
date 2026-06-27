@@ -36,6 +36,7 @@ include("core/sv_gamestate.lua")
 include("core/sv_rounds.lua")
 include("core/sv_commands.lua")
 include("core/sv_weapons.lua")
+include("core/sv_ulx_compat.lua")
 
 include("player/sv_spawning.lua")
 include("player/sv_loadout.lua")

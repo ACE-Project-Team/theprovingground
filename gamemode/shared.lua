@@ -17,9 +17,10 @@ TPG = TPG or {}
 
 -- Team constants
 -- NOTE: GREEN/RED use a high ID range on purpose. ULX's "Manage Teams" (UTeam)
--- binds usergroups to GMod teams at low sequential IDs (1, 2, 3...), and rank
--- scoreboards group players by those teams. Using low IDs here would overwrite
--- those role-teams on servers with custom ranks. Keep these well clear of them.
+-- registers usergroup teams starting at index 21 and force-assigns members onto
+-- them; a high range keeps TPG clear of both ID overlap and UTeam's auto-reset
+-- of teams in [21, next). The force-assignment itself is suppressed in
+-- core/sv_ulx_compat.lua.
 TEAM_UNASSIGNED = 0
 TEAM_GREEN      = 2001
 TEAM_RED        = 2002
