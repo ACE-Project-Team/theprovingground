@@ -98,9 +98,11 @@ function TPG.Voting.StartMapVote()
     -- 3=Bonus) so the vote screen can label it.
     local maps = {}
 
-    -- 2 open maps
+    local slots = TPG.Config.mapVoteSlots or { open = 3, urban = 2, bonus = 1 }
+
+    -- Open maps
     local openMaps = table.Copy(TPG.Voting.MapLists.Open)
-    for i = 1, 2 do
+    for _ = 1, (slots.open or 0) do
         if #openMaps > 0 then
             local idx = math.random(1, #openMaps)
             table.insert(maps, { map = openMaps[idx], category = 1 })
@@ -108,19 +110,24 @@ function TPG.Voting.StartMapVote()
         end
     end
 
-    -- 1 urban map
+    -- Urban maps
     local urbanMaps = table.Copy(TPG.Voting.MapLists.Urban)
-    if #urbanMaps > 0 then
-        local idx = math.random(1, #urbanMaps)
-        table.insert(maps, { map = urbanMaps[idx], category = 2 })
-        table.remove(urbanMaps, idx)
+    for _ = 1, (slots.urban or 0) do
+        if #urbanMaps > 0 then
+            local idx = math.random(1, #urbanMaps)
+            table.insert(maps, { map = urbanMaps[idx], category = 2 })
+            table.remove(urbanMaps, idx)
+        end
     end
 
-    -- 1 bonus (random from either remaining pool)
+    -- Bonus maps (random from either remaining pool)
     local allMaps = table.Add(table.Copy(openMaps), table.Copy(urbanMaps))
-    if #allMaps > 0 then
-        local idx = math.random(1, #allMaps)
-        table.insert(maps, { map = allMaps[idx], category = 3 })
+    for _ = 1, (slots.bonus or 0) do
+        if #allMaps > 0 then
+            local idx = math.random(1, #allMaps)
+            table.insert(maps, { map = allMaps[idx], category = 3 })
+            table.remove(allMaps, idx)
+        end
     end
 
     TPG.State.voting.maps = maps

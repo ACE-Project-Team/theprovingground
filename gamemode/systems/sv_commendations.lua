@@ -85,8 +85,19 @@ hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
     if gameType.useDeathTickets then
         local victimTeam = victim:Team()
         local victimUsage = TPG.PropTracking.GetPlayerUsage(victim)
-        local ticketLoss = math.ceil(math.max((victimUsage.weight or 0) / 2000, 1))
-        
-        TPG.State.AddScore(victimTeam, -ticketLoss)
+
+        -- Base loss scales with the tonnage the victim was fielding (the
+        -- "weight kill" rule): killing a 40T tank drains far more than a buggy.
+        local baseLoss = math.max((victimUsage.weight or 0) / 2000, 1)
+
+        -- Dynamic, player-based scaling: the fewer players on the teams, the
+        -- more each kill is worth, so a 4-player round doesn't crawl. Capped at
+        -- dmTicketMaxMult so it never gets punishing.
+        local active = #team.GetPlayers(TEAM_GREEN) + #team.GetPlayers(TEAM_RED)
+        local refPlayers = TPG.Config.dmTicketRefPlayers or 8
+        local maxMult    = TPG.Config.dmTicketMaxMult or 2.0
+        local mult       = math.Clamp(refPlayers / math.max(active, 1), 1, maxMult)
+
+        TPG.State.AddScore(victimTeam, -math.ceil(baseLoss * mult))
     end
 end)

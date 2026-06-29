@@ -24,6 +24,7 @@ AddCSLuaFile("ui/cl_hud.lua")
 AddCSLuaFile("ui/cl_hud_economy.lua")
 AddCSLuaFile("ui/cl_hud_compass.lua")
 AddCSLuaFile("ui/cl_hud_objectives.lua")
+AddCSLuaFile("ui/cl_hud_ctf.lua")
 AddCSLuaFile("ui/cl_menu_team.lua")
 AddCSLuaFile("ui/cl_menu_loadout.lua")
 AddCSLuaFile("ui/cl_menu_weapons.lua")
@@ -33,6 +34,7 @@ AddCSLuaFile("ui/cl_binds.lua")
 -- Server includes
 include("core/sv_networking.lua")
 include("core/sv_gamestate.lua")
+include("maps/sv_custom_points.lua")
 include("core/sv_rounds.lua")
 include("core/sv_commands.lua")
 include("core/sv_weapons.lua")
@@ -52,6 +54,7 @@ include("systems/sv_vehicles.lua")
 include("systems/sv_commendations.lua")
 
 include("objectives/sv_objectives.lua")
+include("objectives/sv_ctf.lua")
 include("voting/sv_voting.lua")
 
 -- Initialize gamemode

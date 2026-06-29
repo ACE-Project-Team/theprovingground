@@ -6,7 +6,20 @@ TPG.Config = {
     -- Scoring
     startingTickets     = 300,
     winsToMapVote       = 2,
-    
+
+    -- Deathmatch ticket drain scales up when the server is emptier, so low-pop
+    -- rounds still resolve. At/above dmTicketRefPlayers it's the plain rate;
+    -- below it the per-kill loss is multiplied up to dmTicketMaxMult.
+    dmTicketRefPlayers  = 8,
+    dmTicketMaxMult     = 2.0,
+
+    -- Capture the Flag (objectives/sv_ctf.lua). One neutral flag on the KOTH
+    -- point; carrying it drains the enemy's tickets. KOTH maps only.
+    ctfChanceWithinKoth  = 0.5,    -- chance CTF replaces KOTH when the KOTH slot is rolled
+    ctfHoldDrainPerSec   = 4,      -- enemy tickets drained per second while a team carries the flag
+    ctfHoldRewardPerSec  = 15,     -- per-player economy reward per second to the carrier
+    ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
+
     -- Safezone
     safezoneRadius      = 750,
     spawnProtectionTime = 5,
@@ -24,9 +37,15 @@ TPG.Config = {
     useACEPoints        = true,
     teamPointLimit      = 5000,
     playerPointLimit    = 2500,
-    
+
+    -- Per-player economy as a secondary mode (see systems/sv_economy.lua).
+    -- Per-round chance it activates, unless an admin forces it via the
+    -- tpg_economy_enabled convar.
+    economyChance       = 0.30,
+
     -- Duplication
     dupeCooldownPerTon  = 2,
+    dupeCooldownPer1kPoints = 3,    -- +seconds of cooldown per 1000 ACE points of the build (item: pricier builds = longer cooldown)
     dupeGracePeriod     = 60,
     lightVehicleWeight  = 5000,
     lightVehicleProps   = 140,
@@ -36,7 +55,7 @@ TPG.Config = {
     maxSpeedUnits       = 3500,
     maxGForce           = 50,
     easyEntryRange      = 750,
-    easyEntryDelay      = 4,
+    easyEntryDelay      = 3,
     
     -- AFK
     afkWarningTime      = 20,
@@ -47,15 +66,20 @@ TPG.Config = {
     rtvMinPlayers       = 3,
     rtvPercentRequired  = 0.5,
     scramblePercent     = 0.25,
-    
+    -- Map-vote ballot size by category (6 candidates total).
+    mapVoteSlots        = { open = 3, urban = 2, bonus = 1 },
+
     -- Capture Points
     capDistanceMeters   = 5,
     capTimeNeutral      = 10,
     capTimeMax          = 15,
     capMaxPlayers       = 3,
     
-    -- Think rates
-    gameThinkInterval   = 5,
+    -- Think rates (wall-clock seconds). Game logic used to run every N *ticks*,
+    -- so captures and ticket drain ran slower on low-tickrate (e.g. 33-tick)
+    -- servers. These keep the 66-tick feel on any tickrate (~0.075s = 5 ticks @66).
+    captureStep         = 0.075,    -- capture-point progress step
+    scoreStep           = 0.075,    -- round scoring / ticket drain step
     propUpdateInterval  = 100,
 }
 

@@ -7,8 +7,10 @@
     REPLACES the shared per-team point budget (the team weight/prop limits stay
     as physical guardrails).
 
-    Activation is latched once at map load, so toggling `tpg_economy_enabled`
-    only takes effect on the NEXT map change (beta-safe).
+    The economy is a SECONDARY MODE: each round it has a TPG.Config.economyChance
+    chance to switch on (tpg_economy_random), or an admin can force it always-on
+    (tpg_economy_enabled). The active state is rolled in TPG.Rounds.Setup via
+    ECON.RollForRound() and announced so players know the round is per-player.
 ]]
 
 TPG.Economy = TPG.Economy or {}
@@ -32,12 +34,19 @@ ECON.Config = {
     resetEachRound    = true,   -- wallet resets to startingMoney each round
 }
 
--- Latched at map load from the convar below.
+-- Rolled per round (see ECON.RollForRound).
 ECON.Active = false
 
+-- Admin force-on. When 1 the economy is always active, overriding the random roll.
 local cv = CreateConVar("tpg_economy_enabled", "0",
     { FCVAR_ARCHIVE, FCVAR_NOTIFY },
-    "BETA per-player economy. Activates on the NEXT map change.")
+    "Force the per-player economy ON every round. Overrides tpg_economy_random.")
+
+-- When 1 (and not force-on), the economy is a secondary mode with a per-round
+-- chance (TPG.Config.economyChance) to be active.
+local cvRandom = CreateConVar("tpg_economy_random", "1",
+    { FCVAR_ARCHIVE, FCVAR_NOTIFY },
+    "Treat the per-player economy as a secondary mode: per-round chance to activate.")
 
 -- ── Wallet helpers ────────────────────────────────────────────────────────
 function ECON.GetMoney(ply)
@@ -146,6 +155,22 @@ function ECON.OnRoundReset()
     if ECON.Active and ECON.Config.resetEachRound then ECON.ResetWallets() end
 end
 
+-- Per-round activation roll. The economy behaves like a secondary game mode:
+-- forced always-on by tpg_economy_enabled, otherwise a TPG.Config.economyChance
+-- chance each round (tpg_economy_random). Call this from TPG.Rounds.Setup BEFORE
+-- ResetRound so OnRoundReset sees the correct state.
+function ECON.RollForRound()
+    if cv:GetBool() then
+        ECON.Active = true
+    elseif cvRandom:GetBool() then
+        ECON.Active = math.random() < (TPG.Config.economyChance or 0.30)
+    else
+        ECON.Active = false
+    end
+    SetGlobalBool("TPG_EconomyActive", ECON.Active)
+    return ECON.Active
+end
+
 -- New players start with the stipend.
 hook.Add("PlayerInitialSpawn", "TPG_EconomyInitMoney", function(ply)
     timer.Simple(1, function()
@@ -153,12 +178,11 @@ hook.Add("PlayerInitialSpawn", "TPG_EconomyInitMoney", function(ply)
     end)
 end)
 
--- Latch activation at map load so a mid-map toggle only applies next map.
+-- Initial state at map load (before the first round rolls it). Respects the
+-- force convar; the random per-round roll then takes over in Rounds.Setup.
 local function Latch()
     ECON.Active = cv:GetBool()
     SetGlobalBool("TPG_EconomyActive", ECON.Active)
-    print("[TPG] Economy (BETA): " .. (ECON.Active and "ACTIVE" or "inactive") ..
-          " -- toggle tpg_economy_enabled, applies on next map change.")
 end
 hook.Add("InitPostEntity", "TPG_EconomyLatch", Latch)
 Latch()  -- also latch immediately (covers Lua autorefresh during development)

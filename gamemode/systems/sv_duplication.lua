@@ -123,8 +123,15 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
             return
         end
         
-        -- Apply cooldown
-        local cooldown = (totalWeight / 1000) * (TPG.Config.dupeCooldownPerTon or 2)
+        -- Apply cooldown. Two drivers, whichever is longer:
+        --   weight -> (tons * dupeCooldownPerTon), the old heavy-rig penalty
+        --   points -> (kpoints * dupeCooldownPer1kPoints), so a pricey high-point
+        --             build also costs more cooldown even if it isn't heavy.
+        local points    = (TPG.Economy and TPG.Economy.GetContraptionCost
+                            and TPG.Economy.GetContraptionCost(ents)) or 0
+        local weightCd  = (totalWeight / 1000) * (TPG.Config.dupeCooldownPerTon or 2)
+        local pointCd   = (points / 1000) * (TPG.Config.dupeCooldownPer1kPoints or 3)
+        local cooldown  = math.max(weightCd, pointCd)
         pState.dupeCooldown = CurTime() + cooldown
         
         TPG.Util.ChatMessage(ply, "[TPG] Contraption spawned. Duplicator on cooldown for " .. math.ceil(cooldown) .. "s.", Color(0, 255, 0))

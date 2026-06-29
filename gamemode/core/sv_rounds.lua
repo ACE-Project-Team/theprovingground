@@ -15,7 +15,11 @@ function TPG.Rounds.Setup(skipCleanup)
     -- Select gametype
     TPG.State.gameType = TPG.SelectRandomGameType()
     local gameType = TPG.GetGameType(TPG.State.gameType)
-    
+
+    -- Per-player economy is a secondary mode: roll its activation for this round
+    -- (before ResetRound, which resets wallets when active).
+    local economyOn = TPG.Economy and TPG.Economy.RollForRound and TPG.Economy.RollForRound() or false
+
     -- Set spawns (swap each round)
     if TPG.State.round.startTime > 0 then
         -- Swap spawns
@@ -50,6 +54,11 @@ function TPG.Rounds.Setup(skipCleanup)
     if TPG.Objectives and TPG.Objectives.SpawnSafezones then
         TPG.Objectives.SpawnSafezones()
     end
+
+    -- Spawn CTF flags (no-ops unless this round is Capture the Flag)
+    if TPG.CTF and TPG.CTF.SpawnFlags then
+        TPG.CTF.SpawnFlags()
+    end
     
     -- Kill all players to respawn them
     for _, ply in ipairs(player.GetAll()) do
@@ -64,6 +73,12 @@ function TPG.Rounds.Setup(skipCleanup)
     end
     
     TPG.Util.ChatBroadcast("[TPG] Round started: " .. gameType.name, Color(0, 255, 255))
+
+    if economyOn then
+        TPG.Util.ChatBroadcast(
+            "[TPG] PER-PLAYER ECONOMY is ON this round: you each spend a PERSONAL point budget, and destroyed vehicles are NOT refunded.",
+            Color(120, 230, 120))
+    end
 end
 
 function TPG.Rounds.CheckWinCondition()
@@ -123,27 +138,37 @@ function TPG.Rounds.EndRound(winningTeam)
     end
 end
 
--- Game think for round logic
-local thinkTick = 0
+-- Game think for round logic. Scoring advances on a fixed real-time step so
+-- ticket drain runs at the same rate regardless of tickrate (a 33-tick server
+-- used to drain half as fast as 66-tick). Catch-up is clamped against lag.
+local scoreAccum     = 0
+local lastScoreThink = CurTime()
 
 hook.Add("Think", "TPG_RoundThink", function()
-    thinkTick = thinkTick + 1
-    
-    if thinkTick < TPG.Config.gameThinkInterval then return end
-    thinkTick = 0
-    
-    if not TPG.State.round.active then return end
-    
-    -- Process objective scoring
-    if TPG.Objectives and TPG.Objectives.ProcessScoring then
-        TPG.Objectives.ProcessScoring()
+    if not TPG.State.round.active then
+        lastScoreThink = CurTime()
+        scoreAccum     = 0
+        return
     end
-    
-    -- Check win condition
-    TPG.Rounds.CheckWinCondition()
-    
-    -- Sync scores
-    if TPG.Net and TPG.Net.SyncScores then
-        TPG.Net.SyncScores()
+
+    local step = TPG.Config.scoreStep or 0.075
+    scoreAccum = scoreAccum + (CurTime() - lastScoreThink)
+    lastScoreThink = CurTime()
+
+    local ran, steps = false, 0
+    while scoreAccum >= step and steps < 8 do
+        scoreAccum = scoreAccum - step
+        steps = steps + 1
+        if TPG.Objectives and TPG.Objectives.ProcessScoring then
+            TPG.Objectives.ProcessScoring()
+        end
+        ran = true
+    end
+
+    if ran then
+        TPG.Rounds.CheckWinCondition()
+        if TPG.Net and TPG.Net.SyncScores then
+            TPG.Net.SyncScores()
+        end
     end
 end)

@@ -73,6 +73,38 @@ concommand.Add("tpg_votemap", function(ply, cmd, args)
     end
 end)
 
+-- Economy toggle (admin). The underlying state is the server convar
+-- tpg_economy_enabled, which a connected admin can't see/set from their client
+-- on a dedicated server -- only at the server console. This concommand runs
+-- server-side, so any admin can flip it in-game. Latched, so it applies on the
+-- NEXT map change (matching the convar's behaviour).
+concommand.Add("tpg_economy", function(ply, cmd, args)
+    if IsValid(ply) and not ply:IsAdmin() then
+        TPG.Util.ChatMessage(ply, "[TPG] Admins only.", Color(255, 0, 0))
+        return
+    end
+
+    local cv = GetConVar("tpg_economy_enabled")
+    if not cv then
+        TPG.Util.ChatMessage(ply, "[TPG] Economy system not loaded.", Color(255, 0, 0))
+        return
+    end
+
+    -- No argument = report current state; otherwise set 0/1.
+    if args[1] == nil or args[1] == "" then
+        local msg = "[TPG] Per-player economy is " .. (cv:GetBool() and "ENABLED" or "DISABLED") ..
+            " (active this map: " .. ((TPG.Economy and TPG.Economy.Active) and "yes" or "no") ..
+            "). Use tpg_economy 1/0; applies next map."
+        TPG.Util.ChatMessage(ply, msg, Color(0, 255, 255))
+        return
+    end
+
+    local on = tobool(args[1])
+    cv:SetBool(on)
+    TPG.Util.ChatBroadcast("[TPG] Per-player economy " .. (on and "ENABLED" or "DISABLED") ..
+        " -- takes effect on the next map change.", Color(0, 255, 255))
+end)
+
 -- Admin commands
 concommand.Add("tpg_admin_restart", function(ply, cmd, args)
     if not ply:IsAdmin() then return end

@@ -29,6 +29,7 @@ TEAM_RED        = 2002
 GAMEMODE_CP     = 1
 GAMEMODE_KOTH   = 2
 GAMEMODE_DM     = 3
+GAMEMODE_CTF    = 4
 
 -- Shared includes
 include("config/sh_config.lua")

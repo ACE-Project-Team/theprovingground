@@ -879,11 +879,11 @@ TPG.Maps.Current = nil
 
 -- Global limit multipliers, applied on top of every map's authored values.
 -- Reference: one strong tank ~= 11,000 points.
---   points x2.0 -> maps that previously fit ~1 strong tank now fit 2-3
---   weight x1.5 -> weight cap raised so those extra tanks physically fit
---   props  x1.5 -> prop cap raised so it doesn't become the new bottleneck
+--   points x1.84 -> ~8% nerf vs the old x2.0 budget, applied to every map
+--   weight x1.5  -> weight cap raised so those extra tanks physically fit
+--   props  x1.5  -> prop cap raised so it doesn't become the new bottleneck
 -- Tune these three numbers to rebalance all maps at once.
-TPG.Maps.LimitMult = { points = 2.0, weight = 1.5, props = 1.5 }
+TPG.Maps.LimitMult = { points = 1.84, weight = 1.5, props = 1.5 }
 
 local function ApplyLimitMult(limits)
     if not limits then return end
@@ -902,6 +902,11 @@ function TPG.Maps.Load(mapName)
         TPG.Maps.Current = table.Merge(table.Copy(TPG.Maps.Default), TPG.Maps.Configs[mapName])
         ApplyLimitMult(TPG.Maps.Current.limits)
 
+        -- Overlay any admin-placed custom points (server only).
+        if SERVER and TPG.Maps.ApplyCustomPoints then
+            TPG.Maps.ApplyCustomPoints(TPG.Maps.Current, mapName)
+        end
+
         -- Debug: verify limits loaded correctly
         local limits = TPG.Maps.Current.limits
         print("[TPG] Loaded map config: " .. mapName)
@@ -914,6 +919,11 @@ function TPG.Maps.Load(mapName)
     print("[TPG] No config for " .. mapName .. ", using defaults")
     TPG.Maps.Current = table.Copy(TPG.Maps.Default)
     ApplyLimitMult(TPG.Maps.Current.limits)
+
+    if SERVER and TPG.Maps.ApplyCustomPoints then
+        TPG.Maps.ApplyCustomPoints(TPG.Maps.Current, mapName)
+    end
+
     return TPG.Maps.Current
 end
 

@@ -22,8 +22,11 @@ function ENT:Initialize()
     
     self.CapTimeNeutral = TPG.Config.capTimeNeutral or 10
     self.CapTimeMax = TPG.Config.capTimeMax or 15
-    
-    self.ThinkTimer = 0
+
+    -- Capture logic runs on a fixed real-time cadence (see ENT:Think) so it
+    -- isn't tied to server tickrate.
+    self.LastCapStep = CurTime()
+    self.CapAccum    = 0
 end
 
 -- Call this after setting PointID and PointName
@@ -33,10 +36,27 @@ function ENT:SetupNetworking()
 end
 
 function ENT:Think()
-    self.ThinkTimer = self.ThinkTimer + 1
-    if self.ThinkTimer < 5 then return end
-    self.ThinkTimer = 0
-    
+    self:NextThink(CurTime())
+
+    -- Advance capture progress at a fixed wall-clock step instead of every N
+    -- ticks, so a 33-tick server captures at the same speed as a 66-tick one.
+    -- The catch-up loop is clamped so a lag spike can't dump a huge burst of
+    -- progress in a single frame.
+    local step = TPG.Config.captureStep or 0.075
+    self.CapAccum = self.CapAccum + (CurTime() - self.LastCapStep)
+    self.LastCapStep = CurTime()
+
+    local steps = 0
+    while self.CapAccum >= step and steps < 8 do
+        self.CapAccum = self.CapAccum - step
+        steps = steps + 1
+        self:CaptureStep()
+    end
+
+    return true
+end
+
+function ENT:CaptureStep()
     local greenOnPoint = 0
     local redOnPoint = 0
     local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters or 5)
@@ -93,9 +113,6 @@ function ENT:Think()
         self:OnCaptureStateChanged()
         self.LastCapState = self.CapOwnership
     end
-    
-    self:NextThink(CurTime())
-    return true
 end
 
 function ENT:UpdateColor()

@@ -111,7 +111,15 @@ hook.Add("HUDPaint", "TPG_HUD", function()
         Color(255, 255, 0),
         TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER
     )
-    
+
+    -- Per-player economy indicator (secondary mode) -- makes clear it's not just
+    -- "economy on" but that each player runs a personal budget this round.
+    if GetGlobalBool("TPG_EconomyActive", false) then
+        draw.RoundedBox(5, 20, 58, 170, 22, Color(0, 0, 0, 100))
+        draw.SimpleText("PER-PLAYER ECONOMY", "DermaDefaultBold", 105, 69,
+            Color(120, 230, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
+
     -- Team stats box
     draw.RoundedBox(5, sw - 257, 12, 245, 95, Color(0, 0, 0, 100))
     draw.RoundedBox(5, sw - 250, 20, 230, 80, teamColor)
