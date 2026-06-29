@@ -50,13 +50,18 @@ function ENT:Think()
     while self.CapAccum >= step and steps < 8 do
         self.CapAccum = self.CapAccum - step
         steps = steps + 1
-        self:CaptureStep()
+        self:CaptureStep(step)
     end
 
     return true
 end
 
-function ENT:CaptureStep()
+-- dt is the wall-clock duration of this step (seconds). Progress is tracked in
+-- seconds, so capTimeNeutral/capTimeMax are real seconds regardless of tickrate
+-- or step size. (The old code added a whole `balance` per step, making a point
+-- flip in ~0.75s instead of capTimeNeutral.)
+function ENT:CaptureStep(dt)
+    dt = dt or (TPG.Config.captureStep or 0.075)
     local greenOnPoint = 0
     local redOnPoint = 0
     local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters or 5)
@@ -81,8 +86,9 @@ function ENT:CaptureStep()
     local balance = math.Clamp(greenOnPoint - redOnPoint, -maxPlayers, maxPlayers)
     
     if balance ~= 0 then
-        self.CapProgress = self.CapProgress + balance
-        
+        -- One net player moves progress one second per real second.
+        self.CapProgress = self.CapProgress + balance * dt
+
         if self.CapProgress > self.CapTimeNeutral then
             self.CapProgress = math.min(self.CapProgress, self.CapTimeMax)
             self.CapOwnership = (balance < -1) and 0 or 1
@@ -93,13 +99,16 @@ function ENT:CaptureStep()
             self.CapOwnership = 0
         end
     else
-        -- Decay towards current owner
+        -- Empty point: held points slowly top up to the max bonus; a contested
+        -- (neutral) point bleeds progress back toward zero. Both rates are
+        -- per-second, scaled by dt.
         if self.CapOwnership == 1 then
-            self.CapProgress = math.min(self.CapProgress + 0.5, self.CapTimeMax)
+            self.CapProgress = math.min(self.CapProgress + 0.5 * dt, self.CapTimeMax)
         elseif self.CapOwnership == -1 then
-            self.CapProgress = math.max(self.CapProgress - 0.5, -self.CapTimeMax)
+            self.CapProgress = math.max(self.CapProgress - 0.5 * dt, -self.CapTimeMax)
         else
-            self.CapProgress = self.CapProgress * 0.5
+            self.CapProgress = self.CapProgress * (0.5 ^ dt)  -- ~halves per second
+            if math.abs(self.CapProgress) < 0.01 then self.CapProgress = 0 end
         end
     end
     

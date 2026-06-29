@@ -39,6 +39,7 @@ function ENT:PickUp(ply)
     self:SetFlagState(self.STATE_CARRIED)
     self:SetPossessTeam(ply:Team())
     self:SetCarrier(ply)
+    self.CarryStart = CurTime()
 
     self:EmitSound("ambient/alarms/warningbell1.wav", 90, 110)
     local td = TPG.GetTeamData(ply:Team())
@@ -72,7 +73,7 @@ function ENT:Think()
         if not self:CarrierStillValid() then
             self:Drop()
         else
-            self:SetPos(self:GetCarrier():GetPos() + Vector(0, 0, 72))
+            self:SetPos(self:GetCarrier():GetPos() + Vector(0, 0, 50))
         end
     end
 
@@ -90,9 +91,24 @@ function ENT:GameplayStep()
         local c = self:GetCarrier()
         if not IsValid(c) then return end
 
-        -- Score by carrying the flag to your own spawn.
-        local home = TPG.State.spawns[c:Team()]
-        if home and c:GetPos():Distance(home) < (TPG.Config.ctfDeliverRadius or 500) then
+        -- Anti-hoarding: a single carry can't last forever.
+        if self.CarryStart and CurTime() - self.CarryStart > (TPG.Config.ctfMaxCarryTime or 150) then
+            self:ReturnHome("carried too long")
+            return
+        end
+
+        -- Deliver by getting the flag into your own safezone. This matches where
+        -- you actually gain spawn protection, instead of a tighter inner radius
+        -- that forced you to walk deep past the safezone edge to score.
+        local delivered = false
+        if TPG.Protection and TPG.Protection.IsInSafezone then
+            delivered = TPG.Protection.IsInSafezone(c)
+        else
+            local home = TPG.State.spawns[c:Team()]
+            delivered = home and c:GetPos():Distance(home) < (TPG.Config.ctfDeliverRadius or 500)
+        end
+
+        if delivered then
             TPG.CTF.OnCapture(self, c)
         end
         return

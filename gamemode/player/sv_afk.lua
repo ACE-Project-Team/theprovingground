@@ -21,7 +21,16 @@ end)
 hook.Add("Think", "TPG_AFK_Check", function()
     for _, ply in ipairs(player.GetAll()) do
         if not ply:IsConnected() or not ply:IsFullyAuthenticated() then continue end
-        
+
+        -- Spectators (anyone not on a playing team) hold no team slot, so don't
+        -- AFK-kick them -- they're allowed to just watch. Clear any pending warn
+        -- state so they don't get kicked the instant they pick a side.
+        if not TPG.Util.IsOnTeam(ply) then
+            ply._tpgLastActivity = CurTime() + TPG.Config.afkKickTime
+            ply._tpgWarned = false
+            continue
+        end
+
         local afkTime = ply._tpgLastActivity or (CurTime() + TPG.Config.afkKickTime)
         local timeLeft = afkTime - CurTime()
         

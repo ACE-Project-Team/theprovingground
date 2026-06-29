@@ -12,13 +12,19 @@ local SEGW        = 8
 local SEGH        = 26
 local RENDER_DIST = 4000 ^ 2
 
-local NEUTRAL = Color(190, 190, 190)
+local NEUTRAL = Color(150, 150, 150)   -- solid grey (opaque, not the faded look from before)
 local DARK    = Color(35, 35, 35)
 
 local function possessColor(teamId)
     if teamId == TEAM_RED   then return Color(200, 45, 45) end
     if teamId == TEAM_GREEN then return Color(45, 200, 80) end
     return NEUTRAL
+end
+
+function ENT:Initialize()
+    -- We draw the pole/cloth manually and skip the model, so give the entity
+    -- generous render bounds or the engine culls it by the (undrawn) model.
+    self:SetRenderBounds(Vector(-80, -80, 0), Vector(80, 80, POLE_H + 60))
 end
 
 function ENT:DrawCloth(top, fwd, right, col)
@@ -38,8 +44,9 @@ function ENT:DrawCloth(top, fwd, right, col)
 end
 
 function ENT:Draw()
-    self:DrawModel()
-
+    -- Intentionally NOT DrawModel(): the underlying prop is a cap-point base
+    -- platform, which read as "capture this point" and looked wrong floating
+    -- over a carrier's head. We render just the pole + cloth ourselves.
     local col   = possessColor(self:GetPossessTeam())
     local state = self:GetFlagState()
     local pos   = self:GetPos()

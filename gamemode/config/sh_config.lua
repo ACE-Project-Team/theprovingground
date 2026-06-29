@@ -16,10 +16,11 @@ TPG.Config = {
     -- Capture the Flag (objectives/sv_ctf.lua). One neutral flag on the KOTH
     -- point; grab it and carry it to your own spawn to score. KOTH maps only.
     ctfChanceWithinKoth  = 0.5,    -- chance CTF replaces KOTH when the KOTH slot is rolled
-    ctfDeliverRadius     = 500,    -- how close to your own spawn counts as delivering the flag
+    ctfDeliverRadius     = 500,    -- fallback delivery radius if the safezone can't be resolved
     ctfCaptureTicketLoss = 75,     -- enemy tickets lost per delivered flag
     ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
     ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
+    ctfMaxCarryTime      = 150,    -- a single carry auto-returns after this many seconds (anti-hoarding)
 
     -- Safezone
     safezoneRadius      = 750,

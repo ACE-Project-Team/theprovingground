@@ -29,6 +29,19 @@ SWEP.AdminSpawnable = true
 SWEP.Slot     = 1
 SWEP.SlotPos  = 7
 
+-- Weapons defined in a GAMEMODE's entities/weapons folder are registered as
+-- usable weapons but are NOT auto-added to the spawnmenu's "Weapon" list (only
+-- lua/weapons/ autoloads into it). Without this the torch shows under "ACE
+-- Tools" but this tool doesn't. Register it manually so it appears beside it.
+list.Set("Weapon", "weapon_tpg_pointtool", {
+    PrintName      = SWEP.PrintName,
+    ClassName      = "weapon_tpg_pointtool",
+    Category       = SWEP.Category,
+    Spawnable      = SWEP.Spawnable,
+    AdminOnly      = SWEP.AdminOnly,
+    AdminSpawnable = SWEP.AdminSpawnable,
+})
+
 SWEP.Base       = "weapon_base"
 SWEP.ViewModel  = "models/weapons/c_toolgun.mdl"
 SWEP.WorldModel = "models/weapons/w_toolgun.mdl"
