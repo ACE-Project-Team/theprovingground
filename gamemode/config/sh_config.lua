@@ -14,10 +14,11 @@ TPG.Config = {
     dmTicketMaxMult     = 2.0,
 
     -- Capture the Flag (objectives/sv_ctf.lua). One neutral flag on the KOTH
-    -- point; carrying it drains the enemy's tickets. KOTH maps only.
+    -- point; grab it and carry it to your own spawn to score. KOTH maps only.
     ctfChanceWithinKoth  = 0.5,    -- chance CTF replaces KOTH when the KOTH slot is rolled
-    ctfHoldDrainPerSec   = 4,      -- enemy tickets drained per second while a team carries the flag
-    ctfHoldRewardPerSec  = 15,     -- per-player economy reward per second to the carrier
+    ctfDeliverRadius     = 500,    -- how close to your own spawn counts as delivering the flag
+    ctfCaptureTicketLoss = 75,     -- enemy tickets lost per delivered flag
+    ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
     ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
 
     -- Safezone

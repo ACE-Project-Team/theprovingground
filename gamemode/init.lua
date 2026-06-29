@@ -57,6 +57,11 @@ include("objectives/sv_objectives.lua")
 include("objectives/sv_ctf.lua")
 include("voting/sv_voting.lua")
 
+-- Ship the Exo 2 font (point tool HUD) to clients.
+for _, w in ipairs({ "400", "600", "700", "800" }) do
+    resource.AddFile("resource/fonts/Exo2-" .. w .. ".ttf")
+end
+
 -- Initialize gamemode
 function GM:Initialize()
     self.BaseClass.Initialize(self)

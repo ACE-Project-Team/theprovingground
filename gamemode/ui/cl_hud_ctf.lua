@@ -40,9 +40,18 @@ hook.Add("HUDPaint", "TPG_CTFHUD", function()
     local w, h = 360, 50
     local x, y = sw / 2 - w / 2, 118
 
+    -- Highlight the local carrier with a "deliver it" prompt.
+    local carrying = (state == flag.STATE_CARRIED and flag:GetCarrier() == ply)
+    if carrying then h = h + 18 end
+
     draw.RoundedBox(6, x, y, w, h, Color(0, 0, 0, 160))
     draw.SimpleText("CAPTURE THE FLAG", "DermaDefaultBold", x + w / 2, y + 14,
         Color(245, 245, 245), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     draw.SimpleText(status, "DermaDefaultBold", x + w / 2, y + 34,
         sCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+
+    if carrying then
+        draw.SimpleText("BRING IT TO YOUR SPAWN!", "DermaDefaultBold", x + w / 2, y + 54,
+            Color(255, 230, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
 end)

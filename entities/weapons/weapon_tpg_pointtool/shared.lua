@@ -132,13 +132,14 @@ if CLIENT then
     local COL_DARK      = Color(98, 15, 15)     -- #620F0F
     local COL_SECONDARY = Color(245, 245, 245)  -- #F5F5F5
 
-    -- Exo 2 weights (400 body, 600 label, 700 sub, 800 headline). Falls back to
-    -- a system font if Exo 2 isn't installed/shipped -- see notes on adding the
-    -- TTF to resource/fonts.
-    surface.CreateFont("TPG.Tool.Head",  { font = "Exo 2", size = 27, weight = 800, extended = true, antialias = true })
-    surface.CreateFont("TPG.Tool.Sub",   { font = "Exo 2", size = 21, weight = 700, extended = true, antialias = true })
-    surface.CreateFont("TPG.Tool.Label", { font = "Exo 2", size = 17, weight = 600, extended = true, antialias = true })
-    surface.CreateFont("TPG.Tool.Body",  { font = "Exo 2", size = 16, weight = 400, extended = true, antialias = true })
+    -- Exo 2 (shipped in resource/fonts). The weights register under different
+    -- family names, so each face is targeted by name:
+    --   400 -> "Exo 2" Regular, 700 -> "Exo 2" Bold,
+    --   600 -> "Exo 2 SemiBold", 800 -> "Exo 2 ExtraBold".
+    surface.CreateFont("TPG.Tool.Head",  { font = "Exo 2 ExtraBold", size = 27, weight = 800, extended = true, antialias = true })
+    surface.CreateFont("TPG.Tool.Sub",   { font = "Exo 2",           size = 21, weight = 700, extended = true, antialias = true })
+    surface.CreateFont("TPG.Tool.Label", { font = "Exo 2 SemiBold",  size = 17, weight = 600, extended = true, antialias = true })
+    surface.CreateFont("TPG.Tool.Body",  { font = "Exo 2",           size = 16, weight = 400, extended = true, antialias = true })
 
     local gradient = Material("gui/gradient")
 

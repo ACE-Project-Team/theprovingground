@@ -90,14 +90,10 @@ function ENT:GameplayStep()
         local c = self:GetCarrier()
         if not IsValid(c) then return end
 
-        -- Possession drains the enemy's tickets (a mobile hill). The round's
-        -- normal win check (RoundThink) resolves CTF wins from this.
-        local enemy = TPG.GetEnemyTeam(c:Team())
-        local drain = (TPG.Config.ctfHoldDrainPerSec or 4) * STEP
-        TPG.State.AddScore(enemy, -drain)
-
-        if TPG.Economy and TPG.Economy.Reward then
-            TPG.Economy.Reward(c, (TPG.Config.ctfHoldRewardPerSec or 15) * STEP, "ctf_hold")
+        -- Score by carrying the flag to your own spawn.
+        local home = TPG.State.spawns[c:Team()]
+        if home and c:GetPos():Distance(home) < (TPG.Config.ctfDeliverRadius or 500) then
+            TPG.CTF.OnCapture(self, c)
         end
         return
     end
