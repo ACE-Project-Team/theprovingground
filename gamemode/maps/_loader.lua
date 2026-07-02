@@ -167,6 +167,39 @@ TPG.Maps.Configs = {
         },
     },
     
+    -- Night variant of gm_baik_coast_03: identical geometry, so it reuses the
+    -- same spawns / limits / objectives.
+    ["gm_baik_coast_03_night"] = {
+        spawns = {
+            [TEAM_GREEN] = Vector(-4678, -5985, 501),
+            [TEAM_RED]   = Vector(7312, 4011, 295),
+        },
+        limits = {
+            weight = 120,
+            props = 450,      -- Was 300, now 1.5x
+            points = 18000,   -- 120t × 150
+        },
+        safezoneRadius = 750,
+
+        [GAMEMODE_CP] = {
+            capMultiplier = 0.025,
+            objectives = {
+                { pos = Vector(-5137, 3755, 256), name = "Beach House" },
+                { pos = Vector(-217, 8201, 62), name = "Docks" },
+            },
+        },
+        [GAMEMODE_KOTH] = {
+            capMultiplier = 0.15,
+            objectives = {
+                { pos = Vector(-6480, 10373, 219), name = "The Hill" },
+            },
+        },
+        [GAMEMODE_DM] = {
+            capMultiplier = 0,
+            objectives = {},
+        },
+    },
+
     ["gm_baik_construct_draft1"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-3038, 3038, 17),
@@ -879,11 +912,11 @@ TPG.Maps.Current = nil
 
 -- Global limit multipliers, applied on top of every map's authored values.
 -- Reference: one strong tank ~= 11,000 points.
---   points x1.84 -> ~8% nerf vs the old x2.0 budget, applied to every map
---   weight x1.5  -> weight cap raised so those extra tanks physically fit
---   props  x1.5  -> prop cap raised so it doesn't become the new bottleneck
+--   points x1.656 -> another 10% nerf on top of the old x1.84 budget (x2.0 -> x1.84 -> x1.656)
+--   weight x1.5   -> weight cap raised so those extra tanks physically fit
+--   props  x1.5   -> prop cap raised so it doesn't become the new bottleneck
 -- Tune these three numbers to rebalance all maps at once.
-TPG.Maps.LimitMult = { points = 1.84, weight = 1.5, props = 1.5 }
+TPG.Maps.LimitMult = { points = 1.656, weight = 1.5, props = 1.5 }
 
 local function ApplyLimitMult(limits)
     if not limits then return end

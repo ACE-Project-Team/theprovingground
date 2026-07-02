@@ -13,9 +13,10 @@ TPG.Config = {
     dmTicketRefPlayers  = 8,
     dmTicketMaxMult     = 2.0,
 
-    -- Capture the Flag (objectives/sv_ctf.lua). One neutral flag on the KOTH
-    -- point; grab it and carry it to your own spawn to score. KOTH maps only.
-    ctfChanceWithinKoth  = 0.5,    -- chance CTF replaces KOTH when the KOTH slot is rolled
+    -- Capture the Flag (objectives/sv_ctf.lua). Its OWN game mode: one neutral
+    -- flag that sits on the map's KOTH capture point; grab it and carry it to
+    -- your own spawn to score. Only offered on maps that have a KOTH point.
+    ctfChance            = 0.15,   -- per-round chance CTF is the mode (see TPG.SelectRandomGameType)
     ctfDeliverRadius     = 500,    -- fallback delivery radius if the safezone can't be resolved
     ctfCaptureTicketLoss = 75,     -- enemy tickets lost per delivered flag
     ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
@@ -43,11 +44,11 @@ TPG.Config = {
     -- Per-player economy as a secondary mode (see systems/sv_economy.lua).
     -- Per-round chance it activates, unless an admin forces it via the
     -- tpg_economy_enabled convar.
-    economyChance       = 0.30,
+    economyChance       = 0.45,
 
     -- Duplication
-    dupeCooldownPerTon  = 2,
-    dupeCooldownPer1kPoints = 3,    -- +seconds of cooldown per 1000 ACE points of the build (item: pricier builds = longer cooldown)
+    dupeCooldownPerTon  = 2.5,
+    dupeCooldownPer1kPoints = 3.75,    -- +seconds of cooldown per 1000 ACE points of the build (item: pricier builds = longer cooldown)
     dupeGracePeriod     = 60,
     lightVehicleWeight  = 5000,
     lightVehicleProps   = 140,

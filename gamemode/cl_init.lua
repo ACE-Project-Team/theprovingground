@@ -4,6 +4,9 @@
 
 include("shared.lua")
 
+-- Console commands (client-side autocomplete/forwarding shim)
+include("core/sh_commands.lua")
+
 -- UI includes
 include("ui/cl_hud.lua")
 include("ui/cl_hud_economy.lua")

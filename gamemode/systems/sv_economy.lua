@@ -27,9 +27,16 @@ ECON.Config = {
     captureHoldIncome = 60,     -- per interval, per objective you are standing on
     captureRadiusM    = 30,     -- metres from an objective to earn hold income
 
-    killRewardBase    = 200,    -- flat reward per enemy kill
+    killRewardBase    = 250,    -- flat reward per enemy kill
     killRewardVehFrac = 0.05,   -- + this fraction of the victim's vehicle value
-    killRewardMax     = 2000,   -- per-kill clamp
+    killRewardMax     = 2500,   -- per-kill clamp
+
+    teamkillPenalty   = 400,    -- deducted from a player's wallet for killing a teammate
+
+    -- Stock spawn-menu vehicles (jeep, airboat, and any add-on cars) aren't ACE
+    -- contraptions, so they have no point value and would otherwise be a free
+    -- ride around the economy. Charge a flat fee to field one; 0 disables it.
+    stockVehicleCost  = 1500,
 
     resetEachRound    = true,   -- wallet resets to startingMoney each round
 }
@@ -64,6 +71,12 @@ end
 function ECON.Reward(ply, amount, _reason)
     if not ECON.Active or not IsValid(ply) or (amount or 0) <= 0 then return end
     ECON.SetMoney(ply, ECON.GetMoney(ply) + amount)
+end
+
+-- Deduct money (clamped at zero by SetMoney). No-op unless the economy is live.
+function ECON.Penalize(ply, amount, _reason)
+    if not ECON.Active or not IsValid(ply) or (amount or 0) <= 0 then return end
+    ECON.SetMoney(ply, ECON.GetMoney(ply) - amount)
 end
 
 function ECON.CanAfford(ply, cost)
@@ -124,7 +137,18 @@ end)
 hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, attacker)
     if not ECON.Active then return end
     if not IsValid(attacker) or not attacker:IsPlayer() then return end
-    if attacker == victim or attacker:Team() == victim:Team() then return end
+    if attacker == victim then return end
+
+    -- Team kills: no reward, and a small wallet penalty so it stings a little.
+    if attacker:Team() == victim:Team() then
+        local penalty = ECON.Config.teamkillPenalty or 0
+        if penalty > 0 then
+            ECON.Penalize(attacker, penalty, "teamkill")
+            TPG.Util.ChatMessage(attacker, "[TPG] Team kill: -" .. penalty ..
+                " pts. Balance: " .. ECON.GetMoney(attacker), Color(255, 120, 120))
+        end
+        return
+    end
 
     -- No reward for kills made from your own safezone...
     if TPG.Protection and TPG.Protection.IsInSafezone and TPG.Protection.IsInSafezone(attacker) then
@@ -141,6 +165,49 @@ hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, at
     local reward   = math.min(ECON.Config.killRewardBase + vehValue * ECON.Config.killRewardVehFrac,
                               ECON.Config.killRewardMax)
     ECON.Reward(attacker, reward, "kill")
+end)
+
+-- ── Stock (non-ACE) vehicle purchases ──────────────────────────────────────
+-- These stock vehicles carry no ACE point value, so under the economy they'd be
+-- a free way to get around. Charge a flat fee, and if the buyer can't afford it,
+-- remove the vehicle. Seats (prop_vehicle_prisoner_pod) are deliberately absent:
+-- they're build components, not transport.
+local STOCK_VEHICLE_CLASSES = {
+    ["prop_vehicle_jeep"]    = true,
+    ["prop_vehicle_airboat"] = true,
+    ["prop_vehicle_apc"]     = true,
+}
+
+hook.Add("PlayerSpawnedVehicle", "TPG_EconomyStockVehicle", function(ply, ent)
+    if not ECON.Active then return end
+    if not IsValid(ply) or not IsValid(ent) then return end
+
+    local cost = ECON.Config.stockVehicleCost or 0
+    if cost <= 0 then return end
+    if not STOCK_VEHICLE_CLASSES[ent:GetClass()] then return end
+
+    -- Defer a frame: the safezone restriction (sv_protection) may remove the
+    -- vehicle this same frame, and ACE point totals settle on a timer.Simple(0).
+    timer.Simple(0, function()
+        if not IsValid(ply) or not IsValid(ent) then return end
+
+        -- Part of an actual ACE contraption? Then it's billed through the build,
+        -- not as a stock vehicle -- leave it alone.
+        if ent.GetContraption then
+            local con = ent:GetContraption()
+            if con and (con.ACEPoints or 0) > 0 then return end
+        end
+
+        if not ECON.Charge(ply, cost) then
+            ent:Remove()
+            TPG.Util.ChatMessage(ply, "[TPG] Not enough points for a vehicle (costs " ..
+                cost .. ", you have " .. ECON.GetMoney(ply) .. ").", Color(255, 0, 0))
+            return
+        end
+
+        TPG.Util.ChatMessage(ply, "[TPG] Vehicle purchased for " .. cost ..
+            " pts. Balance: " .. ECON.GetMoney(ply), Color(0, 255, 0))
+    end)
 end)
 
 -- ── Lifecycle ──────────────────────────────────────────────────────────────

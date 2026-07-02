@@ -16,6 +16,7 @@ AddCSLuaFile("config/sh_weapons_config.lua")
 AddCSLuaFile("config/sh_weapons.lua")
 AddCSLuaFile("config/sh_gametypes.lua")
 AddCSLuaFile("core/sh_utils.lua")
+AddCSLuaFile("core/sh_commands.lua")
 AddCSLuaFile("objectives/sh_controlpoint.lua")
 AddCSLuaFile("maps/_loader.lua")
 
@@ -37,6 +38,7 @@ include("core/sv_gamestate.lua")
 include("maps/sv_custom_points.lua")
 include("core/sv_rounds.lua")
 include("core/sv_commands.lua")
+include("core/sh_commands.lua")
 include("core/sv_weapons.lua")
 include("core/sv_ulx_compat.lua")
 
@@ -76,7 +78,11 @@ function GM:Initialize()
         RunConsoleCommand("sbox_playershurtplayers", "1")
         RunConsoleCommand("sv_alltalk", "0")
         RunConsoleCommand("mp_falldamage", "1")
-        RunConsoleCommand("sbox_maxprops", "200")
+        -- TPG governs builds with its own per-team prop/weight/point limits
+        -- (see TPG.State.maxLimits), so the engine's per-player sbox cap should
+        -- sit well above them and never be the thing that stops a spawn. 200 was
+        -- far too low and just annoyed players; raise it out of the way.
+        RunConsoleCommand("sbox_maxprops", "2000")
         RunConsoleCommand("wire_holograms_max", "150")
     end)
 end

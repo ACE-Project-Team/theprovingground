@@ -42,15 +42,18 @@ TPG.GameTypes = {
 function TPG.SelectRandomGameType()
     local roll = math.random()
 
-    if roll < 0.2 then
-        -- KOTH slot. CTF lives on the KOTH point, so it only replaces KOTH and
-        -- only when the map actually has one (TPG.CTF.IsSupported).
-        if math.random() < (TPG.Config.ctfChanceWithinKoth or 0.5)
-            and TPG.CTF and TPG.CTF.IsSupported and TPG.CTF.IsSupported() then
+    -- Slot split: 0-0.15 CTF, 0.15-0.40 KOTH, 0.40-0.60 DM, 0.60-1.0 CP.
+    -- CTF is its own mode now -- it just borrows the map's KOTH capture point as
+    -- the flag's home (TPG.CTF.GetFlagPoint), it does NOT replace a KOTH round.
+    -- On a map that can't host a flag, CTF's slice falls through to KOTH.
+    if roll < (TPG.Config.ctfChance or 0.15) then
+        if TPG.CTF and TPG.CTF.IsSupported and TPG.CTF.IsSupported() then
             return GAMEMODE_CTF
         end
         return GAMEMODE_KOTH
-    elseif roll < 0.4 then
+    elseif roll < 0.40 then
+        return GAMEMODE_KOTH
+    elseif roll < 0.60 then
         return GAMEMODE_DM
     else
         return GAMEMODE_CP
