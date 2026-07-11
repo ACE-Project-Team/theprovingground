@@ -71,6 +71,16 @@ TPG.WeaponConfig = {
         ["weapon_ace_rpk74"]   = { speedBonus = -7 },
     },
 
+    -- Reserve-ammo top-ups, applied when the loadout weapon is given: the
+    -- player's clip + reserve of the weapon's primary ammo is raised to this
+    -- total. The AT-4-likes ship with DefaultClip = 1 (a single rocket ever),
+    -- which is uselessly low for a vehicle-combat round.
+    AmmoTopUp = {
+        ["weapon_ace_at4"]     = 6,
+        ["weapon_ace_at4t"]    = 6,
+        ["weapon_ace_javelin"] = 6,
+    },
+
     -- "Virtual" entries that aren't a single discoverable SWEP (multi-item or
     -- fallback). Keyed by a stable sentinel id.
     Virtual = {
