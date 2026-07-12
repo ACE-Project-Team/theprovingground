@@ -6,25 +6,48 @@ TPG.PlayerTeams = TPG.PlayerTeams or {}
 
 function TPG.PlayerTeams.AssignPlayer(ply, teamId)
     local currentTeam = ply:Team()
-    
+
+    -- Already there: nothing to do (and don't burn the cooldown on a no-op).
+    if currentTeam == teamId then return true end
+
+    -- Cooldown on voluntary switches onto a team. Blocks green<->red flipping
+    -- to chase the winning side / dodge autobalance / double-dip budgets, and
+    -- can't be side-stepped via spectator (the stamp only clears on a scramble).
+    -- Admins bypass; leaving to spectator is always allowed; first join is free.
+    local cd = TPG.Config.teamSwitchCooldown or 0
+    local isAdmin = IsValid(ply) and ply:IsAdmin()
+    if cd > 0 and teamId ~= TEAM_UNASSIGNED and not isAdmin and ply.tpgLastTeamSwitch then
+        local remain = cd - (CurTime() - ply.tpgLastTeamSwitch)
+        if remain > 0 then
+            TPG.Util.ChatMessage(ply, "[TPG] Wait " .. math.ceil(remain) ..
+                "s before switching teams again.", Color(255, 0, 0))
+            return false
+        end
+    end
+
     -- Check balance
     if not TPG.PlayerTeams.CanJoin(ply, teamId) then
         TPG.Util.ChatMessage(ply, "[TPG] Teams cannot be unbalanced.", Color(255, 0, 0))
         return false
     end
-    
+
     -- Set team
     ply:SetTeam(teamId)
-    
+
     -- Respawn
     ply:Spawn()
-    
+
+    -- Stamp the cooldown when landing on an actual team (not when spectating).
+    if teamId ~= TEAM_UNASSIGNED then
+        ply.tpgLastTeamSwitch = CurTime()
+    end
+
     -- Notify
     local teamData = TPG.GetTeamData(teamId)
     TPG.Util.ChatMessage(ply, "You have joined " .. teamData.name, Color(0, 255, 255))
-    
+
     print("[TPG] " .. ply:Nick() .. " joined " .. teamData.name)
-    
+
     return true
 end
 
@@ -106,6 +129,9 @@ function TPG.PlayerTeams.ScrambleAll()
     for i, ply in ipairs(pool) do
         ply:SetTeam(pattern[(i - 1) % 4 + 1])
         ply:Spawn()
+        -- A scramble overrides the switch cooldown but re-stamps it, so nobody
+        -- can immediately flip back and undo the forced move.
+        ply.tpgLastTeamSwitch = CurTime()
     end
 
     TPG.Util.ChatBroadcast("[TPG] Teams have been scrambled (balanced by rating)!", Color(255, 255, 0))

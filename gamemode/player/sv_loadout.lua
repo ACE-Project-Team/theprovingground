@@ -59,7 +59,16 @@ function TPG.Loadout.Apply(ply)
     -- Give weapons
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
     TPG.Loadout.GiveWeapon(ply, "Secondary", secondaryId)
-    TPG.Loadout.GiveWeapon(ply, "Special", specialId)
+    local gaveSpecial = TPG.Loadout.GiveWeapon(ply, "Special", specialId)
+
+    -- Bonus disposable AT: infantry who bring neither a launcher nor mines in
+    -- their Special slot get a free single-use tube, so they're never helpless
+    -- against armour. Given last, after the speed snapshot, so it doesn't
+    -- override the (faster) empty-Special movement -- it's a bonus, not a pick.
+    local atClass = TPG.Config.disposableATClass
+    if not gaveSpecial and atClass and atClass ~= "" and weapons.GetStored(atClass) then
+        ply:Give(atClass)
+    end
 
     -- Underdog perk: a free smoke to cover the retreat (or the push).
     if TPG.Underdog and TPG.Underdog.IsPlayerUnderdog and TPG.Underdog.IsPlayerUnderdog(ply) then
@@ -103,14 +112,16 @@ local function TopUpAmmo(ply, category, class, wep)
     end
 end
 
+-- Returns true if it actually handed the player a weapon (so callers can tell
+-- an empty/"none"/disabled pick from a real one -- e.g. the bonus AT).
 function TPG.Loadout.GiveWeapon(ply, category, weaponId)
     local weapon = TPG.GetWeapon(category, weaponId)
-    if not weapon or weapon.enabled == false then return end
+    if not weapon or weapon.enabled == false then return false end
 
     -- Single weapon
     if weapon.class then
         TopUpAmmo(ply, category, weapon.class, ply:Give(weapon.class))
-        return
+        return true
     end
 
     -- Multiple weapons (e.g., mines)
@@ -118,13 +129,16 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
         for _, class in ipairs(weapon.multipleClasses) do
             TopUpAmmo(ply, category, class, ply:Give(class))
         end
-        return
+        return true
     end
 
     -- Fallback weapon (e.g., disposable AT when no special selected)
     if weapon.fallbackClass then
         TopUpAmmo(ply, category, weapon.fallbackClass, ply:Give(weapon.fallbackClass))
+        return true
     end
+
+    return false
 end
 
 function TPG.Loadout.ApplyArmor(ply, armorId)

@@ -48,11 +48,14 @@ TPG.WeaponConfig = {
     },
 
     -- Exact classes never offered. The mine SWEPs are bundled into the virtual
-    -- "Mines" entry below, so they're hidden as individual choices.
+    -- "Mines" entry below, so they're hidden as individual choices. The
+    -- disposable AT is never a menu pick either -- it's handed out as a bonus to
+    -- anyone whose Special slot is empty (see sv_loadout.lua).
     Exclude = {
         ["weapon_ace_antipersonmine"] = true,
         ["weapon_ace_boundingmine"]   = true,
         ["weapon_ace_antitankmine"]   = true,
+        ["disposableat"]              = true,
     },
 
     -- Per-weapon tuning. Any field overrides the discovered/default value:
@@ -69,9 +72,6 @@ TPG.WeaponConfig = {
         ["weapon_ace_mg36"]    = { speedBonus = -15 },
         ["weapon_ace_rpk"]     = { speedBonus = -7 },
         ["weapon_ace_rpk74"]   = { speedBonus = -7 },
-        -- Single-use tube: light to carry, and its top-up is pinned to 1 so
-        -- the Special ammo floor never hands it spare rockets it can't use.
-        ["disposableat"]       = { speedBonus = -3 },
     },
 
     -- Reserve-ammo top-ups, applied when the loadout weapon is given: the
@@ -82,7 +82,6 @@ TPG.WeaponConfig = {
         ["weapon_ace_at4"]     = 6,
         ["weapon_ace_at4t"]    = 6,
         ["weapon_ace_javelin"] = 6,
-        ["disposableat"]       = 1,   -- single-use; extra rockets would be dead weight
     },
 
     -- Floor for EVERY Special-slot weapon, so launchers from add-on packs (ACE

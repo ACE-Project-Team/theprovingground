@@ -53,6 +53,18 @@ TPG.Config = {
     ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
     ctfMaxCarryTime      = 150,    -- a single carry auto-returns after this many seconds (anti-hoarding)
 
+    -- Bonus disposable AT (entities/weapons/disposableat): every teamed player
+    -- who brings neither a launcher nor mines in their Special slot gets a
+    -- single-use AT tube for free, so plain infantry always have an answer to
+    -- armour. Set the class to "" to disable.
+    disposableATClass   = "disposableat",
+
+    -- Voluntary team-switch cooldown (sv_teams.lua). Stops green<->red flipping
+    -- to chase the winning side / dodge autobalance / double-dip team budgets.
+    -- Admins bypass it; a scramble ignores it (and re-stamps everyone so the
+    -- forced move can't be instantly reversed). First join is always free.
+    teamSwitchCooldown  = 30,
+
     -- Safezone
     safezoneRadius      = 750,
     spawnProtectionTime = 5,

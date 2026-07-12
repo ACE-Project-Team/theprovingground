@@ -54,8 +54,23 @@ function ENT:PickUp(ply)
 end
 
 function ENT:Drop()
-    local c   = self:GetCarrier()
-    local pos = (IsValid(c) and (c:GetPos() + Vector(0, 0, 10))) or self:GetPos()
+    local c    = self:GetCarrier()
+    local base = (IsValid(c) and c:GetPos()) or self:GetPos()
+
+    -- Snap the drop down to the ground below. A carrier killed in the air (in an
+    -- aircraft, off a cliff, rocket-jumping) would otherwise leave the flag
+    -- floating at head height with a 100u pickup radius nobody on the ground can
+    -- reach -- it'd just sit there until the return timer. Trace straight down
+    -- through world + props/vehicles (but not players) and drop it onto whatever
+    -- surface is beneath; fall back to the old head-height spot if nothing's hit.
+    local tr = util.TraceLine({
+        start  = base + Vector(0, 0, 16),
+        endpos = base - Vector(0, 0, 16384),
+        filter = function(e) return e ~= c and not e:IsPlayer() end,
+        mask   = MASK_SOLID,
+    })
+    local pos = (tr.Hit and not tr.HitSky) and (tr.HitPos + Vector(0, 0, 10))
+        or (base + Vector(0, 0, 10))
 
     self:SetFlagState(self.STATE_DROPPED)
     self:SetPossessTeam(0)
