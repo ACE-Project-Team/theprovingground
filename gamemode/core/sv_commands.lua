@@ -134,3 +134,16 @@ concommand.Add("tpg_admin_scramble", function(ply)
     TPG.Util.ChatBroadcast("[TPG] An admin scrambled the teams.", Color(0, 255, 255))
     TPG.PlayerTeams.ScrambleAll()
 end)
+
+-- Wipe the lifetime stats/leaderboard. Destructive, so superadmin-only; useful
+-- for clearing corrupted test data (e.g. phantom listen-server-host records).
+concommand.Add("tpg_admin_stats_reset", function(ply)
+    if IsValid(ply) and not ply:IsSuperAdmin() then
+        TPG.Util.ChatMessage(ply, "[TPG] Superadmins only.", Color(255, 0, 0))
+        return
+    end
+    if TPG.Stats and TPG.Stats.ResetAll then
+        TPG.Stats.ResetAll()
+        TPG.Util.ChatBroadcast("[TPG] Lifetime stats and the leaderboard have been reset.", Color(0, 255, 255))
+    end
+end)

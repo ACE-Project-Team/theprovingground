@@ -21,6 +21,7 @@ TPG.Commands.List = {
     { name = "tpg_admin_restart",  help = "Admin: restart the current round." },
     { name = "tpg_admin_endround", help = "Admin: end the round (arg1 = winning team id)." },
     { name = "tpg_admin_scramble", help = "Admin: scramble the teams immediately (no vote)." },
+    { name = "tpg_admin_stats_reset", help = "Superadmin: wipe lifetime stats and the leaderboard." },
     { name = "tpg_economy",        help = "Admin: toggle per-player economy (applies next map). No arg = status." },
     { name = "tpg_points_reload",  help = "Admin: apply placed custom points and restart the round." },
     { name = "tpg_points_clear",   help = "Superadmin: clear all custom points for this map." },

@@ -44,10 +44,19 @@ hook.Add("ShutDown", "TPG_StatsSave", TPG.Stats.Save)
 hook.Add("PlayerDisconnected", "TPG_StatsSaveOnLeave", function() TPG.Stats.Save() end)
 
 -- ── Accessors ───────────────────────────────────────────────────────────────
+-- Retail SteamID64s are 17-digit strings in the 7656.. range. A listen-server
+-- host (or any connection whose Steam auth hasn't settled) can briefly report
+-- "0"/"NULL"/nil instead; a scoring event firing in that window used to bank a
+-- phantom record, which is how one player ends up on the leaderboard several
+-- times. Reject anything that isn't a real SteamID64 so no junk key is created.
+local function IsRealSteamID64(sid)
+    return isstring(sid) and #sid == 17 and string.match(sid, "^7656%d+$") ~= nil
+end
+
 local function entry(ply)
     if not (IsValid(ply) and ply:IsPlayer()) or ply:IsBot() then return nil end
     local sid = ply:SteamID64()
-    if not sid then return nil end
+    if not IsRealSteamID64(sid) then return nil end
 
     if not data[sid] then
         data[sid] = {
@@ -74,7 +83,11 @@ local function addRating(e, amount)
     dirty = true
 end
 
--- Top N by rating, over everyone ever recorded.
+-- Top N by rating, over everyone ever recorded. Duplicate display names are
+-- collapsed to a single row (highest rating first, so the best one survives):
+-- it keeps the same player from appearing more than once if older junk records
+-- exist under a stale key. Two genuinely different players sharing a name is
+-- rare enough that showing one of them in a top-N is an acceptable trade.
 function TPG.Stats.GetLeaderboard(n)
     local list = {}
     for _, e in pairs(data) do
@@ -82,9 +95,23 @@ function TPG.Stats.GetLeaderboard(n)
     end
     table.sort(list, function(a, b) return (a.rating or 0) > (b.rating or 0) end)
 
-    local top = {}
-    for i = 1, math.min(n or 10, #list) do top[i] = list[i] end
+    local top, seen = {}, {}
+    for _, e in ipairs(list) do
+        local key = string.lower(e.name or "?")
+        if not seen[key] then
+            seen[key] = true
+            top[#top + 1] = e
+            if #top >= (n or 10) then break end
+        end
+    end
     return top
+end
+
+-- Wipe every lifetime record (admin tool for clearing corrupted test data).
+function TPG.Stats.ResetAll()
+    data = {}
+    dirty = true
+    TPG.Stats.Save()
 end
 
 -- ── Event hooks ─────────────────────────────────────────────────────────────
