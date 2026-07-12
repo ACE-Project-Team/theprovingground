@@ -33,6 +33,10 @@ TPG.Config = {
     underdogAmmoBonus      = 2,      -- added to the Special-slot ammo floor
     underdogIncomeMult     = 1.25,   -- multiplier on ALL per-player economy income
     underdogSmokeClass     = "weapon_ace_smokegrenade",  -- free on spawn while underdog
+    -- Also free on spawn while underdog. Set to your installed medkit SWEP's
+    -- class (many workshop ones use "weapon_medkit"); "" disables it. Skipped
+    -- silently if the class isn't installed.
+    underdogMedkitClass    = "weapon_medkit",
 
     -- Wait-for-players window at map start: the first round doesn't begin until
     -- loading players are in, so fast loaders can't burn team budget (or start
@@ -86,6 +90,10 @@ TPG.Config = {
     -- single-use AT tube for free, so plain infantry always have an answer to
     -- armour. Set the class to "" to disable.
     disposableATClass   = "disposableat",
+    -- When the bonus tube is handed out, a small chance to upgrade it into a
+    -- real launcher instead (must be an installed, enabled loadout weapon).
+    disposableATUpgradeChance = 0.2,
+    disposableATUpgrades      = { "weapon_ace_stinger", "weapon_ace_javelin" },
 
     -- Voluntary team-switch cooldown (sv_teams.lua). Stops green<->red flipping
     -- to chase the winning side / dodge autobalance / double-dip team budgets.
@@ -122,7 +130,7 @@ TPG.Config = {
     dupeGracePeriod     = 60,
     lightVehicleWeight  = 5000,
     lightVehicleProps   = 140,
-    maxDupeWeight       = 65000,
+    maxDupeWeight       = 250000,   -- 250t hard cap on a single dupe (weight in kg)
     
     -- Vehicles
     maxSpeedUnits       = 3500,

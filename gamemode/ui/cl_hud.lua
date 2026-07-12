@@ -86,6 +86,18 @@ net.Receive("TPG_ChatMessage", function()
     chat.AddText(color, message)
 end)
 
+-- Live teammate positions (server pushes our own team's, so markers track
+-- teammates even outside our PVS -- see TPG.Net.SyncTeamPositions).
+TPG.UI.teamPositions = {}
+net.Receive("TPG_TeamPositions", function()
+    local n, t = net.ReadUInt(7), {}
+    for _ = 1, n do
+        local idx = net.ReadUInt(12)
+        t[idx] = net.ReadVector()
+    end
+    TPG.UI.teamPositions = t
+end)
+
 -- Objective cache
 local objectiveCache = {}
 local lastCacheUpdate = 0
@@ -213,12 +225,21 @@ hook.Add("HUDPaint", "TPG_HUD", function()
 end)
 
 function TPG.UI.DrawTeammates(ply, teamId, teamColor)
+    local positions = TPG.UI.teamPositions or {}
     for _, teammate in ipairs(team.GetPlayers(teamId)) do
         if teammate == ply then continue end
-        
-        local pos = teammate:GetPos() + teammate:OBBCenter()
+
+        -- Prefer the server-pushed position (accurate even out of PVS); fall
+        -- back to the entity's own position if we haven't got one yet.
+        local pos = positions[teammate:EntIndex()]
+        if pos then
+            pos = pos + Vector(0, 0, 50)
+        else
+            pos = teammate:GetPos() + teammate:OBBCenter()
+        end
+
         local screenPos = pos:ToScreen()
-        
+
         if screenPos.visible then
             surface.SetDrawColor(teamColor)
             surface.DrawRect(screenPos.x - 3, screenPos.y - 3, 6, 6)

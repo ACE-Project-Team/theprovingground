@@ -65,16 +65,35 @@ function TPG.Loadout.Apply(ply)
     -- their Special slot get a free single-use tube, so they're never helpless
     -- against armour. Given last, after the speed snapshot, so it doesn't
     -- override the (faster) empty-Special movement -- it's a bonus, not a pick.
+    -- Small chance to roll a real launcher (stinger/javelin) instead, which goes
+    -- through GiveWeapon so it gets the Special ammo floor.
     local atClass = TPG.Config.disposableATClass
-    if not gaveSpecial and atClass and atClass ~= "" and weapons.GetStored(atClass) then
-        ply:Give(atClass)
+    if not gaveSpecial and atClass and atClass ~= "" then
+        local gaveUpgrade = false
+        local upgrades = TPG.Config.disposableATUpgrades
+        if upgrades and #upgrades > 0
+            and math.random() < (TPG.Config.disposableATUpgradeChance or 0) then
+            local pick = upgrades[math.random(#upgrades)]
+            if weapons.GetStored(pick) and TPG.GetWeapon("Special", pick) then
+                gaveUpgrade = TPG.Loadout.GiveWeapon(ply, "Special", pick)
+            end
+        end
+        if not gaveUpgrade and weapons.GetStored(atClass) then
+            ply:Give(atClass)
+        end
     end
 
-    -- Underdog perk: a free smoke to cover the retreat (or the push).
+    -- Underdog perks: a free smoke to cover the retreat (or the push), plus a
+    -- medkit to patch up between fights.
     if TPG.Underdog and TPG.Underdog.IsPlayerUnderdog and TPG.Underdog.IsPlayerUnderdog(ply) then
         local smoke = TPG.Config.underdogSmokeClass or "weapon_ace_smokegrenade"
         if weapons.GetStored(smoke) then
             ply:Give(smoke)
+        end
+
+        local medkit = TPG.Config.underdogMedkitClass
+        if medkit and medkit ~= "" and weapons.GetStored(medkit) then
+            ply:Give(medkit)
         end
     end
 

@@ -13,6 +13,7 @@ util.AddNetworkString("TPG_SyncLimits")
 util.AddNetworkString("TPG_SyncMapVote")
 util.AddNetworkString("TPG_SyncVoteTally")
 util.AddNetworkString("TPG_RequestState")
+util.AddNetworkString("TPG_TeamPositions")
 
 -- Sync game state to all clients, or to one player when given.
 function TPG.Net.SyncState(target)
@@ -81,6 +82,34 @@ function TPG.Net.SyncMapVote(maps)
         end
     net.Broadcast()
 end
+
+-- Teammate map markers (cl_hud DrawTeammates) read positions clientside, but
+-- the engine only refreshes a player's networked position while they're in your
+-- PVS -- a teammate across the map would otherwise sit frozen at their last-seen
+-- spot. Push each team its OWN members' live positions a few times a second so
+-- the markers track everywhere. Sent per-team only, so it never leaks enemy
+-- positions to the other side.
+function TPG.Net.SyncTeamPositions()
+    for _, teamId in ipairs({ TEAM_GREEN, TEAM_RED }) do
+        local members = team.GetPlayers(teamId)
+        if #members > 0 then
+            local alive = {}
+            for _, ply in ipairs(members) do
+                if ply:Alive() then alive[#alive + 1] = ply end
+            end
+
+            net.Start("TPG_TeamPositions")
+                net.WriteUInt(#alive, 7)   -- up to 127 teammates
+                for _, ply in ipairs(alive) do
+                    net.WriteUInt(ply:EntIndex(), 12)
+                    net.WriteVector(ply:GetPos())
+                end
+            net.Send(members)
+        end
+    end
+end
+
+timer.Create("TPG_TeamPositions", 0.2, 0, TPG.Net.SyncTeamPositions)
 
 -- Live vote counts per candidate.
 function TPG.Net.SyncVoteTally(counts)
