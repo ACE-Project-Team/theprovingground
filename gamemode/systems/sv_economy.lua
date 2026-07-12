@@ -55,6 +55,19 @@ local cvRandom = CreateConVar("tpg_economy_random", "1",
     { FCVAR_ARCHIVE, FCVAR_NOTIFY },
     "Treat the per-player economy as a secondary mode: per-round chance to activate.")
 
+-- ── Budget-change feed ──────────────────────────────────────────────────────
+-- Tells the owning client "your budget just changed by N, because <reason>", so
+-- the economy HUD can float a little +N / -N with a label. Purely cosmetic.
+util.AddNetworkString("TPG_MoneyDelta")
+
+function ECON.Notify(ply, delta, reason)
+    if not IsValid(ply) or (delta or 0) == 0 then return end
+    net.Start("TPG_MoneyDelta")
+        net.WriteInt(math.Round(delta), 20)   -- signed; wallet cap fits in 20 bits
+        net.WriteString(reason or "")
+    net.Send(ply)
+end
+
 -- ── Wallet helpers ────────────────────────────────────────────────────────
 function ECON.GetMoney(ply)
     if not IsValid(ply) then return 0 end
@@ -87,11 +100,12 @@ function ECON.CanAfford(ply, cost)
     return ECON.GetMoney(ply) >= math.floor(cost or 0)
 end
 
-function ECON.Charge(ply, cost)
+function ECON.Charge(ply, cost, reason)
     if not IsValid(ply) then return false end
     cost = math.floor(cost or 0)
     if ECON.GetMoney(ply) < cost then return false end
     ECON.SetMoney(ply, ECON.GetMoney(ply) - cost)
+    ECON.Notify(ply, -cost, reason or "purchase")
     return true
 end
 
@@ -130,13 +144,21 @@ hook.Add("Think", "TPG_EconomyIncome", function()
         if not IsValid(ply) or not ply:Alive() then continue end
         if not TPG.Util.IsOnTeam(ply) then continue end
 
+        -- Aggregate this tick's passive + per-objective hold into one number so
+        -- the HUD floats a single "+N income" instead of three stacked popups.
+        local before = ECON.GetMoney(ply)
         ECON.Reward(ply, ECON.Config.passiveIncome, "passive")
 
+        local held = 0
         for _, obj in pairs(objectives) do
             if IsValid(obj) and ply:GetPos():Distance(obj:GetPos()) < capRadius then
                 ECON.Reward(ply, ECON.Config.captureHoldIncome, "hold")
+                held = held + 1
             end
         end
+
+        -- Report the ACTUAL gain (after the underdog multiplier / wallet cap).
+        ECON.Notify(ply, ECON.GetMoney(ply) - before, held > 0 and "hold" or "income")
     end
 end)
 
@@ -150,7 +172,9 @@ hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, at
     if attacker:Team() == victim:Team() then
         local penalty = ECON.Config.teamkillPenalty or 0
         if penalty > 0 then
+            local before = ECON.GetMoney(attacker)
             ECON.Penalize(attacker, penalty, "teamkill")
+            ECON.Notify(attacker, ECON.GetMoney(attacker) - before, "teamkill")
             TPG.Util.ChatMessage(attacker, "[TPG] Team kill: -" .. penalty ..
                 " pts. Balance: " .. ECON.GetMoney(attacker), Color(255, 120, 120))
         end
@@ -171,7 +195,9 @@ hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, at
     local vehValue = (TPG.ACE and TPG.ACE.GetPlayerPoints and TPG.ACE.GetPlayerPoints(victim)) or 0
     local reward   = math.min(ECON.Config.killRewardBase + vehValue * ECON.Config.killRewardVehFrac,
                               ECON.Config.killRewardMax)
+    local before   = ECON.GetMoney(attacker)
     ECON.Reward(attacker, reward, "kill")
+    ECON.Notify(attacker, ECON.GetMoney(attacker) - before, "kill")
 end)
 
 -- ── Stock (non-ACE) vehicle purchases ──────────────────────────────────────
@@ -206,7 +232,7 @@ hook.Add("PlayerSpawnedVehicle", "TPG_EconomyStockVehicle", function(ply, ent)
             if con and (con.ACEPoints or 0) > 0 then return end
         end
 
-        if not ECON.Charge(ply, cost) then
+        if not ECON.Charge(ply, cost, "vehicle") then
             ent:Remove()
             TPG.Util.ChatMessage(ply, "[TPG] Not enough points for a vehicle (costs " ..
                 cost .. ", you have " .. ECON.GetMoney(ply) .. ").", Color(255, 0, 0))

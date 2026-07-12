@@ -27,4 +27,5 @@ function ENT:SetupDataTables()
     self:NetworkVar("Int",    0, "FlagState")    -- STATE_*
     self:NetworkVar("Int",    1, "PossessTeam")  -- team currently carrying (0 = none)
     self:NetworkVar("Entity", 0, "Carrier")
+    self:NetworkVar("Float",  0, "CarryEnd")     -- CurTime() the carry auto-returns (0 = not carried)
 end

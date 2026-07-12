@@ -9,6 +9,7 @@ include("core/sh_commands.lua")
 
 -- UI includes
 include("ui/cl_hud.lua")
+include("ui/cl_hud_prep.lua")
 include("ui/cl_hud_economy.lua")
 include("ui/cl_hud_compass.lua")
 include("ui/cl_hud_objectives.lua")

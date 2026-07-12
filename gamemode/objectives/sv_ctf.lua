@@ -19,16 +19,57 @@ function TPG.CTF.IsSupported()
     return TPG.CTF.GetFlagPoint() ~= nil
 end
 
--- Resolve the flag's home: a custom-placed CTF point, else the map's KOTH point.
-function TPG.CTF.GetFlagPoint()
-    local custom = TPG.Maps.GetCustomFlagPoint and TPG.Maps.GetCustomFlagPoint()
-    if custom then return custom end
-
+-- The map's KOTH capture point -- the flag's default home, ignoring any custom
+-- override.
+local function KothPoint()
     local koth = TPG.Maps.Get()[GAMEMODE_KOTH]
     local objs = koth and koth.objectives
     if objs and objs[1] then return objs[1].pos end
-
     return nil
+end
+
+-- The map's CP-mode capture points, used as alternate flag homes.
+local function CPPoints()
+    local cp = TPG.Maps.Get()[GAMEMODE_CP]
+    local objs = cp and cp.objectives
+    if not objs then return {} end
+
+    local pts = {}
+    for _, o in ipairs(objs) do
+        if o.pos then pts[#pts + 1] = o.pos end
+    end
+    return pts
+end
+
+-- Resolve the flag's home anchor (custom-placed CTF point, else the KOTH point).
+-- Used for the supported check; the actual per-round spot comes from RollFlagPoint.
+function TPG.CTF.GetFlagPoint()
+    local custom = TPG.Maps.GetCustomFlagPoint and TPG.Maps.GetCustomFlagPoint()
+    if custom then return custom end
+    return KothPoint()
+end
+
+-- Pick the flag's home for THIS round. A custom-placed point always wins.
+-- Otherwise the KOTH point keeps at least a 50% share (TPG.Config.ctfKothWeight)
+-- and the remaining chance is split evenly among the map's CP capture points, so
+-- the flag doesn't always sit on the same hill. CP points sitting basically on
+-- top of the KOTH point are skipped so the roll isn't wasted on a duplicate.
+function TPG.CTF.RollFlagPoint()
+    local custom = TPG.Maps.GetCustomFlagPoint and TPG.Maps.GetCustomFlagPoint()
+    if custom then return custom end
+
+    local koth = KothPoint()
+    if not koth then return nil end
+
+    local alts = {}
+    for _, p in ipairs(CPPoints()) do
+        if p:DistToSqr(koth) > (256 * 256) then alts[#alts + 1] = p end
+    end
+    if #alts == 0 then return koth end
+
+    local kothWeight = math.Clamp(TPG.Config.ctfKothWeight or 0.5, 0.5, 1)
+    if math.random() < kothWeight then return koth end
+    return alts[math.random(#alts)]
 end
 
 function TPG.CTF.Cleanup()
@@ -40,7 +81,7 @@ function TPG.CTF.SpawnFlags()
     TPG.CTF.Cleanup()
     if TPG.State.gameType ~= GAMEMODE_CTF then return end
 
-    local point = TPG.CTF.GetFlagPoint()
+    local point = TPG.CTF.RollFlagPoint()
     if not point then
         print("[TPG] CTF: no KOTH point on this map, cannot spawn flag")
         return

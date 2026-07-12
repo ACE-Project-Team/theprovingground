@@ -110,7 +110,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         -- Passed all checks. Under the economy, charge the wallet now
         -- (true purchase -- a destroyed vehicle is not refunded).
         if econCharge then
-            TPG.Economy.Charge(ply, econCharge)
+            TPG.Economy.Charge(ply, econCharge, "vehicle")
             TPG.Util.ChatMessage(ply, "[TPG] Purchased for " .. math.ceil(econCharge) ..
                 " pts. Balance: " .. TPG.Economy.GetMoney(ply), Color(0, 255, 0))
         end

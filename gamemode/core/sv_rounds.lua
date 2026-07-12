@@ -79,6 +79,12 @@ function TPG.Rounds.Setup(skipCleanup)
     
     TPG.Util.ChatBroadcast("[TPG] Round started: " .. gameType.name, Color(0, 255, 255))
 
+    -- Open the preparation window: confine both teams to spawn to build/stage
+    -- once enough players are present (core/sv_prep.lua).
+    if TPG.Prep and TPG.Prep.Begin then
+        TPG.Prep.Begin()
+    end
+
     if economyOn then
         TPG.Util.ChatBroadcast(
             "[TPG] PER-PLAYER ECONOMY is ON this round: you each spend a PERSONAL point budget, and destroyed vehicles are NOT refunded.",

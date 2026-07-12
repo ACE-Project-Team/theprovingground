@@ -64,7 +64,7 @@ hook.Add("HUDPaint", "TPG_CTFHUD", function()
 
     local sw = ScrW()
     local w, h = 360, 50
-    if carrying then h = h + 18 end
+    if carrying then h = h + 44 end   -- room for the prompt + carry-timer bar
     local x, y = sw / 2 - w / 2, 118
 
     draw.RoundedBox(6, x, y, w, h, Color(0, 0, 0, 160))
@@ -76,5 +76,22 @@ hook.Add("HUDPaint", "TPG_CTFHUD", function()
     if carrying then
         draw.SimpleText("BRING IT TO YOUR SPAWN!", "DermaDefaultBold", x + w / 2, y + 54,
             Color(255, 230, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+
+        -- Carry timer: how long before the flag auto-returns (anti-hoarding). The
+        -- bar drains and reddens as it runs out; it counts here in the HUD, not on
+        -- the flag model.
+        local total   = TPG.Config.ctfMaxCarryTime or 150
+        local remain  = math.max(flag:GetCarryEnd() - CurTime(), 0)
+        local frac    = math.Clamp(remain / total, 0, 1)
+        local barW, barH = w - 40, 8
+        local barX, barY = x + 20, y + 68
+        local fill = frac > 0.33 and Color(120, 220, 120)
+            or Color(240, 90, 70)
+
+        draw.RoundedBox(3, barX - 1, barY - 1, barW + 2, barH + 2, Color(0, 0, 0, 200))
+        draw.RoundedBox(3, barX, barY, barW, barH, Color(45, 45, 45, 220))
+        draw.RoundedBox(3, barX, barY, barW * frac, barH, fill)
+        draw.SimpleText(math.ceil(remain) .. "s", "DermaDefault", x + w / 2, barY + barH + 8,
+            Color(230, 230, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
 end)

@@ -43,6 +43,15 @@ TPG.Config = {
     waitJoinExtend = 15,
     waitMaxTotal   = 90,
 
+    -- Preparation period at the start of every round (core/sv_prep.lua). Once at
+    -- least prepMinPlayers players are split across BOTH teams, a prepTime-second
+    -- build/stage window begins during which everyone is confined to their own
+    -- safezone (leaving teleports you back), so a round always opens with both
+    -- sides ready in spawn instead of one team already rolling out. Before that
+    -- condition is met there's no confinement (a lone player can still roam).
+    prepTime       = 30,   -- seconds of confinement once both teams are present
+    prepMinPlayers = 2,    -- total players (both teams) needed to start the countdown
+
     -- King of the Hill drain. KOTH bleeds the team that ISN'T holding the hill
     -- at (points held) * capMul every scoreStep (0.075s). Every map hardcodes a
     -- 0.15 KOTH capMultiplier, which drained a full 300-ticket lead in ~2.5 min
@@ -62,6 +71,11 @@ TPG.Config = {
     ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
     ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
     ctfMaxCarryTime      = 150,    -- a single carry auto-returns after this many seconds (anti-hoarding)
+    -- Where the flag spawns each CTF round: the KOTH point keeps at least this
+    -- share, the rest is split evenly among the map's CP capture points, so the
+    -- flag doesn't always sit on the same hill (objectives/sv_ctf.lua). With one
+    -- extra point that's 50/50; with two it's 50/25/25; etc. Clamped to >= 0.5.
+    ctfKothWeight        = 0.5,
     -- CTF also bleeds a little on kills (systems/sv_commendations.lua), so fights
     -- between flag runs matter -- but flags stay the decisive scoring, so kills
     -- drain only this fraction of the full DM per-kill loss. 0 disables it.
