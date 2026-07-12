@@ -74,6 +74,9 @@ function TPG.CTF.OnCapture(flag, carrier)
     if TPG.Economy and TPG.Economy.Reward then
         TPG.Economy.Reward(carrier, TPG.Config.ctfCaptureReward or 1500, "ctf_capture")
     end
+    if TPG.Stats and TPG.Stats.OnFlagCapture then
+        TPG.Stats.OnFlagCapture(carrier)
+    end
 
     local td = TPG.GetTeamData(capTeam)
     TPG.Util.ChatBroadcast("[CTF] " .. carrier:Nick() .. " delivered the flag for " ..

@@ -29,6 +29,14 @@ function ENT:Initialize()
     self.CapAccum    = 0
 end
 
+-- Objectives must exist on every client from the moment they join: the HUD
+-- markers find them with ents.FindByClass clientside, so under default PVS
+-- networking a point across the map simply didn't exist for you (no marker)
+-- until you'd physically been near it once.
+function ENT:UpdateTransmitState()
+    return TRANSMIT_ALWAYS
+end
+
 -- Call this after setting PointID and PointName
 function ENT:SetupNetworking()
     self:SetNWInt("PointID", self.PointID)

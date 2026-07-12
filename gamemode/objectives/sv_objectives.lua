@@ -66,28 +66,56 @@ function TPG.Objectives.SpawnSafezones()
     end
 end
 
+-- Overtime announcement latch, keyed to the round it fired for.
+local overtimeAnnouncedFor = 0
+
 function TPG.Objectives.ProcessScoring()
     local totalCapValue = 0
-    
+
     TPG.State.objectives = TPG.State.objectives or {}
-    
+
     for _, obj in pairs(TPG.State.objectives) do
         if IsValid(obj) and obj.CapOwnership then
             totalCapValue = totalCapValue + obj.CapOwnership
         end
     end
-    
+
     local mapConfig = TPG.Maps.Get()
     local gameTypeConfig = mapConfig[TPG.State.gameType] or {}
     local gameType = TPG.GetGameType(TPG.State.gameType)
     local capMul = gameTypeConfig.capMultiplier or gameType.defaultCapMul or 0.02
-    
+
     if totalCapValue < 0 then
         -- Red owns more points, drain green
         TPG.State.AddScore(TEAM_GREEN, totalCapValue * capMul)
     elseif totalCapValue > 0 then
         -- Green owns more points, drain red
         TPG.State.AddScore(TEAM_RED, -totalCapValue * capMul)
+    end
+
+    -- DM overtime: deaths are DM's only drain, so a passive round never ended.
+    -- Past dmOvertimeStart both teams bleed at a ramping rate; whoever holds
+    -- more tickets when someone hits zero wins (see CheckWinCondition).
+    if gameType.useDeathTickets then
+        local overtime = (CurTime() - TPG.State.round.startTime) - (TPG.Config.dmOvertimeStart or 600)
+        if overtime > 0 then
+            if overtimeAnnouncedFor ~= TPG.State.round.startTime then
+                overtimeAnnouncedFor = TPG.State.round.startTime
+                TPG.Util.ChatBroadcast(
+                    "[TPG] OVERTIME! Both teams are now bleeding tickets -- force the fight!",
+                    Color(255, 120, 40))
+            end
+
+            local rate = math.min(
+                (TPG.Config.dmOvertimeBleed or 0.2)
+                    + math.floor(overtime / (TPG.Config.dmOvertimeRampEvery or 120))
+                    * (TPG.Config.dmOvertimeRamp or 0.2),
+                TPG.Config.dmOvertimeBleedMax or 2)
+
+            local step = TPG.Config.scoreStep or 0.075
+            TPG.State.AddScore(TEAM_GREEN, -rate * step)
+            TPG.State.AddScore(TEAM_RED, -rate * step)
+        end
     end
 end
 
@@ -103,6 +131,10 @@ function TPG.Objectives.OnCapture(obj, teamId)
         if dist < capRadius then
             local pState = TPG.State.GetPlayer(ply)
             pState.stats.captures = (pState.stats.captures or 0) + 1
+
+            if TPG.Stats and TPG.Stats.OnCapture then
+                TPG.Stats.OnCapture(ply)
+            end
         end
     end
 end

@@ -6,6 +6,11 @@
 TPG.Rounds = TPG.Rounds or {}
 
 function TPG.Rounds.Setup(skipCleanup)
+    -- If a round is being set up by any path (admin restart, points reload),
+    -- the wait-for-players window is over -- never leave building blocked.
+    TPG.State.waitingForPlayers = false
+    timer.Remove("TPG_WaitForPlayers")
+
     -- Keep ULX UTeam from yanking grouped players (admins) off their TPG team.
     if TPG.DisableExternalTeamForcing then TPG.DisableExternalTeamForcing() end
 
@@ -83,15 +88,23 @@ end
 
 function TPG.Rounds.CheckWinCondition()
     if not TPG.State.round.active then return end
-    
+
+    local green = TPG.State.scores[TEAM_GREEN]
+    local red   = TPG.State.scores[TEAM_RED]
     local winner = nil
-    
-    if TPG.State.scores[TEAM_GREEN] <= 0 then
+
+    if green <= 0 and red <= 0 then
+        -- Both at zero in the same tick (possible under the DM overtime bleed):
+        -- higher remaining fraction won the race; a dead tie is a coin flip.
+        winner = green > red and TEAM_GREEN
+            or red > green and TEAM_RED
+            or (math.random() < 0.5 and TEAM_GREEN or TEAM_RED)
+    elseif green <= 0 then
         winner = TEAM_RED
-    elseif TPG.State.scores[TEAM_RED] <= 0 then
+    elseif red <= 0 then
         winner = TEAM_GREEN
     end
-    
+
     if winner then
         TPG.Rounds.EndRound(winner)
     end
@@ -122,6 +135,11 @@ function TPG.Rounds.EndRound(winningTeam)
     if TPG.Commendations and TPG.Commendations.Award then
         TPG.Commendations.Award()
     end
+
+    -- Persistent stats: wins/losses + rating for everyone on a team.
+    if TPG.Stats and TPG.Stats.OnRoundEnd then
+        TPG.Stats.OnRoundEnd(winningTeam)
+    end
     
     -- Check for map vote
     local totalWins = TPG.State.round.wins[TEAM_GREEN] + TPG.State.round.wins[TEAM_RED]
@@ -136,6 +154,71 @@ function TPG.Rounds.EndRound(winningTeam)
             TPG.Rounds.Setup()
         end)
     end
+end
+
+--[[
+    Wait-for-players window (map start only).
+
+    Fast loaders used to join, take a team, and start burning the team budget
+    (or earning economy income) while slow loaders were still on the loading
+    screen. The first round now waits: a small base delay always, extended
+    whenever someone is mid-connect, hard-capped so one stuck client can't
+    hold the server hostage. Building is blocked until the round starts
+    (sv_duplication / PlayerSpawnProp check TPG.State.waitingForPlayers).
+]]
+
+local pendingJoins = {}   -- [steamid] = time the connect started
+
+gameevent.Listen("player_connect")
+hook.Add("player_connect", "TPG_WaitTrackConnect", function(d)
+    if tonumber(d.bot) == 1 then return end
+    pendingJoins[d.networkid] = CurTime()
+end)
+
+gameevent.Listen("player_disconnect")
+hook.Add("player_disconnect", "TPG_WaitTrackDisconnect", function(d)
+    pendingJoins[d.networkid] = nil
+end)
+
+hook.Add("PlayerInitialSpawn", "TPG_WaitTrackSpawned", function(ply)
+    pendingJoins[ply:SteamID()] = nil
+end)
+
+local function AnyoneConnecting()
+    local now = CurTime()
+    for sid, started in pairs(pendingJoins) do
+        if now - started > 180 then
+            pendingJoins[sid] = nil   -- stale entry (client gave up silently)
+        else
+            return true
+        end
+    end
+    return false
+end
+
+function TPG.Rounds.BeginInitialWait()
+    local beganAt = CurTime()
+    local startAt = beganAt + (TPG.Config.waitBaseTime or 5)
+    local deadline = beganAt + (TPG.Config.waitMaxTotal or 90)
+
+    TPG.State.waitingForPlayers = true
+    TPG.Util.ChatBroadcast("[TPG] Waiting for players to load in...", Color(0, 255, 255))
+
+    timer.Create("TPG_WaitForPlayers", 1, 0, function()
+        local now = CurTime()
+
+        -- Someone's still connecting: keep the start at least waitJoinExtend
+        -- away (but never past the hard deadline).
+        if AnyoneConnecting() then
+            startAt = math.min(math.max(startAt, now + (TPG.Config.waitJoinExtend or 15)), deadline)
+        end
+
+        if now < startAt then return end
+
+        timer.Remove("TPG_WaitForPlayers")
+        TPG.State.waitingForPlayers = false
+        TPG.Rounds.Setup()
+    end)
 end
 
 -- Game think for round logic. Scoring advances on a fixed real-time step so

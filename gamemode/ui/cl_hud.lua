@@ -14,6 +14,14 @@ TPG.UI.State = {
     voteEnd = 0,
 }
 
+-- Ask the server for the current round state as soon as the client is fully
+-- in-game -- without this, joining mid-round left the HUD on the default
+-- gametype until the next round's broadcast.
+hook.Add("InitPostEntity", "TPG_RequestState", function()
+    net.Start("TPG_RequestState")
+    net.SendToServer()
+end)
+
 -- Receive state sync
 net.Receive("TPG_SyncState", function()
     TPG.UI.State.gameType = net.ReadUInt(4)

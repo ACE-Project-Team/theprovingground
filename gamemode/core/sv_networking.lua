@@ -12,15 +12,26 @@ util.AddNetworkString("TPG_SyncScores")
 util.AddNetworkString("TPG_SyncLimits")
 util.AddNetworkString("TPG_SyncMapVote")
 util.AddNetworkString("TPG_SyncVoteTally")
+util.AddNetworkString("TPG_RequestState")
 
--- Sync game state to all clients
-function TPG.Net.SyncState()
+-- Sync game state to all clients, or to one player when given.
+function TPG.Net.SyncState(target)
     net.Start("TPG_SyncState")
         net.WriteUInt(TPG.State.gameType or GAMEMODE_CP, 4)
         net.WriteUInt(TPG.State.scores[TEAM_GREEN] or 300, 16)
         net.WriteUInt(TPG.State.scores[TEAM_RED] or 300, 16)
-    net.Broadcast()
+    if target then net.Send(target) else net.Broadcast() end
 end
+
+-- Late joiners: TPG_SyncState is otherwise only broadcast at round setup, so a
+-- player connecting mid-round kept the client default gametype ("CP") on their
+-- HUD no matter what was actually running. The client asks for the state once
+-- its HUD is up (InitPostEntity), which also guarantees it's ready to receive.
+net.Receive("TPG_RequestState", function(_, ply)
+    if not IsValid(ply) then return end
+    TPG.Net.SyncState(ply)
+    TPG.Net.SyncLimits()
+end)
 
 -- Sync scores only (frequent)
 function TPG.Net.SyncScores()

@@ -21,6 +21,12 @@ function ENT:Initialize()
     self:SetCarrier(NULL)
 end
 
+-- The flag's HUD marker looks it up clientside, so it must be networked to
+-- everyone regardless of PVS (same as tpg_controlpoint).
+function ENT:UpdateTransmitState()
+    return TRANSMIT_ALWAYS
+end
+
 function ENT:SetHome(pos)
     self.HomePos = pos
     self:SetPos(pos)

@@ -73,29 +73,42 @@ function TPG.PlayerTeams.Autobalance(ply)
     return false
 end
 
+-- Scramble by skill: snake-draft players over their persistent rating
+-- (systems/sv_stats.lua) so both teams end up with comparable total skill,
+-- instead of the old random shuffle. Spectators are left alone -- they chose
+-- to watch (the old version force-drafted them onto teams).
 function TPG.PlayerTeams.ScrambleAll()
-    -- Put everyone unassigned first
+    local pool = {}
     for _, ply in ipairs(player.GetAll()) do
-        ply:SetTeam(TEAM_UNASSIGNED)
-    end
-    
-    -- Reassign randomly but balanced
-    local players = player.GetAll()
-    
-    for _, ply in ipairs(players) do
-        local greenCount = team.NumPlayers(TEAM_GREEN)
-        local redCount = team.NumPlayers(TEAM_RED)
-        
-        if greenCount <= redCount then
-            ply:SetTeam(TEAM_GREEN)
-        else
-            ply:SetTeam(TEAM_RED)
+        if TPG.Util.IsOnTeam(ply) then
+            pool[#pool + 1] = ply
         end
-        
+    end
+
+    if #pool == 0 then return end
+
+    -- Best first; equal ratings get shuffled relative to each other so two
+    -- scrambles in a row don't produce the identical split.
+    for i = #pool, 2, -1 do
+        local j = math.random(i)
+        pool[i], pool[j] = pool[j], pool[i]
+    end
+    table.sort(pool, function(a, b)
+        return (TPG.Stats and TPG.Stats.GetRating(a) or 1000)
+             > (TPG.Stats and TPG.Stats.GetRating(b) or 1000)
+    end)
+
+    -- Snake draft: A B B A A B B A ... keeps the top players split evenly.
+    local first = math.random() < 0.5 and TEAM_GREEN or TEAM_RED
+    local second = TPG.GetEnemyTeam(first)
+    local pattern = { first, second, second, first }
+
+    for i, ply in ipairs(pool) do
+        ply:SetTeam(pattern[(i - 1) % 4 + 1])
         ply:Spawn()
     end
-    
-    TPG.Util.ChatBroadcast("[TPG] Teams have been scrambled!", Color(255, 255, 0))
+
+    TPG.Util.ChatBroadcast("[TPG] Teams have been scrambled (balanced by rating)!", Color(255, 255, 0))
 end
 
 -- Check for autobalance on death

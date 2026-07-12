@@ -69,6 +69,9 @@ TPG.WeaponConfig = {
         ["weapon_ace_mg36"]    = { speedBonus = -15 },
         ["weapon_ace_rpk"]     = { speedBonus = -7 },
         ["weapon_ace_rpk74"]   = { speedBonus = -7 },
+        -- Single-use tube: light to carry, and its top-up is pinned to 1 so
+        -- the Special ammo floor never hands it spare rockets it can't use.
+        ["disposableat"]       = { speedBonus = -3 },
     },
 
     -- Reserve-ammo top-ups, applied when the loadout weapon is given: the
@@ -79,7 +82,15 @@ TPG.WeaponConfig = {
         ["weapon_ace_at4"]     = 6,
         ["weapon_ace_at4t"]    = 6,
         ["weapon_ace_javelin"] = 6,
+        ["disposableat"]       = 1,   -- single-use; extra rockets would be dead weight
     },
+
+    -- Floor for EVERY Special-slot weapon, so launchers from add-on packs (ACE
+    -- Weapons+, etc.) are covered without listing their classes: any Special
+    -- weapon spawning with fewer total rounds than this is topped up to it.
+    -- Weapons already above the floor (stinger 12, mortar 16, mines 12) are
+    -- untouched, as are ammo-less tools (their ammo type is "none").
+    SpecialAmmoMin = 6,
 
     -- "Virtual" entries that aren't a single discoverable SWEP (multi-item or
     -- fallback). Keyed by a stable sentinel id.

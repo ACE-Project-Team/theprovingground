@@ -120,23 +120,33 @@ local function OpenTeamMenu()
             "DermaDefault", 16, h - 22, COL.textDim, TEXT_ALIGN_LEFT)
     end
 
-    -- ── RTV / Scramble ───────────────────────────────────────────────────
+    -- ── Bottom row: RTV / Scramble / Profile / Manual ────────────────────
     local botY = H - 70
-    local rtv = StyleButton(frame, "ROCK THE VOTE", nil, COL.panelHi, COL.line, function()
-        LocalPlayer():EmitSound("common/weapon_select.wav")
-        RunConsoleCommand("tpg_rtv")
-        frame:Close()
-    end)
-    rtv:SetPos(pad, botY)
-    rtv:SetSize((W - pad * 3) / 2, 46)
+    local btnW = (W - pad * 5) / 4
 
-    local scr = StyleButton(frame, "VOTE SCRAMBLE", nil, COL.panelHi, COL.line, function()
-        LocalPlayer():EmitSound("common/weapon_select.wav")
-        RunConsoleCommand("tpg_scramble")
-        frame:Close()
-    end)
-    scr:SetPos(pad * 2 + (W - pad * 3) / 2, botY)
-    scr:SetSize((W - pad * 3) / 2, 46)
+    local bottomButtons = {
+        { "ROCK THE VOTE", "tpg_rtv" },
+        { "VOTE SCRAMBLE", "tpg_scramble" },
+        { "PROFILE",       "tpg_menu_profile" },
+        { "MANUAL",        "tpg_menu_manual" },
+    }
+
+    for i, def in ipairs(bottomButtons) do
+        local btn = vgui.Create("DButton", frame)
+        btn:SetText("")
+        btn:SetPos(pad + (i - 1) * (btnW + pad), botY)
+        btn:SetSize(btnW, 46)
+        btn.Paint = function(self, w, h)
+            draw.RoundedBox(6, 0, 0, w, h, self:IsHovered() and COL.line or COL.panelHi)
+            draw.SimpleText(def[1], "DermaDefaultBold", w / 2, h / 2,
+                COL.text, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        end
+        btn.DoClick = function()
+            LocalPlayer():EmitSound("common/weapon_select.wav")
+            RunConsoleCommand(def[2])
+            frame:Close()
+        end
+    end
 end
 
 concommand.Add("tpg_menu_team", OpenTeamMenu)

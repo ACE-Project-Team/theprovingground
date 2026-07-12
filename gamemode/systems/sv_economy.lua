@@ -21,15 +21,15 @@ ECON.Config = {
     startingMoney     = 6000,   -- enough for a medium; a strong tank must be earned
     maxMoney          = 60000,  -- wallet cap
 
-    passiveIncome     = 100,    -- granted every passiveInterval seconds
+    passiveIncome     = 150,    -- granted every passiveInterval seconds
     passiveInterval   = 10,
 
-    captureHoldIncome = 60,     -- per interval, per objective you are standing on
+    captureHoldIncome = 100,    -- per interval, per objective you are standing on
     captureRadiusM    = 30,     -- metres from an objective to earn hold income
 
-    killRewardBase    = 250,    -- flat reward per enemy kill
-    killRewardVehFrac = 0.05,   -- + this fraction of the victim's vehicle value
-    killRewardMax     = 2500,   -- per-kill clamp
+    killRewardBase    = 400,    -- flat reward per enemy kill
+    killRewardVehFrac = 0.08,   -- + this fraction of the victim's vehicle value
+    killRewardMax     = 4000,   -- per-kill clamp
 
     teamkillPenalty   = 400,    -- deducted from a player's wallet for killing a teammate
 
@@ -70,6 +70,10 @@ end
 
 function ECON.Reward(ply, amount, _reason)
     if not ECON.Active or not IsValid(ply) or (amount or 0) <= 0 then return end
+    -- Underdog teams earn faster (all income sources).
+    if TPG.Underdog and TPG.Underdog.GetIncomeMult then
+        amount = amount * TPG.Underdog.GetIncomeMult(ply)
+    end
     ECON.SetMoney(ply, ECON.GetMoney(ply) + amount)
 end
 
@@ -113,6 +117,9 @@ end
 local lastTick = 0
 hook.Add("Think", "TPG_EconomyIncome", function()
     if not ECON.Active then return end
+    -- No income before the round actually starts (wait-for-players window) --
+    -- otherwise fast loaders bank money the late joiners never got.
+    if not TPG.State.round.active then return end
     if CurTime() - lastTick < ECON.Config.passiveInterval then return end
     lastTick = CurTime()
 
@@ -181,6 +188,7 @@ local STOCK_VEHICLE_CLASSES = {
 hook.Add("PlayerSpawnedVehicle", "TPG_EconomyStockVehicle", function(ply, ent)
     if not ECON.Active then return end
     if not IsValid(ply) or not IsValid(ent) then return end
+    if not TPG.Util.IsOnTeam(ply) then return end   -- spectators sandbox for free
 
     local cost = ECON.Config.stockVehicleCost or 0
     if cost <= 0 then return end

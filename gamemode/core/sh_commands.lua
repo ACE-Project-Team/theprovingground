@@ -1,5 +1,6 @@
 --[[
-    Admin console commands, made visible + usable from a client console.
+    Console commands made visible + usable from a client console (admin
+    commands plus everyday ones like tpg_team).
 
     The gameplay/admin concommands are registered server-side (sv_commands.lua,
     sv_custom_points.lua). Server-only concommands never appear in a CLIENT's
@@ -16,8 +17,10 @@ TPG.Commands = TPG.Commands or {}
 -- The commands worth surfacing in a client console. Names must match the
 -- server concommands exactly. `help` is shown in autocomplete.
 TPG.Commands.List = {
+    { name = "tpg_team",           help = "Join a team: tpg_team green | red | spec" },
     { name = "tpg_admin_restart",  help = "Admin: restart the current round." },
     { name = "tpg_admin_endround", help = "Admin: end the round (arg1 = winning team id)." },
+    { name = "tpg_admin_scramble", help = "Admin: scramble the teams immediately (no vote)." },
     { name = "tpg_economy",        help = "Admin: toggle per-player economy (applies next map). No arg = status." },
     { name = "tpg_points_reload",  help = "Admin: apply placed custom points and restart the round." },
     { name = "tpg_points_clear",   help = "Superadmin: clear all custom points for this map." },

@@ -39,14 +39,14 @@ TPG.GameTypes = {
     },
 }
 
-function TPG.SelectRandomGameType()
+-- Slot split: CTF 30% / KOTH 25% / DM 15% / CP 30%. CP and CTF share the
+-- top, KOTH right after, DM deliberately rare. CTF is its own mode -- it
+-- borrows the map's KOTH capture point as the flag's home
+-- (TPG.CTF.GetFlagPoint), it does NOT replace a KOTH round. On a map that
+-- can't host a flag, CTF's slice falls through to KOTH.
+local function RollGameType()
     local roll = math.random()
 
-    -- Slot split: CTF 30% / KOTH 25% / DM 15% / CP 30%. CP and CTF share the
-    -- top, KOTH right after, DM deliberately rare. CTF is its own mode -- it
-    -- borrows the map's KOTH capture point as the flag's home
-    -- (TPG.CTF.GetFlagPoint), it does NOT replace a KOTH round. On a map that
-    -- can't host a flag, CTF's slice falls through to KOTH.
     if roll < (TPG.Config.ctfChance or 0.30) then
         if TPG.CTF and TPG.CTF.IsSupported and TPG.CTF.IsSupported() then
             return GAMEMODE_CTF
@@ -59,6 +59,21 @@ function TPG.SelectRandomGameType()
     else
         return GAMEMODE_CP
     end
+end
+
+local lastGameType
+
+function TPG.SelectRandomGameType()
+    local picked = RollGameType()
+
+    -- Anti-repeat: one reroll when the same mode comes up twice in a row, which
+    -- halves the odds of a back-to-back repeat without ever forbidding it.
+    if picked == lastGameType then
+        picked = RollGameType()
+    end
+
+    lastGameType = picked
+    return picked
 end
 
 function TPG.GetGameType(typeId)

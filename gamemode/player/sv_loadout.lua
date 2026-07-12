@@ -60,16 +60,37 @@ function TPG.Loadout.Apply(ply)
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
     TPG.Loadout.GiveWeapon(ply, "Secondary", secondaryId)
     TPG.Loadout.GiveWeapon(ply, "Special", specialId)
-    
+
+    -- Underdog perk: a free smoke to cover the retreat (or the push).
+    if TPG.Underdog and TPG.Underdog.IsPlayerUnderdog and TPG.Underdog.IsPlayerUnderdog(ply) then
+        local smoke = TPG.Config.underdogSmokeClass or "weapon_ace_smokegrenade"
+        if weapons.GetStored(smoke) then
+            ply:Give(smoke)
+        end
+    end
+
     -- Play equip sound
     TPG.Util.PlaySound(ply, "acf_extra/tankfx/gnomefather/rack.wav")
 end
 
 -- Raise the player's clip + reserve of a weapon's primary ammo to the total
--- configured in TPG.WeaponConfig.AmmoTopUp (launchers ship with DefaultClip = 1).
-local function TopUpAmmo(ply, class, wep)
-    local target = TPG.WeaponConfig.AmmoTopUp and TPG.WeaponConfig.AmmoTopUp[class]
+-- configured in TPG.WeaponConfig.AmmoTopUp, or -- for any Special-slot weapon
+-- without an explicit entry -- to the SpecialAmmoMin floor. Launchers commonly
+-- ship with DefaultClip = 1, including ones from add-on packs we can't list by
+-- class; the category floor catches those too.
+local function TopUpAmmo(ply, category, class, wep)
+    local cfg = TPG.WeaponConfig
+    local target = cfg.AmmoTopUp and cfg.AmmoTopUp[class]
+    if not target and category == "Special" then
+        target = cfg.SpecialAmmoMin
+    end
     if not target then return end
+
+    -- Losing hard? The underdog carries a couple of extra rockets.
+    if TPG.Underdog and TPG.Underdog.GetAmmoBonus and target > 1 then
+        target = target + TPG.Underdog.GetAmmoBonus(ply)
+    end
+
     if not IsValid(wep) then wep = ply:GetWeapon(class) end
     if not IsValid(wep) then return end
 
@@ -88,21 +109,21 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
 
     -- Single weapon
     if weapon.class then
-        TopUpAmmo(ply, weapon.class, ply:Give(weapon.class))
+        TopUpAmmo(ply, category, weapon.class, ply:Give(weapon.class))
         return
     end
 
     -- Multiple weapons (e.g., mines)
     if weapon.multipleClasses then
         for _, class in ipairs(weapon.multipleClasses) do
-            TopUpAmmo(ply, class, ply:Give(class))
+            TopUpAmmo(ply, category, class, ply:Give(class))
         end
         return
     end
 
     -- Fallback weapon (e.g., disposable AT when no special selected)
     if weapon.fallbackClass then
-        TopUpAmmo(ply, weapon.fallbackClass, ply:Give(weapon.fallbackClass))
+        TopUpAmmo(ply, category, weapon.fallbackClass, ply:Give(weapon.fallbackClass))
     end
 end
 

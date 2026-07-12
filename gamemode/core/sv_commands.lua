@@ -2,15 +2,25 @@
     Console Commands
 ]]
 
--- Team change
+-- Team change. Accepts friendly names and short numbers as well as raw team
+-- ids -- the menu used to advertise "tpg_team 1/2", which the old numeric-id
+-- check rejected (ids are 2001/2002), so the console path never worked.
+local TEAM_ALIASES = {
+    ["green"] = TEAM_GREEN, ["g"] = TEAM_GREEN, ["1"] = TEAM_GREEN,
+    ["red"]   = TEAM_RED,   ["r"] = TEAM_RED,   ["2"] = TEAM_RED,
+    ["spec"]  = TEAM_UNASSIGNED, ["spectate"] = TEAM_UNASSIGNED,
+    ["spectator"] = TEAM_UNASSIGNED, ["0"] = TEAM_UNASSIGNED,
+}
+
 concommand.Add("tpg_team", function(ply, cmd, args)
-    local teamId = tonumber(args[1])
-    
+    local arg = string.lower(tostring(args[1] or ""))
+    local teamId = TEAM_ALIASES[arg] or tonumber(arg)
+
     if not teamId or not TPG.Teams[teamId] then
-        TPG.Util.ChatMessage(ply, "[TPG] Invalid team.", Color(255, 0, 0))
+        TPG.Util.ChatMessage(ply, "[TPG] Invalid team. Use: tpg_team green | red | spec", Color(255, 0, 0))
         return
     end
-    
+
     TPG.PlayerTeams.AssignPlayer(ply, teamId)
 end)
 
@@ -115,4 +125,12 @@ concommand.Add("tpg_admin_endround", function(ply, cmd, args)
     if not ply:IsAdmin() then return end
     local winner = tonumber(args[1]) or TEAM_GREEN
     TPG.Rounds.EndRound(winner)
+end)
+
+-- Immediate team scramble, no vote (the player-initiated tpg_scramble is the
+-- voted path).
+concommand.Add("tpg_admin_scramble", function(ply)
+    if IsValid(ply) and not ply:IsAdmin() then return end
+    TPG.Util.ChatBroadcast("[TPG] An admin scrambled the teams.", Color(0, 255, 255))
+    TPG.PlayerTeams.ScrambleAll()
 end)

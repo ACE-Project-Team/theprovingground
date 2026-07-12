@@ -45,7 +45,9 @@ hook.Add("Think", "TPG_ProtectionThink", function()
             end
             
             ply:GodEnable()
-            pState.spawnProtection = TPG.Config.spawnProtectionTime
+            pState.spawnProtection = (TPG.Underdog and TPG.Underdog.GetProtectionTime)
+                and TPG.Underdog.GetProtectionTime(ply)
+                or TPG.Config.spawnProtectionTime
             playerSafezoneState[ply] = true
         else
             -- Just left safezone
@@ -119,5 +121,23 @@ hook.Add("PlayerGiveSWEP", "TPG_SWEPRestriction", function(ply)
     if not ply:IsAdmin() then
         TPG.Util.ChatMessage(ply, "[TPG] Only admins can spawn SWEPs.", Color(255, 0, 0))
         return false
+    end
+end)
+
+-- Spectators are non-combatants: they're in god mode (sv_spawning) and none of
+-- the damage they cause lands -- neither from their weapons directly nor from
+-- anything they own (a spectator test-tank's gun counts as theirs via CPPI).
+hook.Add("EntityTakeDamage", "TPG_SpectatorNoDamage", function(_, dmg)
+    local attacker = dmg:GetAttacker()
+    if IsValid(attacker) and attacker:IsPlayer() and not TPG.Util.IsOnTeam(attacker) then
+        return true
+    end
+
+    local inflictor = dmg:GetInflictor()
+    if IsValid(inflictor) and not inflictor:IsPlayer() and inflictor.CPPIGetOwner then
+        local owner = inflictor:CPPIGetOwner()
+        if IsValid(owner) and owner:IsPlayer() and not TPG.Util.IsOnTeam(owner) then
+            return true
+        end
     end
 end)

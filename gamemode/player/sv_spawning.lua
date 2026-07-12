@@ -19,12 +19,18 @@ function GM:PlayerSpawn(ply)
         ply:SetPlayerColor(teamData.vector)
         ply:SetWeaponColor(teamData.vector)
         
-        -- Enable spawn protection
+        -- Enable spawn protection (longer while your team is the underdog)
         local pState = TPG.State.GetPlayer(ply)
-        pState.spawnProtection = TPG.Config.spawnProtectionTime
+        pState.spawnProtection = (TPG.Underdog and TPG.Underdog.GetProtectionTime)
+            and TPG.Underdog.GetProtectionTime(ply)
+            or TPG.Config.spawnProtectionTime
+        ply:GodEnable()
+    else
+        -- Spectators are permanently invulnerable non-combatants; their damage
+        -- output is blocked in sv_protection (TPG_SpectatorNoDamage).
         ply:GodEnable()
     end
-    
+
     -- Apply loadout
     TPG.Loadout.Apply(ply)
 end
@@ -50,6 +56,6 @@ hook.Add("PlayerInitialSpawn", "TPG_InitialSpawn", function(ply)
         ply:ConCommand("tpg_menu_team")
     end
     
-    TPG.Util.ChatMessage(ply, "[TPG] Press F2 for teams, F3 for loadout, F4 to enter vehicle.", Color(0, 255, 0))
+    TPG.Util.ChatMessage(ply, "[TPG] F2 teams / profile / manual, F3 loadout, F4 enter vehicle.", Color(0, 255, 0))
     TPG.Util.PlaySound(ply, "garrysmod/save_load1.wav")
 end)

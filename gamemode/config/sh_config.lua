@@ -13,12 +13,42 @@ TPG.Config = {
     dmTicketRefPlayers  = 8,
     dmTicketMaxMult     = 2.0,
 
+    -- DM overtime: deaths are DM's only ticket drain, so two passive teams made
+    -- a round literally endless (and spawn camping stalled it on purpose).
+    -- After dmOvertimeStart seconds BOTH teams bleed tickets, and the bleed
+    -- ramps up over time -- active play decides the round early, camping just
+    -- loses it slowly.
+    dmOvertimeStart     = 600,   -- seconds of normal play before the bleed starts
+    dmOvertimeBleed     = 0.2,   -- tickets/second at overtime start (both teams)
+    dmOvertimeRamp      = 0.2,   -- added to the rate every dmOvertimeRampEvery
+    dmOvertimeRampEvery = 120,   -- seconds per ramp step
+    dmOvertimeBleedMax  = 2.0,   -- rate cap
+
+    -- Underdog comeback bonuses (systems/sv_underdog.lua). A team is the
+    -- underdog while its tickets are <= underdogRatio of the enemy's AND the
+    -- absolute gap is at least underdogMinGap (no flicker at round start).
+    underdogRatio          = 0.6,
+    underdogMinGap         = 60,
+    underdogProtectionTime = 8,      -- spawn protection seconds (base is spawnProtectionTime)
+    underdogAmmoBonus      = 2,      -- added to the Special-slot ammo floor
+    underdogIncomeMult     = 1.25,   -- multiplier on ALL per-player economy income
+    underdogSmokeClass     = "weapon_ace_smokegrenade",  -- free on spawn while underdog
+
+    -- Wait-for-players window at map start: the first round doesn't begin until
+    -- loading players are in, so fast loaders can't burn team budget (or start
+    -- earning) before slow loaders even exist. Base wait always applies; anyone
+    -- mid-connect pushes the start back to at least waitJoinExtend from now,
+    -- capped at waitMaxTotal overall.
+    waitBaseTime   = 5,
+    waitJoinExtend = 15,
+    waitMaxTotal   = 90,
+
     -- Capture the Flag (objectives/sv_ctf.lua). Its OWN game mode: one neutral
     -- flag that sits on the map's KOTH capture point; grab it and carry it to
     -- your own spawn to score. Only offered on maps that have a KOTH point.
     ctfChance            = 0.30,   -- per-round chance CTF is the mode (see TPG.SelectRandomGameType)
     ctfDeliverRadius     = 500,    -- fallback delivery radius if the safezone can't be resolved
-    ctfCaptureTicketLoss = 75,     -- enemy tickets lost per delivered flag
+    ctfCaptureTicketLoss = 40,     -- enemy tickets lost per delivered flag (75 ended rounds in ~4 caps; ~8 now)
     ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
     ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
     ctfMaxCarryTime      = 150,    -- a single carry auto-returns after this many seconds (anti-hoarding)

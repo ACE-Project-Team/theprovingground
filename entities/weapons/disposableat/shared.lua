@@ -1,81 +1,78 @@
+--[[
+    Disposable AT
+
+    One THEAT rocket, then the tube is gone (the weapon strips itself after
+    firing). Rebuilt on weapon_ace_base: the original was written against the
+    long-removed "ace_basewep" base, so it had been silently dead -- wrong
+    base, no fire functions, and nothing in the loadout system offered it.
+    It's now discovered like any other ACE SWEP (Slot 4 -> Special).
+
+    Ballistics are the original's 60mm THEAT round, unchanged.
+]]
+
 AddCSLuaFile("shared.lua")
-SWEP.Base = "ace_basewep"
 
-if (CLIENT) then
-SWEP.PrintName		= "Disposable AT"
-SWEP.Slot		    = 4
-SWEP.SlotPos		= 3			
-end
+SWEP.Base = "weapon_ace_base"
 
-SWEP.Spawnable		= true	
+SWEP.PrintName    = "Disposable AT"
+SWEP.Slot         = 4
+SWEP.SlotPos      = 3
+SWEP.Spawnable    = true
+SWEP.Category     = "ACE Sweps - RKT"
 
---Visual
-SWEP.ViewModelFlip 	= false
-SWEP.ViewModel		= "models/weapons/v_RPG.mdl"	
-SWEP.WorldModel		= "models/weapons/w_rocket_launcher.mdl"	
-SWEP.ReloadSound	= "Weapon_Pistol.Reload"	
-SWEP.HoldType		= "rpg"		
-SWEP.CSMuzzleFlashes	= true
+SWEP.Purpose      = "Clear backblast! One rocket, then ditch the tube."
+SWEP.Instructions = "Left mouse to shoot. Single use."
 
+-- Visuals
+SWEP.ViewModelFlip   = false
+SWEP.ViewModel       = "models/weapons/v_RPG.mdl"
+SWEP.WorldModel      = "models/weapons/w_rocket_launcher.mdl"
+SWEP.HoldType        = "rpg"
+SWEP.CSMuzzleFlashes = false
+SWEP.DeployDelay     = 2
 
--- Other settings
-SWEP.Weight			= 10						
- 
--- Weapon info		
-SWEP.Purpose		= "Clear Backblast!"	
-SWEP.Instructions	= "Left mouse to shoot"		
+-- Fire settings
+SWEP.FireRate            = 0.2
+SWEP.Primary.Sound       = "acf_extra/tankfx/gnomefather/2pdr2.wav"
+SWEP.Primary.LightScale  = 300
+SWEP.Primary.ClipSize    = 1
+SWEP.Primary.DefaultClip = 1
+SWEP.Primary.Automatic   = false
+SWEP.Primary.Ammo        = "RPG_Round"
+SWEP.Primary.BulletCount = 1
 
--- Primary fire settings
-SWEP.Primary.Sound			= "acf_extra/tankfx/gnomefather/2pdr2.wav"
-SWEP.Primary.NumShots		= 1	
-SWEP.Primary.Recoil			= 20	
-SWEP.Primary.RecoilAngle	= 15		
-SWEP.Primary.Cone			= 0.025		
-SWEP.Primary.Delay			= 7
-SWEP.Primary.ClipSize		= 1		
-SWEP.Primary.DefaultClip	= 1			
-SWEP.Primary.Automatic		= 0	
-SWEP.Primary.Ammo		= "RPG_Round"	
+SWEP.Secondary.Ammo        = "none"
+SWEP.Secondary.ClipSize    = -1
+SWEP.Secondary.DefaultClip = -1
 
-SWEP.Secondary.Ammo		= "none"	
-SWEP.Secondary.ClipSize		= -1		
-SWEP.Secondary.DefaultClip	= -1
+-- Recoil / spread (one big kick; explicit Side/Roll so the base's ViewPunch
+-- never sees nil)
+SWEP.HeatPerShot         = 100
+SWEP.HeatMax             = 100
+SWEP.HeatReductionRate   = 25
+SWEP.ViewPunchAmount     = 8
+SWEP.ViewPunchAmountSide = 0
+SWEP.ViewPunchAmountRoll = 0
 
-SWEP.ReloadSoundEnabled = 1
+SWEP.BaseSpread     = 0.2
+SWEP.MaxSpread      = 15
+SWEP.MovementSpread = 3
+SWEP.UnscopedSpread = 0.5
 
-SWEP.Category 			= "ACE Sweps - RKT"
+SWEP.ZoomFOV  = 50
+SWEP.HasScope = false
 
-SWEP.AimOffset = Vector(0,0,0)
-SWEP.InaccuracyAccumulation = 0
-SWEP.lastFire=CurTime()
-
-SWEP.MaxInaccuracyMult = 5
-SWEP.InaccuracyAccumulationRate = 0.3
-SWEP.InaccuracyDecayRate = 1
-
-SWEP.IronSights = true
-SWEP.IronSightsPos = Vector(-2, -15, 2.98)
-SWEP.ZoomPos = Vector(2,-2,2)
-SWEP.IronSightsAng = Angle(0.45, 0, 0)
-SWEP.CarrySpeedMul = 0.6 --WalkSpeedMult when carrying the weapon
-
-SWEP.ZoomAccuracyImprovement = 0.5 -- 0.3 means 0.7 the inaccuracy
-SWEP.ZoomRecoilImprovement = 0.2 -- 0.3 means 0.7 the recoil movement
-
-SWEP.CrouchAccuracyImprovement = 0.4 -- 0.3 means 0.7 the inaccuracy
-SWEP.CrouchRecoilImprovement = 0.2 -- 0.3 means 0.7 the recoil movement
-
---
+SWEP.CarrySpeedMul = 0.8   -- lighter than a reloadable launcher
 
 function SWEP:InitBulletData()
-	
+
 	self.BulletData = {}
 
 		self.BulletData.Id = "75mmHW"
 		self.BulletData.Type = "THEAT"
 		self.BulletData.Id = 2
 		self.BulletData.Caliber = 6.0
-		self.BulletData.PropLength = 14 --Volume of the case as a cylinder * Powder density converted from g to kg		
+		self.BulletData.PropLength = 14 --Volume of the case as a cylinder * Powder density converted from g to kg
 		self.BulletData.ProjLength = 60 --Volume of the projectile as a cylinder * streamline factor (Data5) * density of steel
 		self.BulletData.Data5 = 2500  --He Filler or Flechette count
 		self.BulletData.Data6 = 60 --HEAT ConeAng or Flechette Spread
@@ -98,7 +95,7 @@ function SWEP:InitBulletData()
 		self.BulletData.BoomFillerMass = self.BulletData.FillerMass / 250
 		local ConeAera = 3.1416 * self.BulletData.Caliber/2 * ((self.BulletData.Caliber/2)^2 + self.BulletData.ProjLength^2)^0.5
 		local ConeThick = self.BulletData.Caliber/50
-	
+
 		local ConeVol = ConeAera * ConeThick
 		self.BulletData.SlugMass = ConeVol*7.9/1000
 		self.BulletData.SlugMass2 = ConeVol*7.9/1000
@@ -108,8 +105,6 @@ function SWEP:InitBulletData()
 		self.BulletData.SlugMV =( self.BulletData.FillerMass/2 * (1-self.BulletData.HEAllocation) * ACF.HEPower * math.sin(math.rad(10+self.BulletData.Data6)/2) /self.BulletData.SlugMass)^ACF.HEATMVScale
 		self.BulletData.SlugCaliber2 =  self.BulletData.Caliber - self.BulletData.Caliber * (math.sin(Rad)*0.5+math.cos(Rad)*1.5)/2
 		self.BulletData.SlugMV2 =( self.BulletData.FillerMass/2 * self.BulletData.HEAllocation * ACF.HEPower * math.sin(math.rad(10+self.BulletData.Data6)/2) /self.BulletData.SlugMass)^ACF.HEATMVScale
---		print("SlugMV: "..self.BulletData.SlugMV)
---		print("SlugMV2: "..self.BulletData.SlugMV2)
 		self.BulletData.Detonated = 0
 		local SlugFrAera = 3.1416 * (self.BulletData.SlugCaliber/2)^2
 		local SlugFrAera2 = 3.1416 * (self.BulletData.SlugCaliber2/2)^2
@@ -119,31 +114,28 @@ function SWEP:InitBulletData()
 		self.BulletData.SlugDragCoef2 = ((SlugFrAera2/10000)/self.BulletData.SlugMass2)*1000
 		self.BulletData.SlugRicochet = 	500									--Base ricochet angle (The HEAT slug shouldn't ricochet at all)
 		self.BulletData.SlugRicochet2 = 	500									--Base ricochet angle (The HEAT slug shouldn't ricochet at all)
-	
+
 		self.BulletData.CasingMass = self.BulletData.ProjMass - self.BulletData.FillerMass - ConeVol*7.9/1000
 		self.BulletData.Fragments = math.max(math.floor((self.BulletData.BoomFillerMass/self.BulletData.CasingMass)*ACF.HEFrag),2)
 		self.BulletData.FragMass = self.BulletData.CasingMass/self.BulletData.Fragments
-		--		self.BulletData.DragCoef  = 0 --Alternatively manually set it
-		self.BulletData.DragCoef  = ((self.BulletData.FrAera/10000)/self.BulletData.ProjMass)	
+		self.BulletData.DragCoef  = ((self.BulletData.FrAera/10000)/self.BulletData.ProjMass)
 
 		--Don't touch below here
-		self.BulletData.MuzzleVel = ACF_MuzzleVelocity( self.BulletData.PropMass, self.BulletData.ProjMass, self.BulletData.Caliber )		
+		self.BulletData.MuzzleVel = ACF_MuzzleVelocity( self.BulletData.PropMass, self.BulletData.ProjMass, self.BulletData.Caliber )
 		self.BulletData.ShovePower = 0.2
 		self.BulletData.KETransfert = 0.3
 		self.BulletData.PenAera = self.BulletData.FrAera^ACF.PenAreaMod
 		self.BulletData.Pos = Vector(0 , 0 , 0)
-		self.BulletData.LimitVel = 800	
+		self.BulletData.LimitVel = 800
 		self.BulletData.Ricochet = 999
 		self.BulletData.Flight = Vector(0 , 0 , 0)
 		self.BulletData.BoomPower = self.BulletData.PropMass + self.BulletData.FillerMass
 
---		local SlugEnergy = ACF_Kinetic( self.BulletData.MuzzleVel*39.37 + self.BulletData.SlugMV*39.37 , self.BulletData.SlugMass, 999999 )
 		local SlugEnergy = ACF_Kinetic( self.BulletData.SlugMV*39.37 , self.BulletData.SlugMass, 999999 )
 		self.BulletData.MaxPen = (SlugEnergy.Penetration/self.BulletData.SlugPenAera)*ACF.KEtoRHA
---		print("SlugPen: "..self.BulletData.MaxPen)
-		local SlugEnergy = ACF_Kinetic( self.BulletData.SlugMV2*39.37 , self.BulletData.SlugMass2, 999999 )
-		self.BulletData.MaxPen = (SlugEnergy.Penetration/self.BulletData.SlugPenAera2)*ACF.KEtoRHA
---		print("SlugPen2: "..self.BulletData.MaxPen)		
+		local SlugEnergy2 = ACF_Kinetic( self.BulletData.SlugMV2*39.37 , self.BulletData.SlugMass2, 999999 )
+		self.BulletData.MaxPen = (SlugEnergy2.Penetration/self.BulletData.SlugPenAera2)*ACF.KEtoRHA
+
 		--For Fake Crate
 		self.BoomFillerMass = self.BulletData.BoomFillerMass
 		self.Type = self.BulletData.Type
@@ -154,69 +146,19 @@ function SWEP:InitBulletData()
 		self.FillerMass = self.BulletData.FillerMass
 		self.DragCoef = self.BulletData.DragCoef
 		self.Colour = self.BulletData.Colour
-		self.DetonatorAngle = 80	
-		
-end	
-		
-function SWEP:PrimaryAttack()		
-	if ( !self:CanPrimaryAttack() ) then return end		
-	if (self:Ammo1() == 0) and (self:Clip1() == 0) then return end
-	self:SetNextPrimaryFire( CurTime() + self.Primary.Delay )	
-	self.Weapon:EmitSound(Sound(self.Primary.Sound), 100, 100, 1, CHAN_WEAPON )		
-
-	if CLIENT then 
-		return 
-		end	
-
-	self.BulletData.Owner = self.Owner
-	self.BulletData.Gun = self	
-	self.InaccuracyAccumulation = math.Clamp(self.InaccuracyAccumulation + self.InaccuracyAccumulationRate - self.InaccuracyDecayRate*(CurTime()-self.lastFire),1,self.MaxInaccuracyMult)
-	
-	if ( self.Owner:IsPlayer() ) then
-		self.Owner:LagCompensation( true )
-	end
-
-	self:ACEFireBullet()
-	
-	if ( self.Owner:IsPlayer() ) then
-		self.Owner:LagCompensation( false )
-	end
-
-
-		
-	self.lastFire=CurTime()
---	print("Inaccuracy: "..self.InaccuracyAccumulation)
-	
-	
-	self.Weapon:SendWeaponAnim( ACT_VM_PRIMARYATTACK )							
-	self.Owner:SetAnimation( PLAYER_ATTACK1 )			
-	self.Owner:ViewPunch(Angle( -self.Primary.Recoil + math.Rand(-self.Primary.RecoilAngleVer,self.Primary.RecoilAngleVer), math.Rand(-self.Primary.RecoilAngleHor,self.Primary.RecoilAngleHor), 0 )*(1+self.InaccuracyAccumulation))	
-	
-	if self:Ammo1() > 0 then
-	self.Owner:RemoveAmmo( 1, "RPG_Round")
-	else
-	self:TakePrimaryAmmo(1)
-	end
---	self:TakePrimaryAmmo(1)
-
-self.Owner:SetWalkSpeed(self.NormalPlayerWalkSpeed)
-self.Owner:SetRunSpeed(self.NormalPlayerRunSpeed)
-
-self.Owner:StripWeapon( "disposableat" )
+		self.DetonatorAngle = 80
 
 end
 
-function SWEP:Reload()	
+-- Single use: the tube is spent after one rocket. Strip shortly after the shot
+-- resolves; the base's OnRemove restores the carry-speed penalty.
+function SWEP:OnPrimaryAttack()
+	if not SERVER then return end
 
-	if self:Clip1() < self.Primary.ClipSize and self:Ammo1() > 0 and self.ReloadSoundEnabled == 1 then
---	self.Weapon:EmitSound(Sound(self.ReloadSound))
-	end
-	self:DefaultReload(ACT_VM_RELOAD)
-	
---player.GetByID( 1 ):GiveAmmo( 30-self:Clip1(), "AR2", true )
-	self:Think()
-	return true
+	local owner = self:GetOwner()
+	timer.Simple(0.1, function()
+		if IsValid(owner) then
+			owner:StripWeapon("disposableat")
+		end
+	end)
 end
-
-
-

@@ -13,20 +13,33 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
     
     if not ents or not IsValid(ply) then return end
     
-    local teamId = ply:Team()
-    if not TPG.Util.IsOnTeam(ply) then
-        -- Not on a team, remove everything
+    -- Nobody builds before the first round begins (wait-for-players window):
+    -- the whole point is that no one gets a budget head start.
+    if TPG.State.waitingForPlayers then
         for _, ent in pairs(ents) do
             if IsValid(ent) then ent:Remove() end
         end
-        TPG.Util.ChatMessage(ply, "[TPG] Join a team before spawning.", Color(255, 0, 0))
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load -- the round hasn't started yet.", Color(255, 200, 0))
         return
     end
-    
+
+    local teamId = ply:Team()
+
+    -- Spectators may build freely: no team budget, no cooldown, no economy
+    -- charge. They're godmoded and their damage is nulled (sv_protection), so
+    -- it's a pure sandbox for testing builds between matches.
+    if not TPG.Util.IsOnTeam(ply) then
+        return
+    end
+
     local pState = TPG.State.GetPlayer(ply)
-    
+
+    -- Under the per-player economy the wallet IS the pacing mechanism (a
+    -- destroyed vehicle isn't refunded), so no duplicator cooldown on top.
+    local econActive = TPG.Economy and TPG.Economy.Active
+
     -- Check cooldown FIRST
-    if CurTime() < (pState.dupeCooldown or 0) then
+    if not econActive and CurTime() < (pState.dupeCooldown or 0) then
         local remaining = math.ceil(pState.dupeCooldown - CurTime())
         TPG.Util.ChatMessage(ply, "[TPG] Duplicator on cooldown for " .. remaining .. "s. Removed.", Color(255, 0, 0))
         for _, ent in pairs(ents) do
@@ -113,11 +126,14 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
             end
         end
         
+        -- No cooldown at all under the economy (the purchase was the cost).
+        if econActive then return end
+
         -- Light vehicles bypass cooldown
         local lightWeight = TPG.Config.lightVehicleWeight or 5000
         local lightProps = TPG.Config.lightVehicleProps or 140
         local propCount = table.Count(ents)
-        
+
         if totalWeight <= lightWeight and propCount <= lightProps then
             TPG.Util.ChatMessage(ply, "[TPG] Light vehicle spawned. No cooldown.", Color(0, 255, 255))
             return
@@ -140,10 +156,16 @@ end)
 
 -- Also check when spawning individual props
 hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, model)
-    if not TPG.Util.IsOnTeam(ply) then
+    if TPG.State.waitingForPlayers then
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load -- the round hasn't started yet.", Color(255, 200, 0))
         return false
     end
-    
+
+    -- Spectators build outside the team limit system entirely.
+    if not TPG.Util.IsOnTeam(ply) then
+        return
+    end
+
     local teamId = ply:Team()
     local teamLimits = TPG.State.limits[teamId] or {}
     local maxLimits = TPG.State.maxLimits or {}
@@ -156,10 +178,16 @@ end)
 
 -- Check when spawning SENTs (ACE entities, etc.)
 hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, class)
-    if not TPG.Util.IsOnTeam(ply) then
+    if TPG.State.waitingForPlayers then
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load -- the round hasn't started yet.", Color(255, 200, 0))
         return false
     end
-    
+
+    -- Spectators build outside the team limit system entirely.
+    if not TPG.Util.IsOnTeam(ply) then
+        return
+    end
+
     -- Allow spawning but check limits after
     timer.Simple(0.5, function()
         if not IsValid(ply) then return end
