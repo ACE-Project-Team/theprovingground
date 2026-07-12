@@ -43,15 +43,29 @@ TPG.Config = {
     waitJoinExtend = 15,
     waitMaxTotal   = 90,
 
+    -- King of the Hill drain. KOTH bleeds the team that ISN'T holding the hill
+    -- at (points held) * capMul every scoreStep (0.075s). Every map hardcodes a
+    -- 0.15 KOTH capMultiplier, which drained a full 300-ticket lead in ~2.5 min
+    -- of solid holding -- rounds were over almost instantly. This single knob
+    -- retunes EVERY KOTH map at once (objectives/sv_objectives.lua applies it for
+    -- KOTH regardless of the per-map value). Math: a continuous one-team hold
+    -- drains 300 tickets in 300 * scoreStep / kothCapMul seconds. At 0.02 that's
+    -- ~18.75 min for a total stomp; realistically contested rounds run 20-25+.
+    kothCapMul           = 0.02,
+
     -- Capture the Flag (objectives/sv_ctf.lua). Its OWN game mode: one neutral
     -- flag that sits on the map's KOTH capture point; grab it and carry it to
     -- your own spawn to score. Only offered on maps that have a KOTH point.
-    ctfChance            = 0.30,   -- per-round chance CTF is the mode (see TPG.SelectRandomGameType)
+    ctfChance            = 0.25,   -- per-round chance CTF is the mode (see TPG.SelectRandomGameType)
     ctfDeliverRadius     = 500,    -- fallback delivery radius if the safezone can't be resolved
     ctfCaptureTicketLoss = 40,     -- enemy tickets lost per delivered flag (75 ended rounds in ~4 caps; ~8 now)
     ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
     ctfReturnTime        = 25,     -- seconds a dropped flag waits before returning to its point
     ctfMaxCarryTime      = 150,    -- a single carry auto-returns after this many seconds (anti-hoarding)
+    -- CTF also bleeds a little on kills (systems/sv_commendations.lua), so fights
+    -- between flag runs matter -- but flags stay the decisive scoring, so kills
+    -- drain only this fraction of the full DM per-kill loss. 0 disables it.
+    ctfKillTicketFrac    = 0.4,
 
     -- Bonus disposable AT (entities/weapons/disposableat): every teamed player
     -- who brings neither a launcher nor mines in their Special slot gets a

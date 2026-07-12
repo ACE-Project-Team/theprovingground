@@ -85,6 +85,13 @@ function TPG.Objectives.ProcessScoring()
     local gameType = TPG.GetGameType(TPG.State.gameType)
     local capMul = gameTypeConfig.capMultiplier or gameType.defaultCapMul or 0.02
 
+    -- KOTH: force the global drain knob over whatever the map hardcoded (they
+    -- all ship 0.15, which ended rounds in ~2.5 min). One place to tune every
+    -- KOTH map to a ~20 min hold. See TPG.Config.kothCapMul for the math.
+    if TPG.State.gameType == GAMEMODE_KOTH and TPG.Config.kothCapMul then
+        capMul = TPG.Config.kothCapMul
+    end
+
     if totalCapValue < 0 then
         -- Red owns more points, drain green
         TPG.State.AddScore(TEAM_GREEN, totalCapValue * capMul)

@@ -80,9 +80,14 @@ hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
         attacker:Kill()
     end
     
-    -- Death tickets (for DM mode)
+    -- Per-kill ticket drain. DM lives entirely on this (frac 1). CTF adds a
+    -- SMALLER version on top of flag captures, so fighting matters between flag
+    -- runs while the flag stays the decisive scoring. Every other mode: none.
     local gameType = TPG.GetGameType(TPG.State.gameType)
-    if gameType.useDeathTickets then
+    local killFrac = gameType.useDeathTickets and 1
+        or (TPG.State.gameType == GAMEMODE_CTF and (TPG.Config.ctfKillTicketFrac or 0)) or 0
+
+    if killFrac > 0 then
         local victimTeam = victim:Team()
         local victimUsage = TPG.PropTracking.GetPlayerUsage(victim)
 
@@ -98,6 +103,6 @@ hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
         local maxMult    = TPG.Config.dmTicketMaxMult or 2.0
         local mult       = math.Clamp(refPlayers / math.max(active, 1), 1, maxMult)
 
-        TPG.State.AddScore(victimTeam, -math.ceil(baseLoss * mult))
+        TPG.State.AddScore(victimTeam, -math.max(math.ceil(baseLoss * mult * killFrac), 1))
     end
 end)
