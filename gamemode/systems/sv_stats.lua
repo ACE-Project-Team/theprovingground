@@ -25,10 +25,32 @@ local FILE = "tpg/stats.json"
 local data  = {}     -- [sid64] = { name, rating, kills, deaths, teamkills, caps, flags, wins, rounds }
 local dirty = false
 
+-- Retail SteamID64s are 17-digit strings in the 7656.. range. A listen-server
+-- host (or any connection whose Steam auth hasn't settled) can briefly report
+-- "0"/"NULL"/nil instead, and an older build banked the id in NUMERIC form --
+-- which util.TableToJSON then serialised in scientific notation ("7.65..e+16"),
+-- a key that is both lossy (can't be matched back to the player) and duplicated.
+-- Reject anything that isn't a real SteamID64 so no junk key is ever created.
+local function IsRealSteamID64(sid)
+    return isstring(sid) and #sid == 17 and string.match(sid, "^7656%d+$") ~= nil
+end
+
 -- ── Storage ─────────────────────────────────────────────────────────────────
 local function Load()
     if not file.Exists(FILE, "DATA") then return end
     data = util.JSONToTable(file.Read(FILE, "DATA") or "") or {}
+
+    -- Purge legacy corrupted rows (scientific-notation/float keys, "0", "NULL").
+    -- These are what made a player appear on the leaderboard under a stale rating
+    -- different from their live record: the name-dedup leaderboard surfaced the
+    -- junk row while the profile card read the real key. Un-keyable, so there's
+    -- nothing to merge back into the real record -- just drop them.
+    for sid in pairs(data) do
+        if not IsRealSteamID64(sid) then
+            data[sid] = nil
+            dirty = true
+        end
+    end
 end
 
 function TPG.Stats.Save()
@@ -44,15 +66,6 @@ hook.Add("ShutDown", "TPG_StatsSave", TPG.Stats.Save)
 hook.Add("PlayerDisconnected", "TPG_StatsSaveOnLeave", function() TPG.Stats.Save() end)
 
 -- ── Accessors ───────────────────────────────────────────────────────────────
--- Retail SteamID64s are 17-digit strings in the 7656.. range. A listen-server
--- host (or any connection whose Steam auth hasn't settled) can briefly report
--- "0"/"NULL"/nil instead; a scoring event firing in that window used to bank a
--- phantom record, which is how one player ends up on the leaderboard several
--- times. Reject anything that isn't a real SteamID64 so no junk key is created.
-local function IsRealSteamID64(sid)
-    return isstring(sid) and #sid == 17 and string.match(sid, "^7656%d+$") ~= nil
-end
-
 local function entry(ply)
     if not (IsValid(ply) and ply:IsPlayer()) or ply:IsBot() then return nil end
     local sid = ply:SteamID64()

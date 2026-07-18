@@ -12,19 +12,20 @@ function TPG.Loadout.Apply(ply)
     for _, class in ipairs(TPG.Weapons.Default) do
         ply:Give(class)
     end
-    
-    local teamId = ply:Team()
-    
-    -- Not on a team, minimal loadout
-    if not TPG.Util.IsOnTeam(ply) then
-        return
-    end
-    
-    -- Give team tools
+
+    -- Building tools (toolgun) -- given to everyone, including spectators, so
+    -- non-combatants can build/tool freely alongside the physgun in Default.
     for _, class in ipairs(TPG.Weapons.TeamTools) do
         ply:Give(class)
     end
-    
+
+    local teamId = ply:Team()
+
+    -- Not on a team, minimal loadout (default weapons + tools, no team kit)
+    if not TPG.Util.IsOnTeam(ply) then
+        return
+    end
+
     -- Get loadout from PData. Ids are weapon class strings now; a legacy
     -- numeric save (from the old index-based system) falls back to the default.
     local dl = TPG.WeaponConfig.DefaultLoadout
@@ -59,16 +60,16 @@ function TPG.Loadout.Apply(ply)
     -- Give weapons
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
     TPG.Loadout.GiveWeapon(ply, "Secondary", secondaryId)
-    local gaveSpecial = TPG.Loadout.GiveWeapon(ply, "Special", specialId)
+    TPG.Loadout.GiveWeapon(ply, "Special", specialId)
 
-    -- Bonus disposable AT: infantry who bring neither a launcher nor mines in
-    -- their Special slot get a free single-use tube, so they're never helpless
-    -- against armour. Given last, after the speed snapshot, so it doesn't
-    -- override the (faster) empty-Special movement -- it's a bonus, not a pick.
-    -- Small chance to roll a real launcher (stinger/javelin) instead, which goes
-    -- through GiveWeapon so it gets the Special ammo floor.
+    -- Bonus disposable AT: EVERY teamed player gets a free single-use tube on
+    -- top of whatever they picked -- it's an extra, not a pick, because a chosen
+    -- launcher can run dry and mines don't answer a tank at range. Given last,
+    -- after the speed snapshot, so it doesn't override movement. Small chance to
+    -- roll a real launcher (stinger/javelin) instead, which goes through
+    -- GiveWeapon so it gets the Special ammo floor.
     local atClass = TPG.Config.disposableATClass
-    if not gaveSpecial and atClass and atClass ~= "" then
+    if atClass and atClass ~= "" then
         local gaveUpgrade = false
         local upgrades = TPG.Config.disposableATUpgrades
         if upgrades and #upgrades > 0

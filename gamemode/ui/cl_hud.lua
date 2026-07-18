@@ -248,9 +248,12 @@ function TPG.UI.DrawTeammates(ply, teamId, teamColor)
     end
 end
 
--- Hide default HUD elements
+-- Hide default HUD elements.
+-- NOTE: CHudBattery (the suit-armour panel) is intentionally NOT hidden --
+-- armour tiers hand out real armour (Light 50 ... Juggernaut 999999) and this
+-- is the only thing that draws it, so hiding it made players think they got
+-- none. Health uses the default CHudHealth, so this keeps the two consistent.
 local hideElements = {
-    ["CHudBattery"] = true,
 }
 
 hook.Add("HUDShouldDraw", "TPG_HideHUD", function(name)

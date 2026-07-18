@@ -86,9 +86,9 @@ TPG.Config = {
     ctfKillTicketFrac    = 0.4,
 
     -- Bonus disposable AT (entities/weapons/disposableat): every teamed player
-    -- who brings neither a launcher nor mines in their Special slot gets a
-    -- single-use AT tube for free, so plain infantry always have an answer to
-    -- armour. Set the class to "" to disable.
+    -- gets a free single-use AT tube on top of their loadout, so everyone always
+    -- has an answer to armour even after a chosen launcher runs dry. Set the
+    -- class to "" to disable.
     disposableATClass   = "disposableat",
     -- When the bonus tube is handed out, a small chance to upgrade it into a
     -- real launcher instead (must be an installed, enabled loadout weapon).
