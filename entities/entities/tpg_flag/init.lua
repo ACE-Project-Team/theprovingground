@@ -33,6 +33,15 @@ function ENT:SetHome(pos)
 end
 
 function ENT:ReturnHome(reason)
+    -- Re-roll the home spot on every reset so the flag moves around the map over
+    -- a round (KOTH point vs. the CP points) instead of living wherever it first
+    -- rolled at spawn. RollFlagPoint returns a fixed custom point if an admin
+    -- placed one, so overridden maps still stay put.
+    if TPG.CTF and TPG.CTF.RollFlagPoint then
+        local pt = TPG.CTF.RollFlagPoint()
+        if pt then self.HomePos = pt + Vector(0, 0, 5) end
+    end
+
     self:SetFlagState(self.STATE_HOME)
     self:SetPossessTeam(0)
     self:SetCarrier(NULL)

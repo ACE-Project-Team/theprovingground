@@ -36,7 +36,10 @@ SWEP.DeployDelay     = 2
 
 -- Fire settings
 SWEP.FireRate            = 0.2
-SWEP.Primary.Sound       = "acf_extra/tankfx/gnomefather/2pdr2.wav"
+-- Must be a sound registered with ACE_DefineGunFireSound: the base's fire path
+-- does next(ACE.GSounds.GunFire[Sound]), which errors on an unregistered sound
+-- (the table entry is nil, not empty). Reuse the AT4's registered launch sound.
+SWEP.Primary.Sound       = "ace_weapons/sweps/multi_sound/at4_multi.mp3"
 SWEP.Primary.LightScale  = 300
 SWEP.Primary.ClipSize    = 1
 SWEP.Primary.DefaultClip = 1
@@ -154,7 +157,7 @@ function SWEP:InitBulletData()
 end
 
 -- Single use: the tube is spent after one rocket. Strip shortly after the shot
--- resolves; the base's OnRemove restores the carry-speed penalty.
+-- resolves; OnRemove (below) hands the carry-speed penalty back.
 function SWEP:OnPrimaryAttack()
 	if not SERVER then return end
 
@@ -164,4 +167,22 @@ function SWEP:OnPrimaryAttack()
 			owner:StripWeapon("disposableat")
 		end
 	end)
+end
+
+-- The base's OnRemove only restores the carry-speed penalty when its fake crate
+-- is still valid -- and a tube stripped the instant it fires usually isn't, so
+-- the 0.8x slow stuck permanently. Always restore the snapshotted speed here,
+-- then defer to the base for its crate cleanup.
+function SWEP:OnRemove()
+	if SERVER then
+		local owner = self:GetOwner()
+		if IsValid(owner) and owner:IsPlayer() and self.NormalPlayerWalkSpeed then
+			owner:SetWalkSpeed(self.NormalPlayerWalkSpeed)
+			owner:SetRunSpeed(self.NormalPlayerRunSpeed)
+		end
+	end
+
+	if self.BaseClass and self.BaseClass.OnRemove then
+		self.BaseClass.OnRemove(self)
+	end
 end
