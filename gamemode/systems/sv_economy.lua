@@ -244,6 +244,118 @@ hook.Add("PlayerSpawnedVehicle", "TPG_EconomyStockVehicle", function(ply, ent)
     end)
 end)
 
+-- ── Post-spawn re-billing ───────────────────────────────────────────────────
+-- ACE's point system recalculates a contraption's cost whenever its owner edits
+-- it after spawn (bolts on armor, links ammo/GBUs, swaps a gun). The INITIAL
+-- purchase is billed once by the dupe-finish flow above; this closes the loophole
+-- where you field a cheap chassis, pay little, then upgrade it for free.
+--
+-- Each freshly spawned build is stamped with the cost already paid
+-- (con.TPG_BilledPoints). ACE fires ACE_OnContraptionPointsRecalculated after any
+-- rebuild; when the fresh total rises above the billed baseline we charge the
+-- difference (economy) and always report it (both modes). A drop is not refunded
+-- -- a vehicle is a true purchase -- we just lower the baseline so re-adding the
+-- same part bills again. Scratch-built (non-dupe) contraptions are never stamped,
+-- matching the existing economy which only charges dupes and stock vehicles.
+local REBILL_DEBOUNCE  = 0.75   -- edits fire a burst of recalcs; settle to one
+local REBILL_MIN_DELTA = 25     -- ignore display-scale / rounding jitter
+
+-- Stamp the price already paid onto each unique contraption in a spawned build.
+function ECON.MarkContraptionsBilled(entList)
+    local seen = {}
+    for _, ent in pairs(entList) do
+        if IsValid(ent) and ent.GetContraption then
+            local con = ent:GetContraption()
+            if con and not seen[con] then
+                seen[con] = true
+                if _G.ACE_EnsureContraptionPoints then
+                    ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+                end
+                con.TPG_BilledPoints = math.floor(con.ACEPoints or 0)
+            end
+        end
+    end
+end
+
+-- Resolve the human owner of a contraption via any of its entities.
+local function ContraptionOwner(con)
+    if not con or not con.ents then return nil end
+    for ent in pairs(con.ents) do
+        if IsValid(ent) and ent.CPPIGetOwner then
+            local owner = ent:CPPIGetOwner()
+            if IsValid(owner) and owner:IsPlayer() then return owner end
+        end
+    end
+    return nil
+end
+
+local function SettleRebill(con)
+    if not istable(con) or con.ACERemoving then return end
+    if con.TPG_BilledPoints == nil then return end
+
+    -- A lazy invalidation may have arrived since the recalc that scheduled us;
+    -- force the total current so we bill the final value.
+    if _G.ACE_EnsureContraptionPoints then
+        ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+    end
+
+    local newTotal = math.floor(con.ACEPoints or 0)
+    local delta    = newTotal - con.TPG_BilledPoints
+    if math.abs(delta) < REBILL_MIN_DELTA then return end
+
+    local owner = ContraptionOwner(con)
+    if not IsValid(owner) or not TPG.Util.IsOnTeam(owner) then
+        con.TPG_BilledPoints = newTotal   -- no teamed owner to bill; keep current
+        return
+    end
+
+    con.TPG_BilledPoints = newTotal
+
+    if delta > 0 then
+        if ECON.Active then
+            local pay = math.min(delta, ECON.GetMoney(owner))
+            if pay > 0 then
+                ECON.SetMoney(owner, ECON.GetMoney(owner) - pay)
+                ECON.Notify(owner, -pay, "modify")
+            end
+            if pay < delta then
+                TPG.Util.ChatMessage(owner, "[TPG] Modifications cost " .. delta ..
+                    " pts but you could only pay " .. pay .. ". Balance: " ..
+                    ECON.GetMoney(owner) .. ".", Color(255, 120, 120))
+            else
+                TPG.Util.ChatMessage(owner, "[TPG] Vehicle modified: -" .. delta ..
+                    " pts. Now worth " .. newTotal .. ". Balance: " ..
+                    ECON.GetMoney(owner) .. ".", Color(255, 200, 0))
+            end
+        else
+            TPG.Util.ChatMessage(owner, "[TPG] Vehicle modified: now worth " ..
+                newTotal .. " pts (+" .. delta .. ").", Color(255, 200, 0))
+        end
+    else
+        TPG.Util.ChatMessage(owner, "[TPG] Vehicle modified: now worth " .. newTotal ..
+            " pts (" .. delta .. (ECON.Active and ", no refund" or "") .. ").",
+            Color(150, 220, 255))
+    end
+end
+
+hook.Add("ACE_OnContraptionPointsRecalculated", "TPG_RebillModifiedVehicle", function(con, change)
+    if not istable(con) or con.ACERemoving then return end
+    local billed = con.TPG_BilledPoints
+    if billed == nil then return end   -- pre-purchase / scratch build; nothing to re-bill
+
+    local total = math.floor((change and change.Total) or con.ACEPoints or 0)
+    if math.abs(total - billed) < REBILL_MIN_DELTA then return end
+
+    -- Coalesce the recalc burst from one edit into a single charge + message.
+    if con.TPG_RebillPending then return end
+    con.TPG_RebillPending = true
+    timer.Simple(REBILL_DEBOUNCE, function()
+        if not istable(con) then return end
+        SettleRebill(con)
+        con.TPG_RebillPending = nil
+    end)
+end)
+
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
 function ECON.ResetWallets()
     for _, ply in ipairs(player.GetAll()) do

@@ -29,15 +29,27 @@ function TPG.ACE.GetPlayerContraptions(ply)
     return contraptions
 end
 
+-- ACE's dev point system is lazy: a spawn, a crate link, or any dupe edit only
+-- marks the contraption dirty and bumps a generation -- con.ACEPoints is NOT
+-- recomputed until someone forces a rebuild. Reading it raw returns a stale
+-- pre-edit value (this is why linking GBUs post-spawn didn't move the number).
+-- Force the same rebuild the economy path already uses before reading.
+local function EnsureConPoints(con)
+    if _G.ACE_EnsureContraptionPoints then
+        ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+    end
+end
+
 -- Get total ACE points for a player
 function TPG.ACE.GetPlayerPoints(ply)
     local total = 0
-    
+
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
-        -- ACE stores this on the contraption object
+        -- ACE stores this on the contraption object (rebuilt on demand above)
+        EnsureConPoints(con)
         total = total + (con.ACEPoints or 0)
     end
-    
+
     return total
 end
 
@@ -67,6 +79,7 @@ function TPG.ACE.GetPlayerPointsByType(ply)
     }
     
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
+        EnsureConPoints(con)
         local breakdown = con.ACEPointsPerType
         if breakdown then
             for category, points in pairs(breakdown) do

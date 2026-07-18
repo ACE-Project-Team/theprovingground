@@ -115,6 +115,12 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
                 " pts. Balance: " .. TPG.Economy.GetMoney(ply), Color(0, 255, 0))
         end
 
+        -- Baseline the paid cost onto the contraption so later edits re-bill
+        -- against it (both economy and shared-budget modes; see sv_economy.lua).
+        if TPG.Economy and TPG.Economy.MarkContraptionsBilled then
+            TPG.Economy.MarkContraptionsBilled(ents)
+        end
+
         -- Calculate weight for cooldown
         local totalWeight = 0
         for _, ent in pairs(ents) do
