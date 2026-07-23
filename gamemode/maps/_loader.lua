@@ -911,12 +911,16 @@ TPG.Maps.Configs = {
 TPG.Maps.Current = nil
 
 -- Global limit multipliers, applied on top of every map's authored values.
--- Reference: one strong tank ~= 11,000 points.
---   points x1.656 -> another 10% nerf on top of the old x1.84 budget (x2.0 -> x1.84 -> x1.656)
+-- Reference: ACE's reworked pricing puts a good modern tank at ~6,000 points
+-- (it was ~11,000 when the per-map values were authored), so the budgets were
+-- silently buying ~2x the tanks they were tuned for.
+--   points x0.828 -> x1.656 halved (x5.5k/11k): budgets buy the same NUMBER of
+--                    tanks as before the repricing, valuing each slot at 5.5k
+--                    (history: x2.0 -> x1.84 -> x1.656 -> x0.828)
 --   weight x1.5   -> weight cap raised so those extra tanks physically fit
 --   props  x1.5   -> prop cap raised so it doesn't become the new bottleneck
 -- Tune these three numbers to rebalance all maps at once.
-TPG.Maps.LimitMult = { points = 1.656, weight = 1.5, props = 1.5 }
+TPG.Maps.LimitMult = { points = 0.828, weight = 1.5, props = 1.5 }
 
 local function ApplyLimitMult(limits)
     if not limits then return end

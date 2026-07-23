@@ -16,7 +16,9 @@
 TPG.Economy = TPG.Economy or {}
 local ECON = TPG.Economy
 
--- ── Tunables (need play-testing; reference: strong tank ~= 11,000 pts) ─────
+-- ── Tunables (need play-testing; reference: ACE's reworked pricing puts a
+-- good modern tank at ~6,000 pts -- these were tuned against the old ~11,000
+-- reference and likely need a pass: startingMoney now buys a good tank) ─────
 ECON.Config = {
     startingMoney     = 6000,   -- enough for a medium; a strong tank must be earned
     maxMoney          = 60000,  -- wallet cap
