@@ -17,11 +17,12 @@ TPG.Economy = TPG.Economy or {}
 local ECON = TPG.Economy
 
 -- ── Tunables (need play-testing; reference: ACE's reworked pricing puts a
--- good modern tank at ~6,000 pts -- these were tuned against the old ~11,000
--- reference and likely need a pass: startingMoney now buys a good tank) ─────
+-- good modern tank at ~6,000 pts) ──────────────────────────────────────────
 ECON.Config = {
-    startingMoney     = 6000,   -- enough for a medium; a strong tank must be earned
+    startingMoney     = 3000,   -- half a good tank (~6k): field a light/medium now, earn the heavy
     maxMoney          = 60000,  -- wallet cap
+
+    losingIncomeMult  = 1.5,    -- all income x1.5 for whichever team is behind on tickets
 
     passiveIncome     = 150,    -- granted every passiveInterval seconds
     passiveInterval   = 10,
@@ -83,12 +84,30 @@ function ECON.SetMoney(ply, amount)
     ply:SetNWInt("TPG_Money", pState.money)
 end
 
+-- Comeback income multiplier. ANY team currently behind on tickets earns
+-- losingIncomeMult on all income; the (hard-losing) underdog state keeps its
+-- own configured multiplier. The two do NOT stack -- the better one applies --
+-- so underdog's "+25% income" announcement never understates what a losing
+-- team was already earning.
+local function IncomeMult(ply)
+    local mult = 1
+    local teamId = ply:Team()
+    local enemy  = TPG.GetEnemyTeam and TPG.GetEnemyTeam(teamId)
+    if enemy and TPG.Util.IsOnTeam(ply) then
+        local own   = (TPG.State.scores and TPG.State.scores[teamId]) or 0
+        local their = (TPG.State.scores and TPG.State.scores[enemy]) or 0
+        if own < their then mult = ECON.Config.losingIncomeMult or 1.5 end
+    end
+    if TPG.Underdog and TPG.Underdog.GetIncomeMult then
+        mult = math.max(mult, TPG.Underdog.GetIncomeMult(ply))
+    end
+    return mult
+end
+
 function ECON.Reward(ply, amount, _reason)
     if not ECON.Active or not IsValid(ply) or (amount or 0) <= 0 then return end
-    -- Underdog teams earn faster (all income sources).
-    if TPG.Underdog and TPG.Underdog.GetIncomeMult then
-        amount = amount * TPG.Underdog.GetIncomeMult(ply)
-    end
+    -- Losing/underdog teams earn faster (all income sources).
+    amount = amount * IncomeMult(ply)
     ECON.SetMoney(ply, ECON.GetMoney(ply) + amount)
 end
 
