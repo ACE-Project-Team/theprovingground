@@ -922,11 +922,28 @@ TPG.Maps.Current = nil
 -- Tune these three numbers to rebalance all maps at once.
 TPG.Maps.LimitMult = { points = 0.828, weight = 1.5, props = 1.5 }
 
+-- Small/tight maps take an EXTRA weight cut on top of the global multiplier.
+-- On a cramped map a full budget of heavy armour just plugs the lanes: nothing
+-- can flank, nothing dies, and the round grinds (a 57-minute Stalingrad KOTH).
+-- Only TONNAGE is cut -- points and props are untouched -- so the budget still
+-- buys the same value, you just can't spend it all on one immovable wall.
+--
+-- "Small" is read off the map's own authored weight limit, which is already the
+-- size judgement the map authors made (40-80t = the urban/close maps; 100t+ =
+-- the open ones). Retunes every tight map at once.
+TPG.Maps.SmallMapWeightTons = 80     -- authored limit at or below this = small
+TPG.Maps.SmallMapWeightMult = 0.8    -- -20% weight on those maps
+
 local function ApplyLimitMult(limits)
     if not limits then return end
     local m = TPG.Maps.LimitMult or {}
+
+    -- Judged on the AUTHORED value, before any multiplier is applied.
+    local smallMap = (limits.weight or 0) <= (TPG.Maps.SmallMapWeightTons or 0)
+    local sizeMult = smallMap and (TPG.Maps.SmallMapWeightMult or 1) or 1
+
     limits.points = math.floor((limits.points or 0) * (m.points or 1))
-    limits.weight = math.floor((limits.weight or 0) * (m.weight or 1))
+    limits.weight = math.floor((limits.weight or 0) * (m.weight or 1) * sizeMult)
     limits.props  = math.floor((limits.props  or 0) * (m.props  or 1))
 end
 

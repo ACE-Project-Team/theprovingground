@@ -108,7 +108,12 @@ function TPG.CTF.OnCapture(flag, carrier)
     local enemy   = TPG.GetEnemyTeam(capTeam)
 
     -- Drain the enemy's tickets; the normal win check resolves the round.
-    TPG.State.AddScore(enemy, -(TPG.Config.ctfCaptureTicketLoss or 75))
+    -- Overtime multiplies it, same as the control-point drain, so a CTF round
+    -- that's gone long ends in a couple of deliveries instead of eight.
+    local loss = (TPG.Config.ctfCaptureTicketLoss or 75)
+        * ((TPG.Objectives and TPG.Objectives.GetOvertimeDrainMul
+            and TPG.Objectives.GetOvertimeDrainMul()) or 1)
+    TPG.State.AddScore(enemy, -math.ceil(loss))
 
     local ps = TPG.State.GetPlayer(carrier)
     ps.stats.captures = (ps.stats.captures or 0) + 1

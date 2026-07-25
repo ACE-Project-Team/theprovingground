@@ -23,6 +23,19 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         return
     end
 
+    -- A saved dupe is the other way a restricted entity gets into the world
+    -- (a health kit or a mine bolted to the hull). Pull them back out before
+    -- anything else looks at this build. Applies to spectators too -- their
+    -- sandbox is for testing vehicles, not for smuggling pickups in.
+    if TPG.Restrictions and TPG.Restrictions.StripBlocked then
+        local stripped = TPG.Restrictions.StripBlocked(ents, ply)
+        if stripped > 0 then
+            TPG.Util.ChatMessage(ply, "[TPG] Removed " .. stripped ..
+                " restricted entit" .. (stripped == 1 and "y" or "ies") ..
+                " from that dupe.", Color(255, 150, 100))
+        end
+    end
+
     local teamId = ply:Team()
 
     -- Spectators may build freely: no team budget, no cooldown, no economy

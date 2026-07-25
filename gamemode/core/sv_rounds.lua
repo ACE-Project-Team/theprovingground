@@ -14,9 +14,27 @@ function TPG.Rounds.Setup(skipCleanup)
     -- Keep ULX UTeam from yanking grouped players (admins) off their TPG team.
     if TPG.DisableExternalTeamForcing then TPG.DisableExternalTeamForcing() end
 
+    -- Overtime is per-round state; clear it before anything can read it.
+    SetGlobalBool("TPG_ObjOvertime", false)
+    SetGlobalFloat("TPG_ObjOvertimeStart", 0)
+
     -- Load map config
     local mapConfig = TPG.Maps.Load()
-    
+
+    -- Occasional unprompted scramble. Teams settle into the same two line-ups
+    -- over an evening even without anyone stacking on purpose -- people rejoin
+    -- to the side they were on, friends group up -- and nobody calls a vote
+    -- because no single round felt unfair. A small per-round chance keeps the
+    -- match-ups moving without making rosters feel arbitrary. Skipped while
+    -- waiting for players (nobody's really on a team yet).
+    local scrambleChance = TPG.Config.autoScrambleChance or 0
+    if scrambleChance > 0 and TPG.State.round.startTime > 0
+        and team.NumPlayers(TEAM_GREEN) + team.NumPlayers(TEAM_RED) >= 4
+        and math.random() < scrambleChance then
+        TPG.Util.ChatBroadcast("[TPG] Rolling a fresh match-up for this round.", Color(255, 255, 0))
+        TPG.PlayerTeams.ScrambleAll()
+    end
+
     -- Select gametype
     TPG.State.gameType = TPG.SelectRandomGameType()
     local gameType = TPG.GetGameType(TPG.State.gameType)

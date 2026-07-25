@@ -36,27 +36,60 @@ local function IsRealSteamID64(sid)
 end
 
 -- ── Storage ─────────────────────────────────────────────────────────────────
+--[[
+    Why this is an ARRAY on disk and not a map keyed by SteamID64.
+
+    util.JSONToTable coerces any object key that parses as a number back into a
+    Lua number -- and a SteamID64 is a 17-digit number, which a double cannot
+    even represent exactly. So `{ ["76561198..."] = {...} }` does not survive a
+    save/load round trip: it comes back keyed by a lossy float that can never be
+    matched to a player again. The previous fix spotted the damaged rows and
+    purged them, which turned "ratings are wrong after a restart" into "ratings
+    are GONE after a restart" -- data/tpg/stats.json was being rewritten as {}.
+
+    Values are not coerced, only keys. So the id lives in the record as a field
+    and the file is a list; the map is rebuilt in memory on load.
+]]
+local FORMAT_VERSION = 2
+
 local function Load()
     if not file.Exists(FILE, "DATA") then return end
-    data = util.JSONToTable(file.Read(FILE, "DATA") or "") or {}
+    local raw = util.JSONToTable(file.Read(FILE, "DATA") or "") or {}
 
-    -- Purge legacy corrupted rows (scientific-notation/float keys, "0", "NULL").
-    -- These are what made a player appear on the leaderboard under a stale rating
-    -- different from their live record: the name-dedup leaderboard surfaced the
-    -- junk row while the profile card read the real key. Un-keyable, so there's
-    -- nothing to merge back into the real record -- just drop them.
-    for sid in pairs(data) do
-        if not IsRealSteamID64(sid) then
-            data[sid] = nil
-            dirty = true
+    if istable(raw.players) then
+        for _, e in ipairs(raw.players) do
+            local sid = e.sid and tostring(e.sid) or nil
+            if IsRealSteamID64(sid) then
+                e.sid = sid
+                data[sid] = e
+            end
+        end
+        return
+    end
+
+    -- Legacy v1 file (keyed map). Whatever kept a usable string key is still
+    -- readable; rows whose key was coerced to a float have genuinely lost the
+    -- id and can't be recovered by anyone. Rewrite in v2 either way.
+    for sid, e in pairs(raw) do
+        if IsRealSteamID64(sid) and istable(e) then
+            e.sid = sid
+            data[sid] = e
         end
     end
+    dirty = true
 end
 
 function TPG.Stats.Save()
     if not dirty then return end
     file.CreateDir("tpg")
-    file.Write(FILE, util.TableToJSON(data, true))
+
+    local out = { version = FORMAT_VERSION, players = {} }
+    for sid, e in pairs(data) do
+        e.sid = sid
+        out.players[#out.players + 1] = e
+    end
+
+    file.Write(FILE, util.TableToJSON(out, true))
     dirty = false
 end
 
@@ -73,10 +106,11 @@ local function entry(ply)
 
     if not data[sid] then
         data[sid] = {
-            name = ply:Nick(), rating = 1000,
+            sid = sid, name = ply:Nick(), rating = 1000,
             kills = 0, deaths = 0, teamkills = 0,
             caps = 0, flags = 0, wins = 0, rounds = 0,
         }
+        dirty = true   -- a brand new record is unsaved work too
     end
     data[sid].name = ply:Nick()
     return data[sid]
@@ -171,19 +205,68 @@ function TPG.Stats.OnFlagCapture(ply)
     addRating(e, 25)
 end
 
--- Round result; called from TPG.Rounds.EndRound.
+--[[
+    Round result; called from TPG.Rounds.EndRound.
+
+    Elo, not a flat +30/-10. Before applying the result we PREDICT it from the
+    two teams' average ratings, and each player only moves by how far the real
+    result was from that prediction: beating a stacked team is worth a lot,
+    beating a team you were always going to beat is worth almost nothing, and
+    losing a match you were expected to lose barely costs you.
+
+    That's the "gets better as it builds up" property -- a flat +/- only ever
+    measures how often you were on the winning side, which on a server with
+    uneven teams mostly measures luck. This converges on actual effectiveness,
+    and it's the number the scramble drafts on (player/sv_teams.lua), so the
+    two systems improve together.
+]]
+local ELO_K = 40
+
+local function TeamAverageRating(teamId)
+    local total, count = 0, 0
+    for _, ply in ipairs(team.GetPlayers(teamId)) do
+        total = total + TPG.Stats.GetRating(ply)
+        count = count + 1
+    end
+    if count == 0 then return 1000 end
+    return total / count
+end
+
 function TPG.Stats.OnRoundEnd(winningTeam)
+    local avg = {
+        [TEAM_GREEN] = TeamAverageRating(TEAM_GREEN),
+        [TEAM_RED]   = TeamAverageRating(TEAM_RED),
+    }
+
     for _, ply in ipairs(player.GetAll()) do
         if TPG.Util.IsOnTeam(ply) then
             local e = entry(ply)
             if e then
+                local own   = ply:Team()
+                local enemy = TPG.GetEnemyTeam(own)
+                local expected = 1 / (1 + 10 ^ (((avg[enemy] or 1000) - (avg[own] or 1000)) / 400))
+                local actual   = (own == winningTeam) and 1 or 0
+
                 e.rounds = e.rounds + 1
-                if ply:Team() == winningTeam then e.wins = e.wins + 1 end
-                addRating(e, ply:Team() == winningTeam and 30 or -10)
+                if actual == 1 then e.wins = e.wins + 1 end
+                addRating(e, ELO_K * (actual - expected))
             end
         end
     end
     TPG.Stats.Save()
+end
+
+-- How much of a player's record is objective play rather than fragging, as
+-- captures+flags per round. The scramble uses this to make sure both sides get
+-- people who actually stand on the point (see player/sv_teams.lua) -- rating
+-- alone splits the good shooters evenly and can still hand one team every
+-- capper on the server.
+function TPG.Stats.GetObjectiveRate(ply)
+    local e = entry(ply)
+    if not e then return 0 end
+    -- Under a handful of rounds there isn't a record yet, just noise.
+    if (e.rounds or 0) < 3 then return 0 end
+    return ((e.caps or 0) + (e.flags or 0)) / e.rounds
 end
 
 -- ── Profile networking ──────────────────────────────────────────────────────

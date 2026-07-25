@@ -377,6 +377,48 @@ hook.Add("ACE_OnContraptionPointsRecalculated", "TPG_RebillModifiedVehicle", fun
     end)
 end)
 
+-- ── Refunds ────────────────────────────────────────────────────────────────
+-- Hand a player back everything they've paid into the vehicles they still have
+-- standing, and remove those vehicles.
+--
+-- This is deliberately NOT a general refund -- a destroyed tank stays a true
+-- purchase, that's the whole model. It exists for the one case where the game
+-- moved the player instead of the player moving: a scramble drops you on the
+-- other side of the map with your build parked in what is now enemy spawn.
+-- Removing the vehicle as part of the refund is what keeps it a relocation
+-- rather than a way to end up with the money and the tank.
+--
+-- con.TPG_BilledPoints is the running total actually paid for that contraption
+-- (initial purchase plus any post-spawn modifications billed above), so it's
+-- exactly the right number to give back.
+function ECON.RefundActivePurchases(ply)
+    if not ECON.Active or not IsValid(ply) then return 0 end
+    if not (TPG.ACE and TPG.ACE.GetPlayerContraptions) then return 0 end
+
+    local refund, doomed = 0, {}
+    for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
+        local billed = con.TPG_BilledPoints
+        if billed and billed > 0 then
+            refund = billed + refund
+            con.TPG_BilledPoints = nil
+            -- Collect first: removing entities mutates con.ents underneath us.
+            for ent in pairs(con.ents or {}) do
+                doomed[#doomed + 1] = ent
+            end
+        end
+    end
+
+    for _, ent in ipairs(doomed) do
+        if IsValid(ent) then ent:Remove() end
+    end
+
+    if refund > 0 then
+        ECON.SetMoney(ply, ECON.GetMoney(ply) + refund)
+        ECON.Notify(ply, refund, "refund")
+    end
+    return refund
+end
+
 -- ── Lifecycle ──────────────────────────────────────────────────────────────
 function ECON.ResetWallets()
     for _, ply in ipairs(player.GetAll()) do
@@ -405,10 +447,16 @@ function ECON.RollForRound()
     return ECON.Active
 end
 
--- New players start with the stipend.
+-- New players start with the stipend -- but someone RE-joining gets the wallet
+-- they left with (core/sv_gamestate.lua stashes it), otherwise spending down to
+-- zero and reconnecting would be a free top-up.
 hook.Add("PlayerInitialSpawn", "TPG_EconomyInitMoney", function(ply)
     timer.Simple(1, function()
-        if IsValid(ply) then ECON.SetMoney(ply, ECON.Config.startingMoney) end
+        if not IsValid(ply) then return end
+        local pState = TPG.State.GetPlayer(ply)
+        local carried = pState.carriedMoney
+        pState.carriedMoney = nil
+        ECON.SetMoney(ply, carried or ECON.Config.startingMoney)
     end)
 end)
 

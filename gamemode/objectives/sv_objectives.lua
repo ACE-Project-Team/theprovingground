@@ -68,6 +68,43 @@ end
 
 -- Overtime announcement latch, keyed to the round it fired for.
 local overtimeAnnouncedFor = 0
+local objOvertimeAnnouncedFor = 0
+
+--[[
+    Objective overtime (CP / KOTH / CTF).
+
+    Objective modes have no self-resolving pressure: if neither side can hold
+    the point, nobody's tickets move and the round runs until people give up on
+    it. Past TPG.Config.objOvertimeStart this ramps two dials over
+    objOvertimeRamp seconds:
+
+        capture times  ->  collapse toward instant (used by tpg_controlpoint),
+                           so a point can flip under fire instead of needing an
+                           uncontested ten seconds nobody ever gets
+        ticket drain   ->  multiplied up, so holding it actually ends the round
+
+    Returns 0..1: how far into the ramp we are. 0 means not in overtime.
+    DM is excluded -- it has its own bleed (dmOvertime* in sh_config).
+]]
+function TPG.Objectives.GetOvertime()
+    if not TPG.State.round.active then return 0 end
+
+    local gameType = TPG.GetGameType(TPG.State.gameType)
+    if gameType.useDeathTickets then return 0 end
+
+    local elapsed = CurTime() - TPG.State.round.startTime
+    local over    = elapsed - (TPG.Config.objOvertimeStart or 900)
+    if over <= 0 then return 0 end
+
+    return math.Clamp(over / math.max(TPG.Config.objOvertimeRamp or 300, 1), 0, 1)
+end
+
+-- Scale factor for anything that drains tickets while overtime is running.
+function TPG.Objectives.GetOvertimeDrainMul()
+    local ot = TPG.Objectives.GetOvertime()
+    if ot <= 0 then return 1 end
+    return 1 + ot * ((TPG.Config.objOvertimeDrainMul or 4) - 1)
+end
 
 function TPG.Objectives.ProcessScoring()
     local totalCapValue = 0
@@ -90,6 +127,22 @@ function TPG.Objectives.ProcessScoring()
     -- KOTH map to a ~20 min hold. See TPG.Config.kothCapMul for the math.
     if TPG.State.gameType == GAMEMODE_KOTH and TPG.Config.kothCapMul then
         capMul = TPG.Config.kothCapMul
+    end
+
+    -- Objective overtime: ramp the drain, and tell everyone the moment it opens
+    -- (the capture-time half is applied inside tpg_controlpoint).
+    local overtime = TPG.Objectives.GetOvertime()
+    if overtime > 0 then
+        capMul = capMul * TPG.Objectives.GetOvertimeDrainMul()
+
+        if objOvertimeAnnouncedFor ~= TPG.State.round.startTime then
+            objOvertimeAnnouncedFor = TPG.State.round.startTime
+            SetGlobalBool("TPG_ObjOvertime", true)
+            SetGlobalFloat("TPG_ObjOvertimeStart", CurTime())
+            TPG.Util.ChatBroadcast(
+                "[TPG] OVERTIME! Capture times are being cut to almost nothing and tickets " ..
+                "are draining fast -- take the point and end it.", Color(255, 120, 40))
+        end
     end
 
     if totalCapValue < 0 then

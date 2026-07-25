@@ -66,6 +66,18 @@ TPG.Config = {
     -- ~18.75 min for a total stomp; realistically contested rounds run 20-25+.
     kothCapMul           = 0.02,
 
+    -- Objective overtime (CP / KOTH / CTF -- DM has its own bleed above).
+    -- Objective modes can stalemate outright: two even teams trade the hill,
+    -- neither side's tickets move, and the round just doesn't end (a 57-minute
+    -- Stalingrad KOTH). Past objOvertimeStart the round starts closing itself
+    -- out -- capture times collapse toward instant so a point can actually flip
+    -- under fire, and the ticket drain ramps up -- reaching full effect
+    -- objOvertimeRamp seconds later. Announced on screen when it kicks in.
+    objOvertimeStart     = 900,   -- seconds of normal play before overtime starts
+    objOvertimeRamp      = 300,   -- seconds from "just started" to full effect
+    objOvertimeDrainMul  = 4,     -- ticket drain multiplier at full effect
+    objOvertimeCapMul    = 0.1,   -- capture times shrink to this fraction at full effect
+
     -- Capture the Flag (objectives/sv_ctf.lua). Its OWN game mode: one neutral
     -- flag that sits on the map's KOTH capture point; grab it and carry it to
     -- your own spawn to score. Only offered on maps that have a KOTH point.
@@ -147,6 +159,16 @@ TPG.Config = {
     rtvMinPlayers       = 3,
     rtvPercentRequired  = 0.5,
     scramblePercent     = 0.25,
+    -- Scramble tuning (player/sv_teams.lua). Ratings are jittered by this
+    -- fraction before drafting so the same roster doesn't produce the identical
+    -- two teams every time -- small enough that it only reorders players who
+    -- were close anyway. Anyone whose lifetime captures+flags per round is at
+    -- or above scrambleCapperRate is drafted as a "capper" in a separate pass,
+    -- so both sides get people who play the objective. autoScrambleChance is
+    -- the per-round chance teams are scrambled without anyone voting for it.
+    scrambleJitter      = 0.08,
+    scrambleCapperRate  = 0.5,
+    autoScrambleChance  = 0.15,
     -- Map-vote ballot size by category (6 candidates total).
     mapVoteSlots        = { open = 3, urban = 2, bonus = 1 },
 

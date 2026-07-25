@@ -89,19 +89,28 @@ function ENT:CaptureStep(dt)
         end
     end
     
+    -- Objective overtime shrinks capture times toward instant so a stalemated
+    -- round can actually be broken (objectives/sv_objectives.lua). Outside
+    -- overtime the factor is 1 and these are the configured times.
+    local overtime = (TPG.Objectives and TPG.Objectives.GetOvertime
+                      and TPG.Objectives.GetOvertime()) or 0
+    local capScale = 1 - overtime * (1 - (TPG.Config.objOvertimeCapMul or 0.1))
+    local timeNeutral = math.max(self.CapTimeNeutral * capScale, 0.5)
+    local timeMax     = math.max(self.CapTimeMax * capScale, timeNeutral + 0.25)
+
     -- Calculate capture balance
     local maxPlayers = TPG.Config.capMaxPlayers or 3
     local balance = math.Clamp(greenOnPoint - redOnPoint, -maxPlayers, maxPlayers)
-    
+
     if balance ~= 0 then
         -- One net player moves progress one second per real second.
         self.CapProgress = self.CapProgress + balance * dt
 
-        if self.CapProgress > self.CapTimeNeutral then
-            self.CapProgress = math.min(self.CapProgress, self.CapTimeMax)
+        if self.CapProgress > timeNeutral then
+            self.CapProgress = math.min(self.CapProgress, timeMax)
             self.CapOwnership = (balance < -1) and 0 or 1
-        elseif self.CapProgress < -self.CapTimeNeutral then
-            self.CapProgress = math.max(self.CapProgress, -self.CapTimeMax)
+        elseif self.CapProgress < -timeNeutral then
+            self.CapProgress = math.max(self.CapProgress, -timeMax)
             self.CapOwnership = (balance > 1) and 0 or -1
         else
             self.CapOwnership = 0
@@ -111,9 +120,9 @@ function ENT:CaptureStep(dt)
         -- (neutral) point bleeds progress back toward zero. Both rates are
         -- per-second, scaled by dt.
         if self.CapOwnership == 1 then
-            self.CapProgress = math.min(self.CapProgress + 0.5 * dt, self.CapTimeMax)
+            self.CapProgress = math.min(self.CapProgress + 0.5 * dt, timeMax)
         elseif self.CapOwnership == -1 then
-            self.CapProgress = math.max(self.CapProgress - 0.5 * dt, -self.CapTimeMax)
+            self.CapProgress = math.max(self.CapProgress - 0.5 * dt, -timeMax)
         else
             self.CapProgress = self.CapProgress * (0.5 ^ dt)  -- ~halves per second
             if math.abs(self.CapProgress) < 0.01 then self.CapProgress = 0 end
