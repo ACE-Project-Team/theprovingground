@@ -58,6 +58,20 @@ local cvRandom = CreateConVar("tpg_economy_random", "1",
     { FCVAR_ARCHIVE, FCVAR_NOTIFY },
     "Treat the per-player economy as a secondary mode: per-round chance to activate.")
 
+-- Post-spawn re-billing. OFF for now: a vehicle costs what it cost when you
+-- spawned it, and modifying it afterwards is free. The machinery below is left
+-- intact and still tracks what was paid; only the charging is gated.
+--
+-- It's off because charging for a "modification" means trusting ACE's point
+-- total the moment a hook fires, and a partial rebuild reads as a modification
+-- nobody made. That's now guarded, but combat itself still moves the number --
+-- shooting a component off a tank splits the contraption and drops its total --
+-- so there is a second class of phantom modification that isn't solved yet.
+-- Re-enable once battle damage can be told apart from a player edit.
+local cvRebill = CreateConVar("tpg_economy_rebill", "0",
+    { FCVAR_ARCHIVE, FCVAR_NOTIFY },
+    "Charge for post-spawn vehicle modifications. 0 = purchase at spawn only.")
+
 -- ── Budget-change feed ──────────────────────────────────────────────────────
 -- Tells the owning client "your budget just changed by N, because <reason>", so
 -- the economy HUD can float a little +N / -N with a label. Purely cosmetic.
@@ -380,6 +394,13 @@ function SettleRebill(con)
         return
     end
 
+    -- Re-billing off: the vehicle costs what it cost at spawn. Note this leaves
+    -- TPG_BilledPoints where it is on purpose -- it records what the player
+    -- actually paid, and RefundActivePurchases hands back exactly that, so
+    -- letting a now-free upgrade raise the baseline would refund money that was
+    -- never spent.
+    if not cvRebill:GetBool() then return end
+
     local delta = newTotal - con.TPG_BilledPoints
     if math.abs(delta) < REBILL_MIN_DELTA then return end
 
@@ -421,6 +442,11 @@ end
 hook.Add("ACE_OnContraptionPointsRecalculated", "TPG_RebillModifiedVehicle", function(con, change)
     if not istable(con) or con.ACERemoving then return end
     if con.TPG_BilledPoints == nil then return end   -- scratch build; nothing to re-bill
+
+    -- With re-billing off the only reason to still settle is to finish a
+    -- provisional baseline from spawn, so the recorded purchase price (and the
+    -- refund built on it) is the real number rather than a partial one.
+    if not cvRebill:GetBool() and not con.TPG_BaselinePending then return end
 
     -- No early-out on the delta here. A partial recalc can land within
     -- REBILL_MIN_DELTA of the baseline purely by coincidence, and skipping it
