@@ -71,7 +71,7 @@ local function Gate(ply, class)
     -- The spawn menu can fire a hook per click; don't carpet the chat.
     if (lastTold[ply] or 0) < CurTime() then
         lastTold[ply] = CurTime() + 2
-        TPG.Util.ChatMessage(ply, "[TPG] " .. class .. " is restricted -- " .. reason .. ".",
+        TPG.Util.ChatMessage(ply, "[TPG] " .. class .. " is restricted - " .. reason .. ".",
             Color(255, 100, 100))
     end
     return false

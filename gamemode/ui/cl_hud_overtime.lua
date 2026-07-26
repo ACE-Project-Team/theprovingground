@@ -39,7 +39,7 @@ hook.Add("HUDPaint", "TPG_OvertimeHUD", function()
 
         draw.SimpleText("OVERTIME", "DermaLarge", x + w / 2, y + 26,
             Color(255, 140, 50, 255 * fade * pulse), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Capture time slashed -- points flip almost instantly", "DermaDefaultBold",
+        draw.SimpleText("Capture time slashed - points flip almost instantly", "DermaDefaultBold",
             x + w / 2, y + 50, Color(235, 235, 235, 255 * fade), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         draw.SimpleText("Tickets are draining fast. Take the point and end it.", "DermaDefault",
             x + w / 2, y + 66, Color(200, 200, 200, 255 * fade), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)

@@ -1,0 +1,9 @@
+{
+    "title": "TPG E2/SF Sandbox Test Stub",
+    "type": "gamemode",
+    "tags": ["build", "roleplay"],
+    "ignore": [
+        "*.psd",
+        "*.xcf"
+    ]
+}

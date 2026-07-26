@@ -67,15 +67,27 @@ local function Evaluate()
             state[teamId] = shouldBe
             local td = TPG.GetTeamData(teamId)
             if shouldBe then
+                -- Income only actually changes under the per-player economy, and
+                -- even then this bonus's multiplier doesn't stack with the
+                -- separate "losing team" multiplier (sv_economy takes the max of
+                -- the two) -- so report whichever one will actually apply,
+                -- and say nothing about income at all when the economy is off.
+                local incomeLine = ""
+                if TPG.Economy and TPG.Economy.Active then
+                    local mult = TPG.Config.underdogIncomeMult or 1.25
+                    if TPG.Economy.Config and TPG.Economy.Config.losingIncomeMult then
+                        mult = math.max(mult, TPG.Economy.Config.losingIncomeMult)
+                    end
+                    incomeLine = ", +" .. math.floor((mult - 1) * 100) .. "% income"
+                end
                 TPG.Util.ChatTeam(teamId, "[TPG] UNDERDOG BONUS active: " ..
                     (TPG.Config.underdogProtectionTime or 8) .. "s spawn protection, " ..
-                    "free smoke grenade, extra launcher ammo, +" ..
-                    math.floor(((TPG.Config.underdogIncomeMult or 1.25) - 1) * 100) ..
-                    "% income. Turn it around!", Color(255, 200, 60))
+                    "free smoke grenade, extra launcher ammo" .. incomeLine ..
+                    ". Turn it around!", Color(255, 200, 60))
                 TPG.Util.ChatBroadcast("[TPG] " .. td.name .. " is fighting from underdog position.",
                     Color(255, 200, 60))
             else
-                TPG.Util.ChatTeam(teamId, "[TPG] Back in the fight -- underdog bonus ended.",
+                TPG.Util.ChatTeam(teamId, "[TPG] Back in the fight - underdog bonus ended.",
                     Color(160, 220, 160))
             end
         end

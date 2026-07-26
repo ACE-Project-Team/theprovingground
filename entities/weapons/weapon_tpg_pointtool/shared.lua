@@ -104,7 +104,7 @@ function SWEP:PrimaryAttack()
 
     owner:EmitSound("buttons/button14.wav", 65, 120)
     owner:ChatPrint(string.format(
-        "[TPG] Placed %s. (%d total) -- run tpg_points_reload to apply.",
+        "[TPG] Placed %s. (%d total) - run tpg_points_reload to apply.",
         pt.label, TPG.Maps.CountPoints()))
 end
 

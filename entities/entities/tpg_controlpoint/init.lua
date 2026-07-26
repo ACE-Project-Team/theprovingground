@@ -171,9 +171,9 @@ function ENT:OnCaptureStateChanged()
         -- Play sounds and track captures
         for _, ply in ipairs(player.GetAll()) do
             if ply:Team() == capTeam then
-                TPG.Util.PlaySound(ply, "Announcer.Success")
+                TPG.Util.PlaySound(ply, "friends/friend_online.wav")
             else
-                TPG.Util.PlaySound(ply, "Announcer.Failure")
+                TPG.Util.PlaySound(ply, "friends/friend_offline.wav")
             end
         end
         

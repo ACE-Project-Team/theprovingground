@@ -19,7 +19,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         for _, ent in pairs(ents) do
             if IsValid(ent) then ent:Remove() end
         end
-        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load -- the round hasn't started yet.", Color(255, 200, 0))
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
         return
     end
 
@@ -176,7 +176,7 @@ end)
 -- Also check when spawning individual props
 hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, model)
     if TPG.State.waitingForPlayers then
-        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load -- the round hasn't started yet.", Color(255, 200, 0))
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
         return false
     end
 
@@ -198,7 +198,7 @@ end)
 -- Check when spawning SENTs (ACE entities, etc.)
 hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, class)
     if TPG.State.waitingForPlayers then
-        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load -- the round hasn't started yet.", Color(255, 200, 0))
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
         return false
     end
 

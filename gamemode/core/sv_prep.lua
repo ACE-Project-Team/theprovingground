@@ -44,7 +44,7 @@ local function ConfineToSpawn(ply, silent)
 
     if not silent and (lastWarn[ply] or 0) < CurTime() then
         lastWarn[ply] = CurTime() + 2   -- throttle so boundary-humping doesn't spam
-        TPG.Util.ChatMessage(ply, "[TPG] Preparation period -- stay in spawn until it ends.",
+        TPG.Util.ChatMessage(ply, "[TPG] Preparation period - stay in spawn until it ends.",
             Color(255, 200, 80))
         TPG.Util.PlaySound(ply, "buttons/button10.wav")
     end
@@ -64,7 +64,7 @@ local function EndPrep()
     prepEnd    = 0
     SetGlobalBool("TPG_PrepActive", false)
     SetGlobalFloat("TPG_PrepEnd", 0)
-    TPG.Util.ChatBroadcast("[TPG] GO! Preparation over -- move out!", Color(120, 230, 120))
+    TPG.Util.ChatBroadcast("[TPG] GO! Preparation over - move out!", Color(120, 230, 120))
 end
 
 hook.Add("Think", "TPG_PrepThink", function()
@@ -82,7 +82,7 @@ hook.Add("Think", "TPG_PrepThink", function()
                 end
             end
             TPG.Util.ChatBroadcast("[TPG] PREPARATION: " .. (TPG.Config.prepTime or 30) ..
-                "s to build and stage in spawn -- you can't leave yet.", Color(255, 200, 80))
+                "s to build and stage in spawn - you can't leave yet.", Color(255, 200, 80))
         end
         return
     end

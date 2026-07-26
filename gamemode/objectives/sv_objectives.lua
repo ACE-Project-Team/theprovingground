@@ -141,7 +141,7 @@ function TPG.Objectives.ProcessScoring()
             SetGlobalFloat("TPG_ObjOvertimeStart", CurTime())
             TPG.Util.ChatBroadcast(
                 "[TPG] OVERTIME! Capture times are being cut to almost nothing and tickets " ..
-                "are draining fast -- take the point and end it.", Color(255, 120, 40))
+                "are draining fast - take the point and end it.", Color(255, 120, 40))
         end
     end
 
@@ -162,7 +162,7 @@ function TPG.Objectives.ProcessScoring()
             if overtimeAnnouncedFor ~= TPG.State.round.startTime then
                 overtimeAnnouncedFor = TPG.State.round.startTime
                 TPG.Util.ChatBroadcast(
-                    "[TPG] OVERTIME! Both teams are now bleeding tickets -- force the fight!",
+                    "[TPG] OVERTIME! Both teams are now bleeding tickets - force the fight!",
                     Color(255, 120, 40))
             end
 

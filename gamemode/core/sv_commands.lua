@@ -112,7 +112,7 @@ concommand.Add("tpg_economy", function(ply, cmd, args)
     local on = tobool(args[1])
     cv:SetBool(on)
     TPG.Util.ChatBroadcast("[TPG] Per-player economy " .. (on and "ENABLED" or "DISABLED") ..
-        " -- takes effect on the next map change.", Color(0, 255, 255))
+        " - takes effect on the next map change.", Color(0, 255, 255))
 end)
 
 -- Admin commands

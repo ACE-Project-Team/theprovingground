@@ -25,7 +25,7 @@ local SECTIONS = {
         lines = {
             "Two teams, one map, everything is built by players. Pick a team (F2),",
             "pick a loadout (F3), then paste a vehicle with AdvDupe2 inside your",
-            "safezone and drive it out. Your team's tickets are its life bar --",
+            "safezone and drive it out. Your team's tickets are its life bar -",
             "first team at 0 tickets loses the round.",
         },
     },
@@ -38,7 +38,7 @@ local SECTIONS = {
             "  both teams bleed tickets at a growing rate: hiding just loses slower.",
             "CAPTURE THE FLAG - a neutral flag sits on the hill. Carry it into your",
             "  own safezone to take a bite out of the enemy's tickets. Carrying it",
-            "  too long returns it -- no hoarding.",
+            "  too long returns it - no hoarding.",
         },
     },
     {
@@ -46,7 +46,7 @@ local SECTIONS = {
         lines = {
             "You can only spawn/paste inside your safezone. Your team shares a",
             "budget of ACE points, weight and props (top of the HUD). Heavier and",
-            "pricier dupes put your duplicator on cooldown -- light vehicles skip it.",
+            "pricier dupes put your duplicator on cooldown - light vehicles skip it.",
             "The first round of a map waits for everyone to load in before starting.",
         },
     },
@@ -55,7 +55,7 @@ local SECTIONS = {
         lines = {
             "Announced at round start. Instead of a shared team budget, YOU have a",
             "wallet: vehicles are purchases and destroyed ones are NOT refunded.",
-            "Earn by playing -- kills (bigger targets pay more), standing on",
+            "Earn by playing - kills (bigger targets pay more), standing on",
             "objectives, passive trickle, flag deliveries. No duplicator cooldown,",
             "but stock vehicles (jeep/airboat/APC) cost points too. Team kills fine you.",
         },
@@ -65,7 +65,7 @@ local SECTIONS = {
         lines = {
             "Losing badly (tickets far behind) activates team-wide help: longer",
             "spawn protection, a free smoke grenade, extra launcher rockets and",
-            "+25% economy income. It switches off once you claw back into the game.",
+            "extra economy income. It switches off once you claw back into the game.",
         },
     },
     {

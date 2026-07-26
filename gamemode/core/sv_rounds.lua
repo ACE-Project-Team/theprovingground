@@ -145,9 +145,9 @@ function TPG.Rounds.EndRound(winningTeam)
     -- Play sounds
     for _, ply in ipairs(player.GetAll()) do
         if ply:Team() == winningTeam then
-            TPG.Util.PlaySound(ply, "mvm/mvm_tele_activate.wav")
+            TPG.Util.PlaySound(ply, "friends/friend_online.wav")
         else
-            TPG.Util.PlaySound(ply, "mvm/mvm_warning.wav")
+            TPG.Util.PlaySound(ply, "friends/friend_offline.wav")
         end
         
         -- Clear dupe cooldowns

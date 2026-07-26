@@ -129,7 +129,7 @@ function TPG.CTF.OnCapture(flag, carrier)
         td.name .. "!", td.color)
 
     for _, ply in ipairs(player.GetAll()) do
-        TPG.Util.PlaySound(ply, ply:Team() == capTeam and "Announcer.Success" or "Announcer.Failure")
+        TPG.Util.PlaySound(ply, ply:Team() == capTeam and "friends/friend_online.wav" or "friends/friend_offline.wav")
     end
 
     flag:ReturnHome("captured")

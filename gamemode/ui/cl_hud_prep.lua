@@ -22,7 +22,7 @@ hook.Add("HUDPaint", "TPG_PrepHUD", function()
     draw.RoundedBox(8, x, y, w, h, Color(0, 0, 0, 170))
     draw.SimpleText("PREPARATION", "DermaLarge", x + w / 2, y + 20,
         Color(255, 200, 80), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    draw.SimpleText("Stay in spawn -- moving out in " .. math.ceil(remain) .. "s",
+    draw.SimpleText("Stay in spawn - moving out in " .. math.ceil(remain) .. "s",
         "DermaDefaultBold", x + w / 2, y + 44,
         Color(235, 235, 235), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 end)
