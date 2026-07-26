@@ -280,6 +280,46 @@ end)
 -- matching the existing economy which only charges dupes and stock vehicles.
 local REBILL_DEBOUNCE  = 0.75   -- edits fire a burst of recalcs; settle to one
 local REBILL_MIN_DELTA = 25     -- ignore display-scale / rounding jitter
+local REBILL_MAX_WAIT  = 8      -- settle attempts before giving up (~6s)
+
+-- Is this contraption's point total a finished number?
+--
+-- ACE rebuilds armor and non-armor independently and fires the recalc hook after
+-- EITHER half lands, so con.ACEPoints is routinely a partial total mid-burst --
+-- a rebuild that touched only non-armor reports it while ACEArmorPoints is still
+-- 0, and vice versa. Billing off one of those is how a 3k vehicle briefly reads
+-- 20k and back. Only a contraption with nothing left dirty is a real number.
+local function PointsSettled(con)
+    if not istable(con) then return false end
+    if not con.ACEArmorCalculated then return false end
+    return not (con.ACEPointsDirty or con.ACEArmorDirty or con.ACENonArmorDirty)
+end
+
+local SettleRebill   -- defined below; ArmSettle drives it
+
+-- Wait for ACE to finish, then settle exactly once.
+--
+-- Deliberately never calls EnsureContraptionPoints: forcing a rebuild from a
+-- timer is what turns one edit into a cascade, and every forced rebuild fires
+-- the very hook that scheduled us. We pull on ACE's hook and let it tell us when
+-- it's done. If it never settles we give up rather than spin.
+local function ArmSettle(con, attempt)
+    timer.Simple(REBILL_DEBOUNCE, function()
+        if not istable(con) or con.ACERemoving then
+            if istable(con) then con.TPG_RebillPending = nil end
+            return
+        end
+
+        local burstOver = CurTime() >= (con.TPG_RebillDeadline or 0)
+        if (not burstOver or not PointsSettled(con)) and attempt < REBILL_MAX_WAIT then
+            ArmSettle(con, attempt + 1)
+            return
+        end
+
+        con.TPG_RebillPending = nil
+        if PointsSettled(con) then SettleRebill(con) end
+    end)
+end
 
 -- Stamp the price already paid onto each unique contraption in a spawned build.
 function ECON.MarkContraptionsBilled(entList)
@@ -293,6 +333,21 @@ function ECON.MarkContraptionsBilled(entList)
                     ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
                 end
                 con.TPG_BilledPoints = math.floor(con.ACEPoints or 0)
+
+                -- A freshly pasted build usually hasn't settled yet. Stamping a
+                -- partial total as the baseline and then charging the difference
+                -- once the real one lands is what made a brand new vehicle
+                -- announce itself as "modified" seconds after spawning. Mark the
+                -- baseline provisional so the first settled total replaces it
+                -- instead of billing against it.
+                if not PointsSettled(con) then
+                    con.TPG_BaselinePending = true
+                    con.TPG_RebillDeadline  = CurTime() + REBILL_DEBOUNCE
+                    if not con.TPG_RebillPending then
+                        con.TPG_RebillPending = true
+                        ArmSettle(con, 0)
+                    end
+                end
             end
         end
     end
@@ -310,18 +365,22 @@ local function ContraptionOwner(con)
     return nil
 end
 
-local function SettleRebill(con)
+function SettleRebill(con)
     if not istable(con) or con.ACERemoving then return end
     if con.TPG_BilledPoints == nil then return end
 
-    -- A lazy invalidation may have arrived since the recalc that scheduled us;
-    -- force the total current so we bill the final value.
-    if _G.ACE_EnsureContraptionPoints then
-        ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+    local newTotal = math.floor(con.ACEPoints or 0)
+
+    -- The baseline stamped at spawn was provisional; this is the first real
+    -- number this build has ever had. Adopt it as the price paid rather than
+    -- charging for the difference between it and a partial reading.
+    if con.TPG_BaselinePending then
+        con.TPG_BaselinePending = nil
+        con.TPG_BilledPoints    = newTotal
+        return
     end
 
-    local newTotal = math.floor(con.ACEPoints or 0)
-    local delta    = newTotal - con.TPG_BilledPoints
+    local delta = newTotal - con.TPG_BilledPoints
     if math.abs(delta) < REBILL_MIN_DELTA then return end
 
     local owner = ContraptionOwner(con)
@@ -361,20 +420,21 @@ end
 
 hook.Add("ACE_OnContraptionPointsRecalculated", "TPG_RebillModifiedVehicle", function(con, change)
     if not istable(con) or con.ACERemoving then return end
-    local billed = con.TPG_BilledPoints
-    if billed == nil then return end   -- pre-purchase / scratch build; nothing to re-bill
+    if con.TPG_BilledPoints == nil then return end   -- scratch build; nothing to re-bill
 
-    local total = math.floor((change and change.Total) or con.ACEPoints or 0)
-    if math.abs(total - billed) < REBILL_MIN_DELTA then return end
+    -- No early-out on the delta here. A partial recalc can land within
+    -- REBILL_MIN_DELTA of the baseline purely by coincidence, and skipping it
+    -- would strand the burst without a settle.
 
-    -- Coalesce the recalc burst from one edit into a single charge + message.
+    -- Slide the deadline on every recalc so one edit settles once AFTER the
+    -- burst finishes. The old code armed a fixed timer on the FIRST recalc and
+    -- ignored every later one, so a burst longer than the debounce got billed
+    -- mid-flight, then billed again on the next burst -- three messages and
+    -- three charges for a single edit, with only the last figure correct.
+    con.TPG_RebillDeadline = CurTime() + REBILL_DEBOUNCE
     if con.TPG_RebillPending then return end
     con.TPG_RebillPending = true
-    timer.Simple(REBILL_DEBOUNCE, function()
-        if not istable(con) then return end
-        SettleRebill(con)
-        con.TPG_RebillPending = nil
-    end)
+    ArmSettle(con, 0)
 end)
 
 -- ── Refunds ────────────────────────────────────────────────────────────────
