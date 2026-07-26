@@ -5,28 +5,58 @@
 
 TPG.ACE = TPG.ACE or {}
 
--- Get all contraptions owned by a player
-function TPG.ACE.GetPlayerContraptions(ply)
-    if not IsValid(ply) then return {} end
-    
-    local contraptions = {}
+-- Owner -> contraptions, built in ONE pass over the entity list.
+--
+-- This used to be a full ents.GetAll() sweep per player, per reader. A single
+-- PropTracking update asks for props + mass + points on every player, so with
+-- N players that was 3N complete entity scans (each with a CPPIGetOwner and a
+-- GetContraption on every entity) every 2 seconds. Sweep once and let all the
+-- readers share it instead.
+--
+-- The cache is scoped to a single tick, so it can never go stale: a purchase
+-- check that runs on the same tick as a spawn still sees the truth. Ownership
+-- attribution is unchanged -- a contraption is still credited to every player
+-- who owns at least one entity in it, deduped per owner.
+local mapTick, mapCache = -1, {}
+
+local function ContraptionMap()
+    if mapTick == engine.TickCount() then return mapCache end
+
+    local byOwner = {}
     local seen = {}
-    
+
     for _, ent in ipairs(ents.GetAll()) do
         if not IsValid(ent) then continue end
         if not ent.GetContraption then continue end
-        
+
         local owner = ent:CPPIGetOwner()
-        if owner ~= ply then continue end
-        
+        if not IsValid(owner) then continue end
+
         local contraption = ent:GetContraption()
-        if contraption and not seen[contraption] then
-            seen[contraption] = true
-            table.insert(contraptions, contraption)
+        if not contraption then continue end
+
+        local seenForOwner = seen[owner]
+        if not seenForOwner then
+            seenForOwner = {}
+            seen[owner] = seenForOwner
+            byOwner[owner] = {}
+        end
+
+        if not seenForOwner[contraption] then
+            seenForOwner[contraption] = true
+            table.insert(byOwner[owner], contraption)
         end
     end
-    
-    return contraptions
+
+    mapTick, mapCache = engine.TickCount(), byOwner
+    return byOwner
+end
+
+-- Get all contraptions owned by a player
+function TPG.ACE.GetPlayerContraptions(ply)
+    if not IsValid(ply) then return {} end
+
+    return ContraptionMap()[ply] or {}
 end
 
 -- ACE's dev point system is lazy: a spawn, a crate link, or any dupe edit only

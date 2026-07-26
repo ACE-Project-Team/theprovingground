@@ -79,6 +79,7 @@ function GM:Initialize()
     
     timer.Simple(3, function()
         TPG.Config.ValidateACE()
+        TPG.Config.ValidateE2SFSandbox()
         TPG.Maps.Load()
         -- First round starts through the wait-for-players window, so fast
         -- loaders can't get a head start on slower ones.
