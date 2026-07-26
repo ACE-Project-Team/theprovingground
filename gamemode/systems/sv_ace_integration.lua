@@ -70,13 +70,26 @@ local function EnsureConPoints(con)
     end
 end
 
--- Get total ACE points for a player
-function TPG.ACE.GetPlayerPoints(ply)
+-- Get total ACE points for a player.
+--
+-- `refresh` decides whether we force ACE to bring its numbers up to date first.
+-- Leave it off for anything periodic. ACE's point system is deliberately lazy:
+-- a split, merge, armor change or vehicle unfreeze only marks the contraption
+-- dirty, and nothing rebuilds until a reader actually needs the value. Polling
+-- it on a timer defeats that design -- it turns "rebuild when someone asks" into
+-- "rebuild everything, forever" -- and combat re-dirties contraptions constantly
+-- (every destroyed component splits one), so the rebuild is rarely a no-op while
+-- a fight is happening. Each rebuild also fires
+-- ACE_OnContraptionPointsRecalculated, which runs TPG's own re-bill listener.
+--
+-- This is the one thing TPG asks of ACE that plain sandbox+ACE never does, which
+-- makes it the first suspect for "same tanks, but only laggy under TPG".
+function TPG.ACE.GetPlayerPoints(ply, refresh)
     local total = 0
 
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
-        -- ACE stores this on the contraption object (rebuilt on demand above)
-        EnsureConPoints(con)
+        -- ACE stores this on the contraption object
+        if refresh then EnsureConPoints(con) end
         total = total + (con.ACEPoints or 0)
     end
 
@@ -96,8 +109,8 @@ function TPG.ACE.GetPlayerMass(ply)
     return total
 end
 
--- Get points breakdown by type
-function TPG.ACE.GetPlayerPointsByType(ply)
+-- Get points breakdown by type. See GetPlayerPoints for what `refresh` costs.
+function TPG.ACE.GetPlayerPointsByType(ply, refresh)
     local totals = {
         Armor = 0,
         Engines = 0,
@@ -109,7 +122,7 @@ function TPG.ACE.GetPlayerPointsByType(ply)
     }
     
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
-        EnsureConPoints(con)
+        if refresh then EnsureConPoints(con) end
         local breakdown = con.ACEPointsPerType
         if breakdown then
             for category, points in pairs(breakdown) do

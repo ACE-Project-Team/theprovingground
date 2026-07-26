@@ -6,7 +6,11 @@
 TPG.PropTracking = TPG.PropTracking or {}
 TPG.PropTracking.Players = {}
 
-function TPG.PropTracking.UpdateTeamTotals()
+-- `refreshPoints` forces ACE to rebuild stale point totals before we read them.
+-- Props and weight don't need it -- CFW maintains con.ents and con.totalMass for
+-- us, so those are just table reads. ACE points are the expensive one (lazy,
+-- rebuilt on demand), which is why the caller decides how often it's worth it.
+function TPG.PropTracking.UpdateTeamTotals(refreshPoints)
     -- Reset team totals
     TPG.State.limits[TEAM_GREEN] = { props = 0, weight = 0, points = 0 }
     TPG.State.limits[TEAM_RED] = { props = 0, weight = 0, points = 0 }
@@ -25,7 +29,7 @@ function TPG.PropTracking.UpdateTeamTotals()
             -- Use ACE/CFW tracking
             props = TPG.ACE.GetPlayerPropCount(ply)
             weight = TPG.ACE.GetPlayerMass(ply)
-            points = TPG.ACE.GetPlayerPoints(ply)
+            points = TPG.ACE.GetPlayerPoints(ply, refreshPoints)
         else
             -- Fallback
             props, weight = TPG.PropTracking.ManualCount(ply)
@@ -103,11 +107,28 @@ function TPG.PropTracking.CanSpawn(ply, additionalWeight)
     return true
 end
 
+-- How often the tracker is allowed to force ACE to rebuild point totals. The
+-- prop/weight side still updates every 2s regardless -- it's cheap. This only
+-- governs the expensive part.
+--
+-- Set to 0 to never force a rebuild: point numbers then only move when
+-- something else in ACE recalculates them, which is the cheapest the server can
+-- possibly be. That's the setting to try first if the round is lagging, since
+-- it takes TPG's periodic ACE work to zero without touching anything else.
+local cvarRefresh = CreateConVar("tpg_points_refresh_interval", "10",
+    { FCVAR_ARCHIVE, FCVAR_NOTIFY },
+    "Seconds between forced ACE point rebuilds for team budget tracking. 0 = never force.")
+
 -- Update every 2 seconds
 local lastUpdate = 0
+local lastPointsRefresh = 0
 hook.Add("Think", "TPG_PropTrackingUpdate", function()
     if CurTime() - lastUpdate < 2 then return end
     lastUpdate = CurTime()
-    
-    TPG.PropTracking.UpdateTeamTotals()
+
+    local interval = cvarRefresh:GetFloat()
+    local refreshPoints = interval > 0 and (CurTime() - lastPointsRefresh) >= interval
+    if refreshPoints then lastPointsRefresh = CurTime() end
+
+    TPG.PropTracking.UpdateTeamTotals(refreshPoints)
 end)
