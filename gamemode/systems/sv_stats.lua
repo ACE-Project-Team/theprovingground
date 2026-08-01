@@ -52,9 +52,37 @@ end
 ]]
 local FORMAT_VERSION = 2
 
-local function Load()
-    if not file.Exists(FILE, "DATA") then return end
-    local raw = util.JSONToTable(file.Read(FILE, "DATA") or "") or {}
+--[[
+    Crash safety.
+
+    file.Write truncates and then writes, so a server that dies mid-write (or a
+    disk that fills) leaves stats.json as a half-file. Nothing here used to
+    notice: the parse just returned nil, the in-memory table stayed empty, and
+    the next autosave wrote out ONLY the handful of players in that session --
+    silently replacing the whole leaderboard with a fragment of it. A restart
+    was all it took to lose everyone's lifetime record.
+
+    So writes go to a temp file first and only replace the real one once they're
+    complete, the previous good file is kept as .bak, and a file that fails to
+    parse is preserved (never overwritten) so the ratings can be recovered by
+    hand if the .bak is somehow bad too.
+]]
+local TMP = FILE .. ".tmp"
+local BAK = FILE .. ".bak"
+
+-- Read one candidate file into `data`. Returns how many records it yielded,
+-- or nil if the file is unreadable/unparseable (as opposed to legitimately
+-- empty, which is 0).
+local function ReadInto(path)
+    if not file.Exists(path, "DATA") then return nil end
+
+    local body = file.Read(path, "DATA")
+    if not body or body == "" then return nil end
+
+    local raw = util.JSONToTable(body)
+    if not istable(raw) then return nil end
+
+    local count = 0
 
     if istable(raw.players) then
         for _, e in ipairs(raw.players) do
@@ -62,9 +90,10 @@ local function Load()
             if IsRealSteamID64(sid) then
                 e.sid = sid
                 data[sid] = e
+                count = count + 1
             end
         end
-        return
+        return count
     end
 
     -- Legacy v1 file (keyed map). Whatever kept a usable string key is still
@@ -74,7 +103,45 @@ local function Load()
         if IsRealSteamID64(sid) and istable(e) then
             e.sid = sid
             data[sid] = e
+            count = count + 1
         end
+    end
+    dirty = true
+    return count
+end
+
+local function Load()
+    -- A .tmp left behind means the last write never finished. The real file is
+    -- still the last complete one, so the leftover is just noise -- but keep it
+    -- rather than delete it, on the off chance it's the newer of the two.
+    if file.Exists(TMP, "DATA") then
+        file.Delete(FILE .. ".unfinished")
+        file.Rename(TMP, FILE .. ".unfinished")
+    end
+
+    if not file.Exists(FILE, "DATA") then
+        -- No main file, but a backup from a previous run is a complete file.
+        if ReadInto(BAK) then
+            print("[TPG] stats.json missing; recovered the leaderboard from stats.json.bak.")
+            dirty = true
+        end
+        return
+    end
+
+    if ReadInto(FILE) then return end
+
+    -- The main file exists and did not parse. Do not let it be overwritten --
+    -- move it aside under a name nothing writes to, then fall back to .bak.
+    local kept = FILE .. ".corrupt"
+    file.Delete(kept)
+    file.Rename(FILE, kept)
+
+    print("[TPG] WARNING: data/tpg/stats.json is unreadable. Kept it as stats.json.corrupt.")
+
+    if ReadInto(BAK) then
+        print("[TPG] Recovered the leaderboard from stats.json.bak.")
+    else
+        print("[TPG] No usable backup either -- starting from an empty leaderboard.")
     end
     dirty = true
 end
@@ -89,7 +156,23 @@ function TPG.Stats.Save()
         out.players[#out.players + 1] = e
     end
 
-    file.Write(FILE, util.TableToJSON(out, true))
+    -- Write the whole thing somewhere disposable first, so a write that dies
+    -- half way through costs us the temp file and nothing else.
+    file.Delete(TMP)
+    file.Write(TMP, util.TableToJSON(out, true))
+
+    if not file.Exists(TMP, "DATA") then
+        print("[TPG] WARNING: could not write data/tpg/stats.json.tmp -- leaderboard NOT saved.")
+        return   -- stay dirty; the next autosave tries again
+    end
+
+    -- Swap it in: current file becomes the backup, temp becomes current.
+    if file.Exists(FILE, "DATA") then
+        file.Delete(BAK)
+        file.Rename(FILE, BAK)
+    end
+    file.Rename(TMP, FILE)
+
     dirty = false
 end
 
