@@ -7,21 +7,25 @@ TPG.Protection = {}
 function TPG.Protection.IsInSafezone(ply)
     local teamId = ply:Team()
     if not TPG.Util.IsOnTeam(ply) then return true end
-    
-    local spawn = TPG.State.spawns[teamId]
-    if not spawn then return false end
-    
+
+    -- No round has published spawns yet (map start, during the wait-for-players
+    -- window). There is no "outside" to be on the wrong side of, so treat the
+    -- whole map as safe rather than telling everyone their spawn protection
+    -- just ran out on a map they can't even build on yet.
+    local spawn = TPG.State.GetSpawn(teamId)
+    if not spawn then return true end
+
     return TPG.Util.IsWithinDistance(ply, spawn, TPG.Config.safezoneRadius)
 end
 
 function TPG.Protection.IsInEnemySafezone(ply)
     local teamId = ply:Team()
     if not TPG.Util.IsOnTeam(ply) then return false end
-    
+
     local enemyTeam = TPG.GetEnemyTeam(teamId)
-    local enemySpawn = TPG.State.spawns[enemyTeam]
+    local enemySpawn = TPG.State.GetSpawn(enemyTeam)
     if not enemySpawn then return false end
-    
+
     return TPG.Util.IsWithinDistance(ply, enemySpawn, TPG.Config.safezoneRadius)
 end
 

@@ -83,9 +83,13 @@ function TPG.Rounds.Setup(skipCleanup)
         TPG.CTF.SpawnFlags()
     end
     
-    -- Kill all players to respawn them
+    -- Respawn everyone who's actually playing, so they start the round in their
+    -- (possibly just-swapped) spawn. Spectators are skipped: they have no spawn
+    -- to be moved to, so killing them was a death for nothing -- and at map
+    -- start, when nobody has picked a side yet, that's a death for *everyone*
+    -- on the server as their first impression of the gamemode.
     for _, ply in ipairs(player.GetAll()) do
-        if ply:Alive() then
+        if ply:Alive() and TPG.Util.IsOnTeam(ply) then
             ply:Kill()
         end
     end

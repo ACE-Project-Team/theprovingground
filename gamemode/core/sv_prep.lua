@@ -35,7 +35,7 @@ end
 
 -- Yank a player back into their safezone.
 local function ConfineToSpawn(ply, silent)
-    local spawn = TPG.State.spawns[ply:Team()]
+    local spawn = TPG.State.GetSpawn(ply:Team())
     if not spawn then return end
 
     if ply:InVehicle() then ply:ExitVehicle() end

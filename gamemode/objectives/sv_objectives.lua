@@ -44,7 +44,7 @@ end
 
 function TPG.Objectives.SpawnSafezones()
     -- Green safezone
-    local greenSpawn = TPG.State.spawns[TEAM_GREEN]
+    local greenSpawn = TPG.State.GetSpawn(TEAM_GREEN)
     if greenSpawn then
         local greenMarker = ents.Create("tpg_safezonemarker")
         if IsValid(greenMarker) then
@@ -55,7 +55,7 @@ function TPG.Objectives.SpawnSafezones()
     end
     
     -- Red safezone
-    local redSpawn = TPG.State.spawns[TEAM_RED]
+    local redSpawn = TPG.State.GetSpawn(TEAM_RED)
     if redSpawn then
         local redMarker = ents.Create("tpg_safezonemarker")
         if IsValid(redMarker) then

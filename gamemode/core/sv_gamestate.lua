@@ -10,10 +10,12 @@ TPG.State = {
         [TEAM_RED]   = 300,
     },
     
-    spawns = {
-        [TEAM_GREEN] = Vector(0, 0, 0),
-        [TEAM_RED]   = Vector(0, 0, 0),
-    },
+    -- Published by TPG.Rounds.Setup once a round actually starts. Deliberately
+    -- EMPTY until then: these used to default to Vector(0, 0, 0), which is a
+    -- perfectly truthy Vector, so every "do we have a spawn yet" check said yes
+    -- and handed out the map origin. See player/sv_spawning.lua for what that
+    -- cost. Read them through TPG.State.GetSpawn, never directly.
+    spawns = {},
     
     limits = {
         [TEAM_GREEN] = { props = 0, weight = 0, points = 0 },
@@ -43,6 +45,18 @@ TPG.State = {
         endTime = 0,
     },
 }
+
+-- The round's spawn for a team, or nil if there isn't a real one yet.
+--
+-- "Real" excludes the map origin on purpose. Nothing legitimately spawns at
+-- 0,0,0 -- it's what you get from an unset Vector and from TPG.Maps.GetSpawn's
+-- own fallback -- and on most maps it's inside the world or under it, which is
+-- an out-of-world death that god mode does not stop.
+function TPG.State.GetSpawn(teamId)
+    local pos = TPG.State.spawns[teamId]
+    if not isvector(pos) or pos:IsZero() then return nil end
+    return pos
+end
 
 -- Initialize player state
 function TPG.State.InitPlayer(ply)
