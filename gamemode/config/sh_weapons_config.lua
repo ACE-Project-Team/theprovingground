@@ -45,11 +45,22 @@ TPG.WeaponConfig = {
         "test$",
         "modtest",
         "abbaaaaaaab",
+
+        -- Mines from add-on packs. TPG offers exactly one mine option -- the
+        -- virtual "Mines" entry below, which hands out the three ACE base mines
+        -- as a set. Pack mines duplicate that for a Special slot pick, so a
+        -- player picking "AT mine" from a pack got one mine where the ACE entry
+        -- gives three, and the list filled up with near-identical names. Ends
+        -- in "mine" rather than contains, so weapon_ace_minedetector survives.
+        "mine$",
+        "mines$",
+        "claymore",
     },
 
-    -- Exact classes never offered. The mine SWEPs are bundled into the virtual
-    -- "Mines" entry below, so they're hidden as individual choices. The
-    -- disposable AT is never a menu pick either -- it's handed out as a bonus to
+    -- Exact classes never offered. The ACE mine SWEPs are bundled into the
+    -- virtual "Mines" entry below, so they're hidden as individual choices (see
+    -- also the mine ExcludePatterns, which drop add-on packs' own mines). The
+    -- disposable AT is never a menu pick either -- it's the consolation tube for
     -- anyone whose Special slot is empty (see sv_loadout.lua).
     Exclude = {
         ["weapon_ace_antipersonmine"] = true,

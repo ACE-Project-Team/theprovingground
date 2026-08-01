@@ -60,16 +60,19 @@ function TPG.Loadout.Apply(ply)
     -- Give weapons
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
     TPG.Loadout.GiveWeapon(ply, "Secondary", secondaryId)
-    TPG.Loadout.GiveWeapon(ply, "Special", specialId)
+    local gaveSpecial = TPG.Loadout.GiveWeapon(ply, "Special", specialId)
 
-    -- Bonus disposable AT: EVERY teamed player gets a free single-use tube on
-    -- top of whatever they picked -- it's an extra, not a pick, because a chosen
-    -- launcher can run dry and mines don't answer a tank at range. Given last,
-    -- after the speed snapshot, so it doesn't override movement. Small chance to
-    -- roll a real launcher (stinger/javelin) instead, which goes through
-    -- GiveWeapon so it gets the Special ammo floor.
+    -- Consolation disposable AT: only for players whose Special slot came up
+    -- EMPTY -- no pick, or a pick that's been disabled by an admin. Nobody
+    -- should be completely unable to answer a tank, but handing a free tube to
+    -- someone who already chose a launcher just made the Special slot a
+    -- formality: everyone had AT regardless, so the pick cost nothing to skip
+    -- and the fast "none" loadout was strictly better. Given last, after the
+    -- speed snapshot, so it doesn't override movement. Small chance to roll a
+    -- real launcher (stinger/javelin) instead, which goes through GiveWeapon so
+    -- it gets the Special ammo floor.
     local atClass = TPG.Config.disposableATClass
-    if atClass and atClass ~= "" then
+    if not gaveSpecial and atClass and atClass ~= "" then
         local gaveUpgrade = false
         local upgrades = TPG.Config.disposableATUpgrades
         if upgrades and #upgrades > 0
