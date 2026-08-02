@@ -18,8 +18,18 @@ local CATEGORIES = { "Primary", "Secondary", "Special" }
 -- of discovery. Kept so a re-discover (late-mounted content) re-applies it.
 TPG.Weapons._state = TPG.Weapons._state or nil
 
-local function passesExclude(cfg, class)
+local function passesExclude(cfg, swep, class)
     if cfg.Exclude[class] then return false end
+
+    -- SubCategory is the reliable signal: ACE and its packs tag every SWEP with
+    -- one, and it doesn't depend on the class name happening to contain a word.
+    -- The pack mines are classed weapon_ace_PMN / TM62 / VS50, which no sane
+    -- name pattern catches, but all three declare SubCategory "Mines".
+    local sub = swep.SubCategory
+    if sub and cfg.ExcludeSubCategories and cfg.ExcludeSubCategories[sub] then
+        return false
+    end
+
     local lc = string.lower(class)
     for _, pat in ipairs(cfg.ExcludePatterns or {}) do
         if string.find(lc, pat) then return false end
@@ -49,7 +59,7 @@ function TPG.Weapons.Discover()
 
         local base = swep.Base
         if not (base and cfg.Bases[base]) then continue end
-        if not passesExclude(cfg, class) then continue end
+        if not passesExclude(cfg, swep, class) then continue end
 
         local override = cfg.Overrides[class] or {}
         local cat = override.category or cfg.SlotCategory[swep.Slot or -1]

@@ -40,18 +40,31 @@ TPG.WeaponConfig = {
         Special   = 20,
     },
 
-    -- Lua patterns (matched against the lowercase class) for dev/test junk to hide.
+    -- SWEP.SubCategory values to drop wholesale.
+    --
+    -- TPG offers exactly one mine option -- the virtual "Mines" entry below,
+    -- which hands out the three ACE base mines as a set. Pack mines duplicate
+    -- that for a Special slot pick, so a player picking "AT mine" from a pack
+    -- got one mine where the ACE entry gives three, and the list filled up with
+    -- near-identical names.
+    --
+    -- ACE's own mines are NOT caught by this: base ACE files them under
+    -- "Grenades/Mines", and they're bundled into the virtual entry via the
+    -- Exclude list below. Only packs using a bare "Mines" subcategory are hit,
+    -- which is what ACE Weapons+ does.
+    ExcludeSubCategories = {
+        ["Mines"] = true,
+    },
+
+    -- Lua patterns (matched against the lowercase class) for dev/test junk to
+    -- hide, plus a name-based backstop for mines in packs that don't set a
+    -- SubCategory at all. Ends in "mine" rather than contains, so
+    -- weapon_ace_minedetector survives.
     ExcludePatterns = {
         "test$",
         "modtest",
         "abbaaaaaaab",
 
-        -- Mines from add-on packs. TPG offers exactly one mine option -- the
-        -- virtual "Mines" entry below, which hands out the three ACE base mines
-        -- as a set. Pack mines duplicate that for a Special slot pick, so a
-        -- player picking "AT mine" from a pack got one mine where the ACE entry
-        -- gives three, and the list filled up with near-identical names. Ends
-        -- in "mine" rather than contains, so weapon_ace_minedetector survives.
         "mine$",
         "mines$",
         "claymore",
@@ -84,6 +97,12 @@ TPG.WeaponConfig = {
         ["weapon_ace_javelin"]        = { category = "Special" },
         ["weapon_ace_stinger"]        = { category = "Special" },
         ["weapon_ace_portablemortar"] = { category = "Special" },
+        -- ACE Weapons+ makes the same mistake with its two MANPADS and the M32
+        -- revolver grenade launcher -- all three are Slot 3. Its RPGs are
+        -- correctly Slot 4 and need no override.
+        ["weapon_ace_9k32"]  = { category = "Special" },
+        ["weapon_ace_9k38"]  = { category = "Special" },
+        ["weapon_ace_m32gl"] = { category = "Special" },
         -- heavy weapons slow you down more
         ["weapon_ace_m249saw"] = { speedBonus = -15 },
         ["weapon_ace_m60"]     = { speedBonus = -15 },

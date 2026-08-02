@@ -50,16 +50,35 @@ TPG.Gear.Weapons = {
     ["weapon_ace_portablemortar"] = { cost = 400, cooldown = 180 },  -- indirect fire from safety
 
     --[[
-        ACE Weapons+ launchers (RPG-28 and friends) belong here too, priced
-        above the AT-4 Proto and below the Javelin. They are NOT listed yet
-        because that pack isn't installed on this machine and inventing class
-        names would silently price nothing at all -- an entry whose class never
-        matches a real SWEP is indistinguishable from a free weapon.
+        ACE Weapons+ (github.com/OrangeFox861/ACE-Weapons-).
 
-        Until the classes are known, any pack launcher is free. Admins can gate
-        one immediately without a code change through the weapon panel, which
-        can set a per-weapon cost override.
+        Its launchers are graded off the AT-4 as the free baseline, exactly like
+        the ACE ones above. Anything in the AT-4's class -- single-shot, single
+        HEAT warhead, no guidance -- stays free, so taking the pack never costs
+        you the ability to fight armour. What costs points is a tandem warhead,
+        a reload, or guidance.
+
+        The free ones are listed as comments rather than zero-cost entries: an
+        entry here means "priced", and a 0 would sit in the table looking like
+        an oversight. Absent IS the free state.
+
+            weapon_ace_m72law     LAW, lighter than an AT-4
+            weapon_ace_rpg26      disposable light HEAT
+            weapon_ace_rpg7       PG-7VL, the baseline RPG-7
+            weapon_ace_rshg2      thermobaric, anti-personnel not anti-armour
     ]]
+    ["weapon_ace_rpg7v2"]        = { cost = 150,  cooldown = 60 },   -- reloadable RPG-7
+    ["weapon_ace_carlgustafhe"]  = { cost = 300,  cooldown = 100 },  -- HEDP, reloadable
+    ["weapon_ace_shmel"]         = { cost = 300,  cooldown = 120 },  -- RPO-A thermobaric
+    ["weapon_ace_carlgustaf"]    = { cost = 350,  cooldown = 110 },  -- HEAT 551C, reloadable
+    ["weapon_ace_matador"]       = { cost = 350,  cooldown = 110 },  -- RGW-90
+    ["weapon_ace_m32gl"]         = { cost = 450,  cooldown = 150 },  -- 6-shot revolver GL
+    ["weapon_ace_panzerfaust3"]  = { cost = 450,  cooldown = 140 },  -- heavy HEAT
+    ["weapon_ace_rpg7v2t"]       = { cost = 500,  cooldown = 150 },  -- PG-7VR tandem
+    ["weapon_ace_9k32"]          = { cost = 450,  cooldown = 170 },  -- Strela-2, anti-air
+    ["weapon_ace_9k38"]          = { cost = 550,  cooldown = 190 },  -- Igla, better anti-air
+    ["weapon_ace_rpg29"]         = { cost = 600,  cooldown = 190 },  -- Vampir, tandem
+    ["weapon_ace_rpg28"]         = { cost = 650,  cooldown = 220 },  -- heaviest tandem
 }
 
 -- [armor id] = { cost, cooldown }. See config/sh_armor.lua for the tiers.
