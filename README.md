@@ -1,3 +1,5 @@
+<img src="logo.svg" alt="The Proving Ground" width="640">
+
 # The Proving Ground
 A gamemode heavily inspired by the Baiknor combined arms gamemode, but for ACE
 
