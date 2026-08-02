@@ -10,6 +10,7 @@ AddCSLuaFile("cl_init.lua")
 
 -- Shared configs
 AddCSLuaFile("config/sh_config.lua")
+AddCSLuaFile("config/sh_palette.lua")
 AddCSLuaFile("config/sh_teams.lua")
 AddCSLuaFile("config/sh_armor.lua")
 AddCSLuaFile("config/sh_weapons_config.lua")

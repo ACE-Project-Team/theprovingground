@@ -33,6 +33,7 @@ GAMEMODE_CTF    = 4
 
 -- Shared includes
 include("config/sh_config.lua")
+include("config/sh_palette.lua")
 include("config/sh_teams.lua")
 include("config/sh_armor.lua")
 include("config/sh_weapons_config.lua")
