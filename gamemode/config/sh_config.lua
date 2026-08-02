@@ -212,7 +212,7 @@ end
 
 -- tpg_e2sf_sandbox (the E2/Starfall tpg* chip functions) has to exist as a REAL
 -- addon under garrysmod/addons/ -- normally a junction/symlink to this repo's
--- standalone_addon/tpg_e2sf_sandbox folder, since git doesn't carry filesystem
+-- addons/tpg_e2sf_sandbox folder, since git doesn't carry filesystem
 -- links. Easy to forget on a fresh deploy, so check for it and say so loudly
 -- rather than let it fail silently. See README.md for setup.
 function TPG.Config.ValidateE2SFSandbox()
@@ -224,7 +224,7 @@ function TPG.Config.ValidateE2SFSandbox()
         print("[TPG] NOTE: tpg_e2sf_sandbox addon not found under garrysmod/addons/.")
         print("[TPG] E2/Starfall tpg* chip functions will only work while TPG is the")
         print("[TPG] active gamemode (they won't load in plain sandbox). See")
-        print("[TPG] standalone_addon/tpg_e2sf_sandbox and README.md to fix.")
+        print("[TPG] addons/tpg_e2sf_sandbox and README.md to fix.")
         print("[TPG] ================================================================")
     end
 

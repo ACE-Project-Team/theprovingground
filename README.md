@@ -10,7 +10,7 @@ either is missing (see `TPG.Config.ValidateACE()` in `gamemode/config/sh_config.
 
 ## E2/SF sandbox testing addon
 
-`standalone_addon/tpg_e2sf_sandbox/` holds the Wire Expression2 and Starfall
+`addons/tpg_e2sf_sandbox/` holds the Wire Expression2 and Starfall
 `tpg*` chip functions (team roster, loadout, teammate checks, etc). Wire/SF
 autoload these from wherever they're currently mounted, and a gamemode's own
 `lua/` folder is only mounted while that gamemode is the active one -- so as
@@ -27,12 +27,12 @@ to, including after a fresh clone.
 
 Windows (run once per machine, adjust drive/paths as needed):
 ```powershell
-New-Item -ItemType Junction -Path "<garrysmod>\addons\tpg_e2sf_sandbox" -Target "<garrysmod>\gamemodes\theprovingground\standalone_addon\tpg_e2sf_sandbox"
+New-Item -ItemType Junction -Path "<garrysmod>\addons\tpg_e2sf_sandbox" -Target "<garrysmod>\gamemodes\theprovingground\addons\tpg_e2sf_sandbox"
 ```
 
 Linux:
 ```bash
-ln -s "<garrysmod>/gamemodes/theprovingground/standalone_addon/tpg_e2sf_sandbox" "<garrysmod>/addons/tpg_e2sf_sandbox"
+ln -s "<garrysmod>/gamemodes/theprovingground/addons/tpg_e2sf_sandbox" "<garrysmod>/addons/tpg_e2sf_sandbox"
 ```
 
 On startup TPG checks whether this addon is mounted and prints a warning to
