@@ -92,11 +92,20 @@ function TPG.Objectives.GetOvertime()
     local gameType = TPG.GetGameType(TPG.State.gameType)
     if gameType.useDeathTickets then return 0 end
 
+    -- Per-gametype timing wins over the global default (see sh_config.lua):
+    -- CP's multiple points already resolve rounds on their own, so it waits
+    -- much longer and ramps more slowly than a single-point KOTH.
+    local byType = TPG.Config.objOvertimeStartByType or {}
+    local start  = byType[TPG.State.gameType] or TPG.Config.objOvertimeStart or 900
+
+    local rampByType = TPG.Config.objOvertimeRampByType or {}
+    local ramp = rampByType[TPG.State.gameType] or TPG.Config.objOvertimeRamp or 300
+
     local elapsed = CurTime() - TPG.State.round.startTime
-    local over    = elapsed - (TPG.Config.objOvertimeStart or 900)
+    local over    = elapsed - start
     if over <= 0 then return 0 end
 
-    return math.Clamp(over / math.max(TPG.Config.objOvertimeRamp or 300, 1), 0, 1)
+    return math.Clamp(over / math.max(ramp, 1), 0, 1)
 end
 
 -- Scale factor for anything that drains tickets while overtime is running.

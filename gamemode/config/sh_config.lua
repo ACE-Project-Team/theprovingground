@@ -78,6 +78,20 @@ TPG.Config = {
     objOvertimeDrainMul  = 4,     -- ticket drain multiplier at full effect
     objOvertimeCapMul    = 0.1,   -- capture times shrink to this fraction at full effect
 
+    -- Per-gametype overtime start, overriding objOvertimeStart. CP is the odd
+    -- one out: it has SEVERAL points, so the drain already scales with how many
+    -- you hold and a team that's winning is banking tickets the whole round --
+    -- it does not stalemate the way a single-point KOTH does. Overtime was
+    -- arriving while CP rounds were still a real fight and ending them early,
+    -- so CP gets a much later start and a gentler ramp. KOTH and CTF, which do
+    -- genuinely deadlock, keep the original timing.
+    objOvertimeStartByType = {
+        [GAMEMODE_CP] = 1500,   -- 25 min (was 15)
+    },
+    objOvertimeRampByType = {
+        [GAMEMODE_CP] = 480,    -- 8 min to full effect (was 5)
+    },
+
     -- Capture the Flag (objectives/sv_ctf.lua). Its OWN game mode: one neutral
     -- flag that sits on the map's KOTH capture point; grab it and carry it to
     -- your own spawn to score. Only offered on maps that have a KOTH point.
