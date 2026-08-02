@@ -4,6 +4,57 @@
 
 TPG.Loadout = {}
 
+--[[
+    Premium picks (config/sh_gear.lua).
+
+    A handful of items cost something to take -- points under the per-player
+    economy, a personal cooldown otherwise. Both are charged HERE, at spawn,
+    rather than in the loadout menu: the menu only records a preference, and
+    charging on selection would bill players for kit they never got (menu open
+    at round end, kicked before spawning, admin disabling the weapon in between).
+
+    A denied pick silently becomes the free equivalent and says why in chat.
+    Nobody spawns weaponless because they couldn't afford a Javelin.
+]]
+local function DenialMessage(ply, kind, id, reason, amount)
+    local name = TPG.Gear.Name(kind, id)
+
+    if reason == "cooldown" then
+        TPG.Util.ChatMessage(ply, "[TPG] " .. name .. " is on cooldown for another " ..
+            math.ceil(amount) .. "s.", Color(255, 200, 0))
+    elseif reason == "afford" then
+        TPG.Util.ChatMessage(ply, "[TPG] " .. name .. " costs " .. amount ..
+            " pts and you have " .. (TPG.Economy and TPG.Economy.GetMoney(ply) or 0) .. ".",
+            Color(255, 200, 0))
+    end
+end
+
+-- Returns the weapon id the player actually gets. `fallback` must be free.
+local function ResolveWeapon(ply, category, id, fallback)
+    if not TPG.Gear.Claim then return id end   -- gear system absent; nothing is priced
+    if not id or id == "none" then return id end
+
+    -- Nothing to charge for a pick that wasn't going to be handed out anyway --
+    -- GiveWeapon turns a missing or admin-disabled entry into nothing.
+    local entry = TPG.GetWeapon(category, id)
+    if not entry or entry.enabled == false then return id end
+
+    local ok, reason, amount = TPG.Gear.Claim(ply, "weapon", id)
+    if ok then return id end
+
+    DenialMessage(ply, "weapon", id, reason, amount)
+    return fallback
+end
+
+local function ResolveArmor(ply, armorId)
+    if not TPG.Gear.Claim then return armorId end
+    local ok, reason, amount = TPG.Gear.Claim(ply, "armor", armorId)
+    if ok then return armorId end
+
+    DenialMessage(ply, "armor", armorId, reason, amount)
+    return TPG.Gear.FreeArmor
+end
+
 function TPG.Loadout.Apply(ply)
     -- Strip existing weapons
     ply:StripWeapons()
@@ -39,7 +90,14 @@ function TPG.Loadout.Apply(ply)
     local secondaryId = loadoutId("Secondary", dl.Secondary)
     local specialId   = loadoutId("Special",   dl.Special)
     local armorId     = TPG.Util.GetPData(ply, "Armor", 1)
-    
+
+    -- Charge for the premium picks first: a denial swaps in a different item,
+    -- and the swap changes the speed maths below.
+    primaryId   = ResolveWeapon(ply, "Primary",   primaryId,   dl.Primary)
+    secondaryId = ResolveWeapon(ply, "Secondary", secondaryId, dl.Secondary)
+    specialId   = ResolveWeapon(ply, "Special",   specialId,   "none")
+    armorId     = ResolveArmor(ply, armorId)
+
     -- Apply armor stats
     TPG.Loadout.ApplyArmor(ply, armorId)
 
@@ -100,6 +158,10 @@ function TPG.Loadout.Apply(ply)
             ply:Give(medkit)
         end
     end
+
+    -- Refresh the menu's cooldown countdowns with whatever this spawn just
+    -- started (or didn't).
+    if TPG.Gear.Sync then TPG.Gear.Sync(ply) end
 
     -- Play equip sound
     TPG.Util.PlaySound(ply, "acf_extra/tankfx/gnomefather/rack.wav")

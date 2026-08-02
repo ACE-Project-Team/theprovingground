@@ -76,6 +76,14 @@ TPG.WeaponConfig = {
         ["weapon_ace_grenade"]      = { category = "Secondary", speedBonus = 0 },
         ["weapon_ace_smokegrenade"] = { category = "Secondary", speedBonus = 0 },
         ["weapon_ace_binocular"]    = { category = "Secondary", speedBonus = 8 },
+        -- ACE files the guided launchers and the mortar under Slot 3, the same
+        -- slot as its sniper rifles, so discovery bucketed them as Primary --
+        -- you could carry a Javelin AS your rifle and still take an AT-4 in the
+        -- Special slot on top. They're launchers; put them in the launcher slot,
+        -- where they compete with the other anti-tank options.
+        ["weapon_ace_javelin"]        = { category = "Special" },
+        ["weapon_ace_stinger"]        = { category = "Special" },
+        ["weapon_ace_portablemortar"] = { category = "Special" },
         -- heavy weapons slow you down more
         ["weapon_ace_m249saw"] = { speedBonus = -15 },
         ["weapon_ace_m60"]     = { speedBonus = -15 },

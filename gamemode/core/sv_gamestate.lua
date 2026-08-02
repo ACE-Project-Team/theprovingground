@@ -150,11 +150,21 @@ local function StashCarryover(ply)
     local pState = TPG.State.players[ply]
     if not pState then return end
 
+    -- Premium gear cooldowns, stored as remaining seconds so they resume rather
+    -- than restart. Same reasoning as the duplicator cooldown: a reconnect can't
+    -- be the cheapest way to get another Javelin.
+    local gear = {}
+    for key, ends in pairs(pState.gearCooldowns or {}) do
+        local left = ends - CurTime()
+        if left > 0 then gear[key] = left end
+    end
+
     carryover[sid] = {
         at           = CurTime(),
         round        = TPG.State.round.startTime,
         dupeCooldown = math.max((pState.dupeCooldown or 0) - CurTime(), 0),
         money        = pState.money,
+        gear         = gear,
         lastSwitch   = ply.tpgLastTeamSwitch,
     }
 end
@@ -177,6 +187,15 @@ local function RestoreCarryover(ply)
     -- Wallet: sv_economy's initial stipend reads this instead of handing out a
     -- fresh startingMoney when it's set.
     if c.money then pState.carriedMoney = c.money end
+
+    -- Gear cooldowns outlive rounds by design, so unlike the duplicator these
+    -- come back regardless of which round the player left in.
+    if istable(c.gear) and next(c.gear) then
+        pState.gearCooldowns = pState.gearCooldowns or {}
+        for key, left in pairs(c.gear) do
+            pState.gearCooldowns[key] = CurTime() + left
+        end
+    end
 
     if c.lastSwitch then ply.tpgLastTeamSwitch = c.lastSwitch end
 end
