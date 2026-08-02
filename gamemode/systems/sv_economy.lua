@@ -24,15 +24,21 @@ ECON.Config = {
 
     losingIncomeMult  = 1.5,    -- all income x1.5 for whichever team is behind on tickets
 
-    passiveIncome     = 150,    -- granted every passiveInterval seconds
+    -- Passive and kill income were trimmed 10% (150 -> 135, 400 -> 360, and the
+    -- kill clamp with them) because wallets were outrunning what there is to
+    -- spend them on. Objective hold income is deliberately NOT cut: it's the
+    -- one source that requires standing somewhere contested, and shaving it
+    -- would push players further toward farming kills from safety, which is the
+    -- opposite of what the trim is for.
+    passiveIncome     = 135,    -- granted every passiveInterval seconds
     passiveInterval   = 10,
 
     captureHoldIncome = 100,    -- per interval, per objective you are standing on
     captureRadiusM    = 30,     -- metres from an objective to earn hold income
 
-    killRewardBase    = 400,    -- flat reward per enemy kill
-    killRewardVehFrac = 0.08,   -- + this fraction of the victim's vehicle value
-    killRewardMax     = 4000,   -- per-kill clamp
+    killRewardBase    = 360,    -- flat reward per enemy kill
+    killRewardVehFrac = 0.072,  -- + this fraction of the victim's vehicle value
+    killRewardMax     = 3600,   -- per-kill clamp
 
     teamkillPenalty   = 400,    -- deducted from a player's wallet for killing a teammate
 
