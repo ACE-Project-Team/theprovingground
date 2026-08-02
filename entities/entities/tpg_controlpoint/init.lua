@@ -98,6 +98,10 @@ function ENT:CaptureStep(dt)
     local timeNeutral = math.max(self.CapTimeNeutral * capScale, 0.5)
     local timeMax     = math.max(self.CapTimeMax * capScale, timeNeutral + 0.25)
 
+    -- UpdateColor scales brightness by how close CapProgress is to its ceiling,
+    -- so it needs the ceiling actually in force, not the configured one.
+    self.EffectiveCapTimeMax = timeMax
+
     -- Calculate capture balance
     local maxPlayers = TPG.Config.capMaxPlayers or 3
     local balance = math.Clamp(greenOnPoint - redOnPoint, -maxPlayers, maxPlayers)
@@ -141,16 +145,36 @@ function ENT:CaptureStep(dt)
     end
 end
 
+--[[
+    Point colour: team hue, brightness = how firmly it's held.
+
+    Two things were wrong here in overtime. The ratio divided CapProgress by the
+    CONFIGURED CapTimeMax while overtime clamps CapProgress to a much smaller
+    effective ceiling (down to a tenth of it), so a fully-held point read as
+    ratio ~0.1 and rendered as near-black -- you couldn't tell who owned it,
+    which is exactly when it matters most. It divides by the ceiling actually in
+    force now.
+
+    Second, brightness ran all the way to 0 even outside overtime, so a point
+    that was owned but freshly flipped was almost black too. Ownership is
+    information, not decoration: MIN_OWNED keeps a held point unmistakably its
+    team's colour, and the ratio only modulates the top of the range.
+]]
+local MIN_OWNED = 0.45
+
 function ENT:UpdateColor()
-    local ratio = math.abs(self.CapProgress / self.CapTimeMax)
-    
+    local ceiling = math.max(self.EffectiveCapTimeMax or self.CapTimeMax, 0.01)
+    local ratio   = math.Clamp(math.abs(self.CapProgress) / ceiling, 0, 1)
+
     if self.CapOwnership == 1 then
-        self:SetColor(Color(0, 255 * ratio, 0, 255))
+        self:SetColor(Color(0, 255 * (MIN_OWNED + (1 - MIN_OWNED) * ratio), 0, 255))
     elseif self.CapOwnership == -1 then
-        self:SetColor(Color(255 * ratio, 0, 0, 255))
+        self:SetColor(Color(255 * (MIN_OWNED + (1 - MIN_OWNED) * ratio), 0, 0, 255))
     else
-        local neutralRatio = 1 - math.abs(self.CapProgress / self.CapTimeMax)
-        self:SetColor(Color(255 * neutralRatio, 255 * neutralRatio, 0, 255))
+        -- Neutral: yellow, dimming as someone works it toward a capture. Floored
+        -- too, so a contested point stays visible rather than fading to black.
+        local neutral = MIN_OWNED + (1 - MIN_OWNED) * (1 - ratio)
+        self:SetColor(Color(255 * neutral, 255 * neutral, 0, 255))
     end
 end
 
