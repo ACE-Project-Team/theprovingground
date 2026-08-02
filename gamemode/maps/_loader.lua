@@ -917,10 +917,13 @@ TPG.Maps.Current = nil
 --   points x0.828 -> x1.656 halved (x5.5k/11k): budgets buy the same NUMBER of
 --                    tanks as before the repricing, valuing each slot at 5.5k
 --                    (history: x2.0 -> x1.84 -> x1.656 -> x0.828)
---   weight x1.5   -> weight cap raised so those extra tanks physically fit
+--   weight x1.8   -> weight cap raised so those extra tanks physically fit
+--                    (x1.5 -> x1.8: a further +20% on the open maps, which were
+--                    hitting tonnage before they hit points -- the weight cap,
+--                    not the budget, was deciding what you could field)
 --   props  x1.5   -> prop cap raised so it doesn't become the new bottleneck
 -- Tune these three numbers to rebalance all maps at once.
-TPG.Maps.LimitMult = { points = 0.828, weight = 1.5, props = 1.5 }
+TPG.Maps.LimitMult = { points = 0.828, weight = 1.8, props = 1.5 }
 
 -- Small/tight maps take an EXTRA weight cut on top of the global multiplier.
 -- On a cramped map a full budget of heavy armour just plugs the lanes: nothing
@@ -931,8 +934,15 @@ TPG.Maps.LimitMult = { points = 0.828, weight = 1.5, props = 1.5 }
 -- "Small" is read off the map's own authored weight limit, which is already the
 -- size judgement the map authors made (40-80t = the urban/close maps; 100t+ =
 -- the open ones). Retunes every tight map at once.
+--
+-- This multiplier is chosen to CANCEL the global weight bump rather than to be
+-- a round number: 1.8 * 0.667 = 1.2, which is exactly what small maps got under
+-- the old 1.5 * 0.8. The +20% is for the open maps only -- tight maps were
+-- already at the tonnage they can physically hold, and giving them more is how
+-- you get the plugged-lane grind this carve-out exists to prevent. If you
+-- retune LimitMult.weight, retune this so the product stays where you want it.
 TPG.Maps.SmallMapWeightTons = 80     -- authored limit at or below this = small
-TPG.Maps.SmallMapWeightMult = 0.8    -- -20% weight on those maps
+TPG.Maps.SmallMapWeightMult = 0.667  -- net 1.2x on small maps (unchanged)
 
 local function ApplyLimitMult(limits)
     if not limits then return end
