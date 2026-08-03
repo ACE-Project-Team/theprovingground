@@ -55,6 +55,67 @@ local function ResolveArmor(ply, armorId)
     return TPG.Gear.FreeArmor
 end
 
+--[[
+    Hold every ACE weapon the player carries to the speed the loadout set.
+
+    weapon_ace_base's Think force-sets its owner's walk/run speed every tick
+    from SWEP.NormalPlayerWalkSpeed / NormalPlayerRunSpeed (shared.lua Think).
+    The base fills those in from the owner's real speed in its Deploy -- but
+    Deploy is just a method, and several ACE weapons define their own without
+    ever calling the base's: weapon_ace_grenade, weapon_ace_smokegrenade and
+    weapon_ace_slam all do. Those inherit the speed-forcing Think and keep the
+    SWEP table's fallbacks, a flat 200 walk / 400 run (shared.lua:72).
+
+    So pulling out a grenade -- which every loadout carries -- pinned the player
+    to 200/400 on the SERVER for as long as it was out, and left them there.
+    Most armour tiers sit near enough to those numbers to pass unnoticed; a
+    Juggernaut is meant to move at 60/89 and instead sprinted at over three
+    times its speed. Setting the speed before handing out weapons doesn't help,
+    because these weapons never read it.
+
+    Stamping the real numbers onto the weapons makes ACE's own Think arrive at
+    the right answer whether or not the weapon ever snapshotted anything. Its
+    CarrySpeedMul still applies on top, so per-weapon weight penalties (the
+    SLAM's 0.6, say) survive.
+]]
+function TPG.Loadout.StampSpeed(ply)
+    if not IsValid(ply) or not ply:Alive() then return end
+
+    -- Set by Apply, below. Zero means no loadout has run for this player yet.
+    local walk = ply:GetNWInt("TPG_WalkSpeed", 0)
+    if walk <= 0 then return end
+    local run = ply:GetNWInt("TPG_RunSpeed", walk)
+
+    for _, wep in ipairs(ply:GetWeapons()) do
+        if wep.NormalPlayerWalkSpeed then
+            wep.NormalPlayerWalkSpeed = walk
+            wep.NormalPlayerRunSpeed  = run
+        end
+    end
+
+    ply:SetWalkSpeed(walk)
+    ply:SetRunSpeed(run)
+end
+
+--[[
+    Re-stamp whenever the held weapon changes.
+
+    Two things need it. A weapon that arrives outside Apply (the underdog smoke,
+    a pickup) is unstamped until now. And the base's own Deploy re-snapshots
+    GetWalkSpeed() -- which by then is the PREVIOUS weapon's already-multiplied
+    speed -- so switching back and forth between two weapons with a
+    CarrySpeedMul below 1 ratchets the player slower on every swap. Restoring
+    the true speed here, before the incoming weapon deploys, fixes that snapshot
+    too.
+
+    PlayerSwitchWeapon fires only on an actual switch, and SWEP:Think only runs
+    for the active weapon, so this is the one moment that matters -- no per-tick
+    cost.
+]]
+hook.Add("PlayerSwitchWeapon", "TPG_StampSpeed", function(ply)
+    TPG.Loadout.StampSpeed(ply)
+end)
+
 function TPG.Loadout.Apply(ply)
     -- Strip existing weapons
     ply:StripWeapons()
@@ -191,6 +252,10 @@ function TPG.Loadout.Apply(ply)
     -- sets it, the stats and gear systems read it on the death). Cleared here,
     -- at the end of the spawn it was set for, so the NEXT death is a real one.
     pState.rekit = nil
+
+    -- Last, once every weapon is in hand: hold them all to the speed set above.
+    -- See StampSpeed -- grenades and mines would otherwise force 200/400.
+    TPG.Loadout.StampSpeed(ply)
 
     -- Refresh the menu's cooldown countdowns with whatever this spawn just
     -- started (or didn't).
