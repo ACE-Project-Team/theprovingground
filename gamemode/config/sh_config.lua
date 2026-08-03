@@ -135,6 +135,22 @@ TPG.Config = {
     baseWalkSpeed       = 200,
     baseRunSpeed        = 350,
     baseSpeedPercent    = 55,
+
+    --[[
+        Floor for the summed speed percentage, before it reaches the engine.
+
+        Armor and weapon penalties are added together, and a Juggernaut (-40)
+        carrying an ordinary kit (Primary -5, Special -10) summed to exactly
+        55 - 55 = 0 -- and with an LMG it went negative. A max speed of zero or
+        below doesn't stop a player: Source skips the clamp entirely and falls
+        back to sv_maxspeed, so the heaviest armour in the game came out the
+        FASTEST thing on the field. See player/sv_loadout.lua.
+
+        15 is the Juggernaut's own tier before any weapon penalty, so at the
+        floor it moves at 60 walk / 89 run. That is deliberately crawling; raise
+        this if it plays too slow.
+    ]]
+    minSpeedPercent     = 15,
     
     -- Limits (fallback if ACE unavailable)
     fallbackPropLimit   = 300,

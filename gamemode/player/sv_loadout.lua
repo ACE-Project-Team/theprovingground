@@ -172,9 +172,25 @@ function TPG.Loadout.Apply(ply)
     local armor = TPG.GetArmor(armorId)
     speedBonus = speedBonus + armor.speedBonus
 
+    --[[
+        Floor the total before it becomes a speed.
+
+        Armour and weapon penalties are summed, and only one tier is heavy
+        enough to reach the bottom: a Juggernaut (-40) with an ordinary kit
+        (Primary -5, Special -10) landed on exactly 55 - 55 = 0, and an LMG
+        (-15) took it negative. That is not "can't move" -- Source only clamps
+        movement to max speed when max speed is above zero, so a walk speed of 0
+        or less means NO limit and the player falls back to sv_maxspeed (320).
+        The slowest thing in the game was the fastest, no matter what it held.
+
+        Clamping the percentage rather than the two speeds keeps walk and run in
+        proportion to each other.
+    ]]
     local speedPercent = (TPG.Config.baseSpeedPercent + speedBonus) / 100
-    local walkSpeed = math.Round(TPG.Config.baseWalkSpeed * speedPercent * 2)
-    local runSpeed  = math.Round(TPG.Config.baseRunSpeed * speedPercent * 1.7)
+    speedPercent = math.max(speedPercent, (TPG.Config.minSpeedPercent or 15) / 100)
+
+    local walkSpeed = math.max(math.Round(TPG.Config.baseWalkSpeed * speedPercent * 2), 1)
+    local runSpeed  = math.max(math.Round(TPG.Config.baseRunSpeed * speedPercent * 1.7), 1)
     ply:SetWalkSpeed(walkSpeed)
     ply:SetRunSpeed(runSpeed)
 
