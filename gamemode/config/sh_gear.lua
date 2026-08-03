@@ -49,6 +49,13 @@ TPG.Gear.Weapons = {
     ["weapon_ace_xm25"]          = { cost = 500,  cooldown = 150 },  -- airburst, ignores cover
     ["weapon_ace_portablemortar"] = { cost = 400, cooldown = 180 },  -- indirect fire from safety
 
+    -- The anti-materiel rifle is the one PRIMARY worth pricing: everything else
+    -- in that slot trades range for rate of fire against infantry, while this
+    -- one puts holes in vehicles from a ridge with ten rounds to do it. Priced
+    -- under the launchers because it still costs you your rifle to carry, and it
+    -- can't kill a tank the way a tandem warhead can.
+    ["weapon_ace_amr"]           = { cost = 350,  cooldown = 120 },
+
     --[[
         ACE Weapons+ (github.com/OrangeFox861/ACE-Weapons-).
 

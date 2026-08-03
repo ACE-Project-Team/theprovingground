@@ -18,6 +18,33 @@ local CATEGORIES = { "Primary", "Secondary", "Special" }
 -- of discovery. Kept so a re-discover (late-mounted content) re-applies it.
 TPG.Weapons._state = TPG.Weapons._state or nil
 
+--[[
+    How many rounds the player will actually walk away with.
+
+    Mirrors TopUpAmmo in player/sv_loadout.lua: ply:Give hands over DefaultClip
+    rounds in total, and the loadout then raises that to the per-class top-up or
+    the Special-slot floor if either is higher. Computed once at discovery so
+    the menu can print it without re-deriving the rule (and without touching a
+    SWEP table every frame).
+
+    nil means "this doesn't consume ammo" -- ClipSize -1 is ACE's marker for
+    tools and melee, and printing "0 rounds" on those would be a lie.
+]]
+local function roundsFor(cfg, swep, class, category)
+    local primary = swep and swep.Primary
+    if not primary then return nil end
+    if (primary.ClipSize or -1) < 0 then return nil end
+
+    local rounds = math.max(primary.DefaultClip or 0, 0)
+
+    local target = cfg.AmmoTopUp and cfg.AmmoTopUp[class]
+    if not target and category == "Special" then target = cfg.SpecialAmmoMin end
+    if target then rounds = math.max(rounds, target) end
+
+    if rounds <= 0 then return nil end
+    return rounds
+end
+
 local function passesExclude(cfg, swep, class)
     if cfg.Exclude[class] then return false end
 
@@ -72,6 +99,11 @@ function TPG.Weapons.Discover()
             speedBonus = override.speedBonus or cfg.DefaultSpeed[cat] or 0,
             cost = override.cost or 0,
             base = base,
+            -- Shared, unlike PrintName and Slot on some SWEPs, so both realms
+            -- agree on it. The menu groups by this so a forty-weapon Primary
+            -- list becomes "Assault Rifles / SMGs / Shotguns / ...".
+            subCategory = override.subCategory or swep.SubCategory,
+            rounds = roundsFor(cfg, swep, class, cat),
             enabled = true,
         }
     end
@@ -89,6 +121,11 @@ function TPG.Weapons.Discover()
                     speedBonus = data.speedBonus or cfg.DefaultSpeed[cat] or 0,
                     cost = data.cost or 0,
                     base = "virtual",
+                    subCategory = data.subCategory,
+                    -- exactAmmo is a hard total, not a floor: see the mines
+                    -- entry in sh_weapons_config.lua for why they need one.
+                    exactAmmo = data.exactAmmo,
+                    rounds = data.exactAmmo,
                     enabled = true,
                 }
             end

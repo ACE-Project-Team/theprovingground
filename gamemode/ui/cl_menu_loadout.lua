@@ -1,26 +1,26 @@
 --[[
     Loadout Selection Menu
 
-    The old menu was four scrolling lists of text side by side. It showed
-    everything at once, which sounds good until you use it: your own loadout was
-    four green rows scattered across four columns, "green" was the only feedback
-    a click gave you (so it read as "bought?" rather than "equipped"), and the
-    numbers on the right -- a bare "cd", a bare "-15%" -- assumed you already
-    knew what the gamemode charges you and in what currency.
-
-    So it's a paperdoll now. One pane shows WHO YOU ARE: the actual player model
+    A paperdoll and a grid. One pane shows WHO YOU ARE: the actual player model
     TPG will spawn you in (config/sh_armor.lua picks it from your armor tier),
-    with the four slots listed under it holding the names of what you've got.
-    That pane is the answer to "what am I taking in". The other pane is the one
-    question you're currently asking -- the items for the slot you clicked --
-    laid out as icon boxes rather than a list, because a rifle is easier to
-    recognise by shape than by which of six ACE naming conventions it uses.
+    with the four slots under it holding what you've got. The other pane shows
+    the one question you're currently asking -- the items for the slot you
+    clicked -- as icon boxes, because a rifle is easier to recognise by shape
+    than by which of six ACE naming conventions its name follows.
 
-    Everything the server will charge you (config/sh_gear.lua) is still shown up
-    front, but spelled out rather than abbreviated, and the panel header says
-    which currency this round is even using. Selection remains a preference --
-    the charge happens at spawn (player/sv_loadout.lua) -- which is exactly what
-    was unclear before, so the menu now says so in words.
+    Two rules the drawing code follows, both learned the hard way:
+
+      Paint runs every frame, for every card on screen, so NOTHING that can be
+      worked out in advance happens in there. Truncating a string costs a
+      surface.GetTextSize per character tried; forty cards doing that (plus a
+      price-table lookup each) every frame is what turned this menu into a
+      framerate problem. Everything static is resolved once, at build time, into
+      the card's own table; Paint only reads it and the live cooldown.
+
+      The grid is laid out by hand rather than by DIconLayout. A DIconLayout
+      docked inside a DScrollPanel sizes itself to its children, which resizes
+      the canvas, which re-runs the layout -- a loop that can run every frame.
+      Column count comes from arithmetic on a known width instead.
 ]]
 
 local SLOTS = {
@@ -32,8 +32,7 @@ local SLOTS = {
 
 -- Each slot owns a colour, and it's the same colour on the paperdoll row, on
 -- the panel header and on the border of every box in the grid. That's what
--- makes a selected box tell you WHICH slot it's selected in -- the old menu's
--- one shade of green couldn't, and position in a column was the only clue.
+-- makes a selected box tell you WHICH slot it's selected in.
 local function SlotColor(key)
     local C = TPG.Colors
     if key == "Primary"   then return C.Accent end
@@ -44,14 +43,14 @@ end
 
 local C = TPG.Colors
 
--- Menu-only shades. The HUD palette has no "row" or "hover" because the HUD
--- has nothing to hover, but they're derived from its panel colour so the menu
--- still reads as the same gamemode.
+-- Menu-only shades, derived from the HUD's panel colour so the menu still reads
+-- as the same gamemode. The HUD has no "hover" because it has nothing to hover.
 local MC = {
     bg     = Color(18, 12, 28, 250),
     panel  = Color(28, 19, 44, 255),
     row    = Color(40, 28, 62, 255),
     hover  = Color(56, 40, 86, 255),
+    sunken = Color(22, 15, 36, 255),
 }
 
 -- Cooldown ends, keyed the same way the server keys them. Stored as SysTime
@@ -157,12 +156,10 @@ local function BuildItems(slotKey)
                 id     = armor.id,
                 kind   = "armor",
                 name   = armor.name,
+                group  = nil,
                 model  = ArmorModel(armor.id),
-                lines  = {
-                    data.health .. " health, " .. data.armor .. " armor",
-                    SpeedText(data.speedBonus),
-                    not data.canUseSeat and "Cannot use vehicle seats" or nil,
-                },
+                detail = data.health .. " health, " .. data.armor .. " armor",
+                extra  = SpeedText(data.speedBonus),
                 warn   = not data.canUseSeat and "Cannot use vehicle seats" or nil,
             }
         end
@@ -172,11 +169,17 @@ local function BuildItems(slotKey)
     for _, wep in ipairs(TPG.GetWeaponList(slotKey)) do
         local entry = TPG.GetWeapon(slotKey, wep.id)
         items[#items + 1] = {
-            id    = wep.id,
-            kind  = "weapon",
-            name  = wep.name,
-            model = ItemModel(entry),
-            lines = { SpeedText(entry and entry.speedBonus) },
+            id     = wep.id,
+            kind   = "weapon",
+            name   = wep.name,
+            -- SWEP.SubCategory, carried through discovery. It's what the tab
+            -- strip groups by, so a 40-entry Primary list stops being a scroll.
+            group  = entry and entry.subCategory,
+            model  = ItemModel(entry),
+            detail = SpeedText(entry and entry.speedBonus),
+            -- "how many will I get" -- worked out by the same rule the server
+            -- hands them out with (config/sh_weapons.lua).
+            extra  = entry and entry.rounds and (entry.rounds .. " rounds") or nil,
         }
     end
     return items
@@ -200,8 +203,8 @@ local function OpenLoadoutMenu()
 
     -- Sized against the screen, not at 940x560: that was wider than a 1280x720
     -- window and a postage stamp on a 4K one.
-    local fw = math.min(S(1080), ScrW() * 0.94)
-    local fh = math.min(S(660), ScrH() * 0.92)
+    local fw = math.min(S(1180), ScrW() * 0.94)
+    local fh = math.min(S(720), ScrH() * 0.92)
 
     local frame = vgui.Create("DFrame")
     frame:SetSize(fw, fh)
@@ -214,9 +217,14 @@ local function OpenLoadoutMenu()
     frame:SetDraggable(false)
     frame:MakePopup()
 
-    local headH  = S(56)
-    local closeS = S(30)
-    local closeM = S(13)
+    local headH  = S(58)
+    local closeS = S(32)
+    local closeM = S(14)
+
+    -- Resolved once: the header line is static for as long as the menu is open
+    -- apart from the wallet figure, and re-truncating it 60 times a second was
+    -- pure waste.
+    local headerFits = fw - closeM - closeS - S(18) - S(200)
 
     frame.Paint = function(_, w, h)
         draw.RoundedBox(S(8), 0, 0, w, h, MC.bg)
@@ -225,9 +233,7 @@ local function OpenLoadoutMenu()
         draw.SimpleText("LOADOUT", "TPG.Menu.Title", S(20), headH / 2, C.Text,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
-        -- Which currency is in force this round, in the player's own terms. The
-        -- old header said "TEAM BUDGET - premium gear runs on a cooldown" and
-        -- left the player to work out what a cooldown did to them.
+        -- Which currency is in force this round, in the player's own terms.
         local mode, col
         if TPG.Gear.EconomyActive() then
             mode = "Per-player economy - you have " ..
@@ -238,11 +244,8 @@ local function OpenLoadoutMenu()
             col  = C.TextMuted
         end
 
-        -- Stops well clear of the close button instead of running under it.
-        local textRight = w - closeM - closeS - S(18)
-        mode = TPG.UI.Truncate(mode, "TPG.Menu.Head", textRight - S(180))
-        draw.SimpleText(mode, "TPG.Menu.Head", textRight, headH / 2, col,
-            TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+        draw.SimpleText(TPG.UI.Truncate(mode, "TPG.Menu.Head", headerFits), "TPG.Menu.Head",
+            w - closeM - closeS - S(18), headH / 2, col, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
     end
 
     local close = vgui.Create("DButton", frame)
@@ -251,15 +254,14 @@ local function OpenLoadoutMenu()
     close:SetText("")
     close.Paint = function(self, w, h)
         draw.RoundedBox(S(4), 0, 0, w, h, self:IsHovered() and C.Red or MC.row)
-        draw.SimpleText("X", "TPG.Menu.Head", w / 2, h / 2, C.Text,
-            TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        TPG.UI.TextInBox("X", "TPG.Menu.Head", 0, 0, w, h, C.Text)
     end
     close.DoClick = function() frame:Close() end
 
     -- ── Footer (docked first: a FILL panel takes whatever is left) ──────────
     local footer = vgui.Create("DPanel", frame)
     footer:Dock(BOTTOM)
-    footer:SetTall(S(56))
+    footer:SetTall(S(58))
     footer:DockMargin(S(14), 0, S(14), S(14))
     footer.Paint = function(_, w, h)
         draw.RoundedBox(S(5), 0, 0, w, h, MC.panel)
@@ -270,27 +272,28 @@ local function OpenLoadoutMenu()
         local speed = TPG.Config.baseSpeedPercent + bonus
 
         draw.SimpleText(armor.health .. " health    " .. armor.armor .. " armor    " ..
-            speed .. "% move speed", "TPG.Menu.Head", S(14), h / 2 - S(9), C.Text,
+            speed .. "% move speed", "TPG.Menu.Head", S(14), h / 2 - S(10), C.Text,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-        -- The single most important thing the old menu never said.
-        draw.SimpleText("Your picks are saved as you click them and take effect the next time you spawn.",
-            "TPG.Menu.Small", S(14), h / 2 + S(11), C.TextMuted,
+        draw.SimpleText("Picks are saved as you click them and take effect the next time you spawn.",
+            "TPG.Menu.Small", S(14), h / 2 + S(12), C.TextMuted,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     end
 
     local respawn = vgui.Create("DButton", footer)
     respawn:Dock(RIGHT)
     respawn:DockMargin(0, S(9), S(9), S(9))
-    respawn:SetWide(S(160))
+    respawn:SetWide(S(200))
     respawn:SetText("")
+    respawn:SetTooltip("Doesn't count as a death, and doesn't re-charge you for gear you already bought this life.")
     respawn.Paint = function(self, w, h)
         draw.RoundedBox(S(4), 0, 0, w, h, self:IsHovered() and C.Purple or MC.row)
-        draw.SimpleText("RESPAWN NOW", "TPG.Menu.Head", w / 2, h / 2, C.Text,
-            TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        TPG.UI.TextInBox("RESPAWN NOW", "TPG.Menu.Head", 0, 0, w, h, C.Text)
     end
     respawn.DoClick = function()
         LocalPlayer():EmitSound("common/wpn_hudoff.wav")
-        RunConsoleCommand("kill")
+        -- tpg_rekit, not `kill`: see core/sv_commands.lua. Plain suicide put a
+        -- death on your record and billed you twice for premium gear.
+        RunConsoleCommand("tpg_rekit")
         frame:Close()
     end
 
@@ -300,32 +303,49 @@ local function OpenLoadoutMenu()
     body.Paint = nil
 
     local activeSlot = SLOTS[1]
-    local RefreshGrid   -- forward declaration; the paperdoll rows call it
+    local activeGroup = nil      -- subcategory filter, nil = all
+    local searchText  = ""
+    local RefreshGrid, RefreshTabs   -- forward declarations
+
+    -- Widths are arithmetic, not measured: docking hasn't happened yet when the
+    -- grid is first built, so asking a panel how wide it is would return zero.
+    local bodyW = fw - S(28)
+    local dollW = math.min(S(330), bodyW * 0.30)
+    local paneW = bodyW - dollW - S(10)
+    local gridW = paneW - S(10) - S(6) - S(18)   -- margins + scrollbar
 
     -- ── Left: the paperdoll ────────────────────────────────────────────────
     local doll = vgui.Create("DPanel", body)
     doll:Dock(LEFT)
-    doll:SetWide(math.min(S(320), fw * 0.32))
+    doll:SetWide(dollW)
     doll:DockMargin(0, 0, S(10), 0)
     doll.Paint = function(_, w, h)
         draw.RoundedBox(S(5), 0, 0, w, h, MC.panel)
         draw.SimpleText("YOU", "TPG.Menu.Head", S(12), S(10), C.TextMuted)
+        draw.SimpleText("drag to turn", "TPG.Menu.Tiny", w - S(12), S(14), C.TextMuted,
+            TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
     end
 
     -- Slot rows live at the bottom of the pane; the model takes the rest.
     local rows = vgui.Create("DPanel", doll)
     rows:Dock(BOTTOM)
-    rows:SetTall(S(4) + #SLOTS * S(46))
+    rows:SetTall(S(4) + #SLOTS * S(50))
     rows:DockMargin(S(10), 0, S(10), S(10))
     rows.Paint = nil
 
     local model = vgui.Create("DModelPanel", doll)
     model:Dock(FILL)
-    model:DockMargin(S(10), S(32), S(10), S(6))
+    model:DockMargin(S(10), S(34), S(10), S(6))
     model:SetFOV(38)
     -- No animation, so the model holds its reference pose: the arms-out stance
-    -- the user asked for, and the one that shows the vest.
+    -- that shows the vest.
     model:SetAnimated(false)
+    model:SetMouseInputEnabled(true)
+
+    -- Facing the camera. The camera sits out along +X and a model at yaw 0
+    -- faces +X, so the previous 205 pointed it directly away -- you got its
+    -- back. 20 is enough of a turn to read as a three-quarter view.
+    local modelYaw = 20
 
     local dollModel
     local function ApplyDollModel()
@@ -344,26 +364,37 @@ local function OpenLoadoutMenu()
         local height = maxs.z - mins.z
         local centre = Vector(0, 0, mins.z + height * 0.52)
         model:SetLookAt(centre)
-        model:SetCamPos(centre + Vector(height * 1.55, 0, height * 0.08))
+        model:SetCamPos(centre + Vector(height * 1.5, 0, height * 0.05))
     end
 
-    -- Hold a fixed three-quarter view. DModelPanel's default LayoutEntity spins
-    -- an un-animated model on the spot, which makes a paperdoll you can't read.
-    model.LayoutEntity = function(self, ent)
-        ent:SetAngles(Angle(0, 205 + math.sin(SysTime() * 0.6) * 12, 0))
+    model.LayoutEntity = function(_, ent)
+        ent:SetAngles(Angle(0, modelYaw, 0))
     end
 
     ApplyDollModel()
-    model.Think = function()
+
+    model.OnMousePressed = function(self)
+        self.dragging, self.dragX = true, gui.MouseX()
+        self:MouseCapture(true)
+    end
+    model.OnMouseReleased = function(self)
+        self.dragging = false
+        self:MouseCapture(false)
+    end
+    model.Think = function(self)
+        if self.dragging then
+            local x = gui.MouseX()
+            modelYaw = (modelYaw + (x - self.dragX) * 0.6) % 360
+            self.dragX = x
+        end
         ApplyDollModel()
     end
 
     --[[
-        The vest. Clicking the chest opens armor, because that is where a player
-        looks for it -- the request was literally "clicking on the person inside
-        the menu vest gives you armor options". It's an invisible hotspot rather
-        than a drawn control so it doesn't clutter the model; the outline only
-        appears on hover, which is what tells you it was clickable at all.
+        The vest, over the model's chest, because that is where a player looks
+        for armor. Drawn as corner brackets and always visible: an invisible
+        hotspot didn't tell anyone it was there, and a filled box big enough to
+        click covered the torso it was pointing at.
     ]]
     local vest = vgui.Create("DButton", model)
     vest:SetText("")
@@ -371,18 +402,34 @@ local function OpenLoadoutMenu()
     vest:SetTooltip("Armor")
     vest.PerformLayout = function(self)
         local w, h = model:GetWide(), model:GetTall()
-        self:SetSize(w * 0.30, h * 0.20)
-        self:SetPos(w * 0.35, h * 0.30)
+        self:SetSize(w * 0.26, h * 0.17)
+        self:SetPos(w * 0.37, h * 0.31)
     end
     vest.Paint = function(self, w, h)
-        if not self:IsHovered() then return end
-        Outline(w, h, math.max(S(2), 1), SlotColor("Armor"))
-        draw.SimpleText("ARMOR", "TPG.Menu.Tiny", w / 2, h + S(4), SlotColor("Armor"),
-            TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        local col = SlotColor("Armor")
+        local hovered = self:IsHovered()
+        local a = hovered and 255 or 130
+        local t = math.max(S(2), 1)
+        local arm = math.min(w, h) * 0.32
+
+        surface.SetDrawColor(col.r, col.g, col.b, a)
+        -- Corners only: enough to read as a target, little enough to see the
+        -- armor it's framing.
+        surface.DrawRect(0, 0, arm, t)              surface.DrawRect(0, 0, t, arm)
+        surface.DrawRect(w - arm, 0, arm, t)        surface.DrawRect(w - t, 0, t, arm)
+        surface.DrawRect(0, h - t, arm, t)          surface.DrawRect(0, h - arm, t, arm)
+        surface.DrawRect(w - arm, h - t, arm, t)    surface.DrawRect(w - t, h - arm, t, arm)
+
+        if hovered then
+            draw.SimpleText("ARMOR", "TPG.Menu.Tiny", w / 2, h + S(4), col,
+                TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
+        end
     end
     vest.DoClick = function()
         surface.PlaySound("buttons/button14.wav")
         activeSlot = SLOTS[4]
+        activeGroup, searchText = nil, ""
+        RefreshTabs()
         RefreshGrid()
     end
 
@@ -392,24 +439,24 @@ local function OpenLoadoutMenu()
         local row = vgui.Create("DButton", rows)
         row:Dock(TOP)
         row:DockMargin(0, 0, 0, S(4))
-        row:SetTall(S(42))
+        row:SetTall(S(46))
         row:SetText("")
         row.Paint = function(self, w, h)
             local active = (activeSlot.key == slot.key)
             draw.RoundedBox(S(4), 0, 0, w, h,
-                active and MC.hover or (self:IsHovered() and MC.hover or MC.row))
-            -- The slot's own colour down the edge, so the four rows are told
-            -- apart by colour and not just by reading them.
+                (active or self:IsHovered()) and MC.hover or MC.row)
             draw.RoundedBox(0, 0, 0, math.max(S(3), 1), h, col)
             if active then Outline(w, h, math.max(S(2), 1), col) end
 
             draw.SimpleText(slot.label, "TPG.Menu.Tiny", S(12), S(7), col)
             draw.SimpleText(TPG.UI.Truncate(EquippedName(slot.key), "TPG.Menu.Item", w - S(24)),
-                "TPG.Menu.Item", S(12), S(21), C.Text)
+                "TPG.Menu.Item", S(12), S(23), C.Text)
         end
         row.DoClick = function()
             surface.PlaySound("buttons/button14.wav")
             activeSlot = slot
+            activeGroup, searchText = nil, ""
+            RefreshTabs()
             RefreshGrid()
         end
     end
@@ -424,104 +471,152 @@ local function OpenLoadoutMenu()
         draw.SimpleText(activeSlot.label, "TPG.Menu.Head", S(14), S(12), col)
 
         --[[
-            The plain-language explanation of what this round charges you. "cd"
-            in a badge told a player nothing; this says what the badge will
-            actually do to them, once, at the top, in the currency in force.
+            The plain-language answer to "what does this cost me and for how
+            long". "cd" in a badge said none of it.
         ]]
         local rule
         if TPG.Gear.EconomyActive() then
-            rule = "Marked items cost points from your budget, charged when you spawn with them."
+            rule = "Marked items cost points, charged when you spawn with them. Yours for that whole life."
         else
-            rule = "Marked items go on a personal cooldown: take one and you spawn with the free equivalent until the timer runs out."
+            rule = "Marked items are yours for that whole life. The timer starts when you spawn with one, and until it runs out you spawn with the free equivalent instead."
         end
         draw.SimpleText(TPG.UI.Truncate(activeSlot.hint .. "  " .. rule, "TPG.Menu.Small", w - S(28)),
-            "TPG.Menu.Small", S(14), S(32), C.TextMuted)
+            "TPG.Menu.Small", S(14), S(34), C.TextMuted)
     end
+
+    -- Tab strip + search share one row.
+    local tools = vgui.Create("DPanel", pane)
+    tools:Dock(TOP)
+    tools:DockMargin(S(10), S(58), S(10), S(4))
+    tools:SetTall(S(30))
+    tools.Paint = nil
+
+    local search = vgui.Create("DTextEntry", tools)
+    search:Dock(RIGHT)
+    search:SetWide(S(210))
+    search:SetPlaceholderText("Search...")
+    search:SetUpdateOnType(true)
+    search:SetFont("TPG.Menu.Small")
+    search.Paint = function(self, w, h)
+        draw.RoundedBox(S(4), 0, 0, w, h, MC.sunken)
+        Outline(w, h, 1, MC.row)
+        self:DrawTextEntryText(C.Text, C.Purple, C.Text)
+    end
+    search.OnValueChange = function(_, value)
+        searchText = string.lower(value or "")
+        RefreshGrid()
+    end
+
+    local tabs = vgui.Create("DPanel", tools)
+    tabs:Dock(FILL)
+    tabs:DockMargin(0, 0, S(8), 0)
+    tabs.Paint = nil
 
     local scroll = vgui.Create("DScrollPanel", pane)
     scroll:Dock(FILL)
-    scroll:DockMargin(S(10), S(52), S(6), S(10))
+    scroll:DockMargin(S(10), 0, S(6), S(10))
 
-    -- Docked TOP, not FILL: inside a DScrollPanel the layout has to be free to
-    -- grow past the visible height, which is the whole point of the scrollbar.
-    -- It wraps to whatever width it's given, so the number of columns follows
-    -- the window instead of being a hardcoded four.
-    local layout = vgui.Create("DIconLayout", scroll)
-    layout:Dock(TOP)
-    layout:SetSpaceX(S(8))
-    layout:SetSpaceY(S(8))
+    -- Plain canvas; the grid positions its own children (see the header note on
+    -- DIconLayout).
+    local canvas = vgui.Create("DPanel", scroll)
+    canvas:Dock(TOP)
+    canvas:SetTall(1)
+    canvas.Paint = nil
 
-    local cardW, cardH = S(148), S(132)
+    local cardW, cardH = S(174), S(192)
+    local gap = S(10)
+    local cols = math.max(math.floor((gridW + gap) / (cardW + gap)), 1)
 
-    local function MakeCard(item)
-        local col = SlotColor(activeSlot.key)
-        local slotKey, cmd = activeSlot.key, activeSlot.cmd
+    --[[
+        One card. Everything static -- the truncated strings, the price, whether
+        it even HAS a badge -- is resolved here, once. Paint reads the results.
+    ]]
+    local function MakeCard(item, index)
+        local col     = SlotColor(activeSlot.key)
+        local dim     = Color(col.r, col.g, col.b, 60)
+        local slotKey = activeSlot.key
+        local cmd     = activeSlot.cmd
+        local price   = TPG.Gear.Price(item.kind, item.id)
 
-        local card = layout:Add("DButton")
+        local card = vgui.Create("DButton", canvas)
         card:SetSize(cardW, cardH)
+        card:SetPos(((index - 1) % cols) * (cardW + gap),
+                    math.floor((index - 1) / cols) * (cardH + gap))
         card:SetText("")
         card:SetTooltip(item.name)
 
         -- SpawnIcon renders a cached material of the model, which is what makes
         -- a grid of forty weapons affordable -- a DModelPanel each would render
-        -- forty models every frame. Items without a usable model just get the
-        -- name, centred, in the space the icon would have used.
+        -- forty models every frame. Items without a usable model just get their
+        -- name in the space the icon would have used.
+        local iconS = S(104)
         if item.model then
             local icon = vgui.Create("SpawnIcon", card)
             icon:SetModel(item.model)
-            icon:SetSize(S(72), S(72))
-            icon:SetPos(cardW / 2 - S(36), S(12))
+            icon:SetSize(iconS, iconS)
+            icon:SetPos((cardW - iconS) / 2, S(26))
             icon:SetMouseInputEnabled(false)
-            icon:SetTooltip(nil)
         end
+
+        local nameY  = item.model and (cardH - S(64)) or math.Round(cardH * 0.34)
+        local name   = TPG.UI.Truncate(item.name, "TPG.Menu.Item", cardW - S(14))
+        local detail = item.detail and TPG.UI.Truncate(item.detail, "TPG.Menu.Tiny", cardW - S(14))
+        local extra  = item.extra and TPG.UI.Truncate(item.extra, "TPG.Menu.Tiny", cardW - S(14))
+
+        -- The static half of the badge. The locked version is time-dependent and
+        -- is the only one built in Paint.
+        local badge, badgeCol
+        if price then
+            if TPG.Gear.EconomyActive() then
+                badge, badgeCol = price.cost .. " pts", C.Neutral
+            elseif (price.cooldown or 0) > 0 then
+                badge, badgeCol = FormatTime(price.cooldown) .. " cooldown", C.Neutral
+            end
+        end
+
+        local stripH = S(22)
 
         card.Paint = function(self, w, h)
             local selected = (picks[slotKey] == item.id)
-            local price    = TPG.Gear.Price(item.kind, item.id)
             local left     = price and CooldownLeft(item.kind, item.id) or 0
 
-            draw.RoundedBox(S(5), 0, 0, w, h,
-                self:IsHovered() and MC.hover or MC.row)
-            Outline(w, h, math.max(selected and S(2) or S(1), 1),
-                selected and col or Color(col.r, col.g, col.b, 60))
+            draw.RoundedBox(S(5), 0, 0, w, h, self:IsHovered() and MC.hover or MC.row)
+            Outline(w, h, math.max(selected and S(2) or S(1), 1), selected and col or dim)
 
-            local nameY = item.model and (h - S(46)) or (h / 2 - S(20))
-            draw.SimpleText(TPG.UI.Truncate(item.name, "TPG.Menu.Item", w - S(14)),
-                "TPG.Menu.Item", w / 2, nameY,
+            draw.SimpleText(name, "TPG.Menu.Item", w / 2, nameY,
                 left > 0 and C.TextMuted or C.Text, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
-
-            -- One detail line -- the first stat that changes how you play. A
-            -- card this size can hold one, and a second would be the kind of
-            -- number-soup the old menu was criticised for.
-            local detail = item.lines[1]
             if detail then
-                draw.SimpleText(TPG.UI.Truncate(detail, "TPG.Menu.Tiny", w - S(14)),
-                    "TPG.Menu.Tiny", w / 2, nameY + S(17), C.TextMuted,
+                draw.SimpleText(detail, "TPG.Menu.Tiny", w / 2, nameY + S(21), C.TextMuted,
                     TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
             end
-
-            -- Price / lock badge, top-left so it never lands on the icon's
-            -- silhouette. Says what it means: "300 pts" or "Locked 1:20".
-            local badge, badgeCol
-            if left > 0 then
-                badge, badgeCol = "Locked " .. FormatTime(left), C.Red
-            elseif price then
-                if TPG.Gear.EconomyActive() then
-                    badge, badgeCol = price.cost .. " pts", C.Neutral
-                elseif (price.cooldown or 0) > 0 then
-                    badge, badgeCol = FormatTime(price.cooldown) .. " cooldown", C.Neutral
-                end
+            if extra then
+                draw.SimpleText(extra, "TPG.Menu.Tiny", w - S(8), S(8), C.TextMuted,
+                    TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
             end
-            if badge then
+
+            -- Badge, top-left so it never lands on the icon's silhouette.
+            local text, textCol = badge, badgeCol
+            if left > 0 then
+                text, textCol = "Locked " .. FormatTime(left), C.Red
+            end
+            if text then
                 surface.SetFont("TPG.Menu.Tiny")
-                local bw, bh = surface.GetTextSize(badge)
+                local bw, bh = surface.GetTextSize(text)
                 draw.RoundedBox(S(3), S(6), S(6), bw + S(10), bh + S(4), Color(0, 0, 0, 170))
-                draw.SimpleText(badge, "TPG.Menu.Tiny", S(11), S(8), badgeCol)
+                draw.SimpleText(text, "TPG.Menu.Tiny", S(11), S(8), textCol)
+
+                -- A locked item also gets a bar showing how much of the wait is
+                -- done, so "not yet" turns into "nearly".
+                if left > 0 and (price.cooldown or 0) > 0 then
+                    local frac = 1 - math.Clamp(left / price.cooldown, 0, 1)
+                    local bx, by, barW = S(6), S(6) + bh + S(6), bw + S(10)
+                    draw.RoundedBox(0, bx, by, barW, math.max(S(3), 1), MC.sunken)
+                    draw.RoundedBox(0, bx, by, barW * frac, math.max(S(3), 1), col)
+                end
             end
 
             -- "Did I purchase it or not" -- the answer, in words, on the item.
             if selected then
-                local stripH = S(18)
                 draw.RoundedBox(0, 0, h - stripH, w, stripH, col)
                 TPG.UI.TextInBox("EQUIPPED", "TPG.Menu.Tiny", 0, h - stripH, w, stripH,
                     C.Contrast(col))
@@ -540,12 +635,77 @@ local function OpenLoadoutMenu()
     end
 
     RefreshGrid = function()
-        layout:Clear()
+        canvas:Clear()
+
+        local shown = 0
         for _, item in ipairs(BuildItems(activeSlot.key)) do
-            MakeCard(item)
+            local matchesGroup  = (not activeGroup) or item.group == activeGroup
+            local matchesSearch = (searchText == "")
+                or string.find(string.lower(item.name), searchText, 1, true) ~= nil
+
+            if matchesGroup and matchesSearch then
+                shown = shown + 1
+                MakeCard(item, shown)
+            end
+        end
+
+        local rowCount = math.ceil(shown / cols)
+        canvas:SetTall(math.max(rowCount * (cardH + gap) - gap, 1))
+    end
+
+    --[[
+        Tabs for the slot's subcategories.
+
+        Rebuilt per slot rather than per keystroke, so typing in the search box
+        never destroys the panel that has keyboard focus. Armor has no
+        subcategories and gets no strip; neither does a slot whose weapons all
+        come from one (a pack that tags nothing would otherwise get a lone "All"
+        tab that does nothing).
+    ]]
+    RefreshTabs = function()
+        tabs:Clear()
+
+        local groups, seen = {}, {}
+        for _, item in ipairs(BuildItems(activeSlot.key)) do
+            if item.group and not seen[item.group] then
+                seen[item.group] = true
+                groups[#groups + 1] = item.group
+            end
+        end
+        table.sort(groups)
+
+        if #groups < 2 then return end
+        table.insert(groups, 1, false)   -- the "All" tab
+
+        local col = SlotColor(activeSlot.key)
+        for _, group in ipairs(groups) do
+            local label = group or "All"
+
+            local tab = vgui.Create("DButton", tabs)
+            tab:Dock(LEFT)
+            tab:DockMargin(0, 0, S(6), 0)
+            tab:SetText("")
+
+            surface.SetFont("TPG.Menu.Small")
+            tab:SetWide(surface.GetTextSize(label) + S(20))
+
+            tab.Paint = function(self, w, h)
+                local active = (activeGroup == (group or nil))
+                draw.RoundedBox(S(4), 0, 0, w, h,
+                    (active or self:IsHovered()) and MC.hover or MC.sunken)
+                if active then draw.RoundedBox(0, 0, h - math.max(S(2), 1), w, math.max(S(2), 1), col) end
+                TPG.UI.TextInBox(label, "TPG.Menu.Small", 0, 0, w, h,
+                    active and C.Text or C.TextMuted)
+            end
+            tab.DoClick = function()
+                surface.PlaySound("buttons/button14.wav")
+                activeGroup = group or nil
+                RefreshGrid()
+            end
         end
     end
 
+    RefreshTabs()
     RefreshGrid()
 end
 

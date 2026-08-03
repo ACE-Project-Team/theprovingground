@@ -80,6 +80,10 @@ TPG.WeaponConfig = {
         ["weapon_ace_boundingmine"]   = true,
         ["weapon_ace_antitankmine"]   = true,
         ["disposableat"]              = true,
+        -- ACE's safezone-authoring tool. It's a Slot 4 SWEP, so discovery filed
+        -- it with the launchers, but it isn't a weapon at all -- it's a mapping
+        -- tool, and taking it costs you your anti-tank slot.
+        ["weapon_szcreator"]          = true,
     },
 
     --[[
@@ -163,6 +167,20 @@ TPG.WeaponConfig = {
                     "weapon_ace_boundingmine",
                     "weapon_ace_antitankmine",
                 },
+                --[[
+                    The set used to arrive with 33 mines. Each of the three
+                    SWEPs ships DefaultClip 11, and they all draw from ONE ammo
+                    pool ("CombineHeavyCannon"), so giving all three stacked
+                    their clips into a single shared reserve.
+
+                    That shared pool is also why this is a single total rather
+                    than 6 anti-tank / 3 bounding / 10 anti-personnel: nothing
+                    distinguishes whose rounds are whose once they're in it, and
+                    per-type counts would need the ACE SWEPs themselves changed
+                    to use separate ammo types. 19 is the requested split's
+                    total, spent however the player likes.
+                ]]
+                exactAmmo = 19,
             },
         },
     },

@@ -43,13 +43,18 @@ local function CompassBox()
     local S = TPG.UI.S
     local L = TPG.UI.ComputeLayout()
 
-    surface.SetFont("TPG.HUD.Label")
+    surface.SetFont("TPG.HUD.Compass")
     local _, labelH = surface.GetTextSize("N")
-    surface.SetFont("TPG.HUD.Small")
+    surface.SetFont("TPG.HUD.CompassNum")
     local _, bearH = surface.GetTextSize("0")
 
     local h = labelH + bearH + S(4)
-    local w = math.min(L.scoreW * 0.62, ScrW() * 0.5)
+
+    -- As wide as the score bar above it. The earlier 0.62 was chosen to sit
+    -- inside a backing panel; without the panel there's nothing to sit inside,
+    -- and a narrow ladder squeezes 50 degrees of heading into a span too short
+    -- to turn against, which is what made it feel smaller than the old one.
+    local w = math.min(L.scoreW, ScrW() * 0.62)
 
     return ScrW() / 2 - w / 2, TPG.UI.BelowObjectives() + S(8), w, h, labelH
 end
@@ -95,7 +100,7 @@ hook.Add("HUDPaint", "TPG_Compass", function()
             -- doing the legibility work, not a backing panel.
             local alpha = 255 * (1 - (math.abs(diff) / FOV_DEGREES) * 0.4)
 
-            draw.SimpleTextOutlined(dir.label, "TPG.HUD.Label", cx + diff * perDegree, y,
+            draw.SimpleTextOutlined(dir.label, "TPG.HUD.Compass", math.Round(cx + diff * perDegree), y,
                 Color(COMPASS_COLOR.r, COMPASS_COLOR.g, COMPASS_COLOR.b, alpha),
                 TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, outlineW,
                 Color(OUTLINE.r, OUTLINE.g, OUTLINE.b, OUTLINE.a * (alpha / 255)))
@@ -103,6 +108,7 @@ hook.Add("HUDPaint", "TPG_Compass", function()
     end
 
     -- Bearing number, always dead centre under the ladder.
-    draw.SimpleTextOutlined(string.format("%03d", math.floor(lookAngle)), "TPG.HUD.Small",
-        cx, y + labelH + S(4), COMPASS_COLOR, TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, outlineW, OUTLINE)
+    draw.SimpleTextOutlined(string.format("%03d", math.floor(lookAngle)), "TPG.HUD.CompassNum",
+        math.Round(cx), y + labelH + S(4), COMPASS_COLOR,
+        TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP, outlineW, OUTLINE)
 end)

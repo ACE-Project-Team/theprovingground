@@ -80,6 +80,43 @@ concommand.Add("tpg_loadout", function(ply, cmd, args)
     TPG.Util.SetPData(ply, key, class)
 end)
 
+--[[
+    Respawn to apply a loadout change.
+
+    The menu used to run plain `kill` for this, which made a loadout tweak cost
+    the same as being shot: a death on your record, and -- under the per-player
+    economy -- a second charge for premium gear you had already bought and never
+    got to fire. Neither is a thing the player did wrong.
+
+    So it's its own command. It flags the death as a re-kit, which the stats
+    system skips (systems/sv_stats.lua) and the gear system reads as "keep what
+    this life already paid for" (systems/sv_gear.lua). Picking something you
+    HAVEN'T paid for still charges normally, so this isn't a way to shop for
+    free -- it only stops you being billed twice for the same item.
+
+    Rate-limited because it is, mechanically, a suicide: without the limit it
+    would be a free escape from a losing fight.
+]]
+local REKIT_INTERVAL = 20
+
+concommand.Add("tpg_rekit", function(ply)
+    if not IsValid(ply) or not ply:Alive() then return end
+    if not TPG.Util.IsOnTeam(ply) then return end
+
+    local pState = TPG.State.GetPlayer(ply)
+    local ready  = (pState.lastRekit or -math.huge) + REKIT_INTERVAL
+
+    if CurTime() < ready then
+        TPG.Util.ChatMessage(ply, "[TPG] Wait " .. math.ceil(ready - CurTime()) ..
+            "s before respawning again.", Color(255, 200, 0))
+        return
+    end
+
+    pState.lastRekit = CurTime()
+    pState.rekit     = true
+    ply:Kill()
+end)
+
 -- Easy vehicle entry
 concommand.Add("tpg_easyentry", function(ply, cmd, args)
     if TPG.Vehicles and TPG.Vehicles.EasyEntry then

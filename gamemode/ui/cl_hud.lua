@@ -154,7 +154,7 @@ function TPG.UI.ComputeLayout()
     L.scoreX = sw / 2 - L.scoreW / 2
 
     L.pipY    = L.scoreY + L.scoreH + S(8)
-    L.pipSize = S(24)
+    L.pipSize = S(26)
     L.pipGap  = S(6)
 
     return L
@@ -274,8 +274,11 @@ hook.Add("HUDPaint", "TPG_HUD", function()
                 local pointName  = obj:GetNWString("PointName", "?")
                 local initial    = string.upper(string.sub(pointName, 1, 1))
 
-                local bx = startX + (i - 1) * pitch
-                local by = L.pipY
+                -- Rounded: a pip sitting on a half-pixel draws its rounded
+                -- corners and its letter blurred asymmetrically, which reads as
+                -- the letter being off-centre in the box.
+                local bx = math.Round(startX + (i - 1) * pitch)
+                local by = math.Round(L.pipY)
                 local edge = math.max(S(2), 1)
 
                 draw.RoundedBox(S(4), bx - edge, by - edge, L.pipSize + edge * 2, L.pipSize + edge * 2, C.Shadow)

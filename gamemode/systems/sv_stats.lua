@@ -246,6 +246,11 @@ end
 
 -- ── Event hooks ─────────────────────────────────────────────────────────────
 hook.Add("PlayerDeath", "TPG_StatsDeath", function(victim, _inflictor, attacker)
+    -- A re-kit (the loadout menu's respawn button) isn't a death anyone earned,
+    -- theirs or an enemy's, so it doesn't go on either record. See
+    -- core/sv_commands.lua for tpg_rekit.
+    if IsValid(victim) and TPG.State.GetPlayer(victim).rekit then return end
+
     local ve = entry(victim)
     if ve then
         ve.deaths = ve.deaths + 1

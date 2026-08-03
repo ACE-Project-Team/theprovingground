@@ -105,13 +105,21 @@ local FONTS = {
     ["TPG.HUD.Small"] = { font = "Exo 2",           size = 15, weight = 500 },
     ["TPG.HUD.Pip"]   = { font = "Exo 2 ExtraBold", size = 16, weight = 800 },
 
+    -- The compass gets its own pair rather than borrowing Label/Small. It's
+    -- read at a glance while moving, from the middle of the screen, with the
+    -- world behind it -- the same size that works for a docked panel label is
+    -- too small out there.
+    ["TPG.HUD.Compass"]     = { font = "Exo 2 ExtraBold", size = 27, weight = 800 },
+    ["TPG.HUD.CompassNum"]  = { font = "Exo 2 SemiBold",  size = 19, weight = 600 },
+
     -- Menus. Same family as the HUD so the loadout screen and the thing it
-    -- configures look like one gamemode rather than two.
-    ["TPG.Menu.Title"] = { font = "Exo 2 ExtraBold", size = 26, weight = 800 },
-    ["TPG.Menu.Head"]  = { font = "Exo 2 SemiBold",  size = 17, weight = 600 },
-    ["TPG.Menu.Item"]  = { font = "Exo 2 SemiBold",  size = 16, weight = 600 },
-    ["TPG.Menu.Small"] = { font = "Exo 2",           size = 14, weight = 500 },
-    ["TPG.Menu.Tiny"]  = { font = "Exo 2",           size = 12, weight = 500 },
+    -- configures look like one gamemode rather than two. Sized a step up from
+    -- the HUD's: a HUD label is glanced at, menu text is read.
+    ["TPG.Menu.Title"] = { font = "Exo 2 ExtraBold", size = 28, weight = 800 },
+    ["TPG.Menu.Head"]  = { font = "Exo 2 SemiBold",  size = 19, weight = 600 },
+    ["TPG.Menu.Item"]  = { font = "Exo 2 SemiBold",  size = 18, weight = 600 },
+    ["TPG.Menu.Small"] = { font = "Exo 2",           size = 16, weight = 500 },
+    ["TPG.Menu.Tiny"]  = { font = "Exo 2",           size = 14, weight = 500 },
 }
 
 --[[
@@ -182,18 +190,23 @@ end
     GMod can't measure a glyph's actual bounding box (surface.GetTextSize
     returns the line height, not the ink), so this applies a fixed optical
     correction instead: nudge down by OPTICAL_DESCENDER of the line height.
-    0.09 is half a typical ~18% descender, which lands capitals on the centre
-    of the tile. Text with real descenders (a "g", a "p") sits a hair low as a
-    result, which is why this is used for the pips and not for body text.
+    0.06 lands capitals on the centre of the tile. Text with real descenders (a
+    "g", a "p") sits a hair low as a result, which is why this is used for the
+    pips and not for body text.
+
+    Both coordinates are ROUNDED. Centring produces a half-pixel offset whenever
+    the box and the glyph differ by an odd number of pixels, and a glyph
+    rasterised on a half-pixel is blurred asymmetrically -- it reads as being
+    nudged up and to the left, which is exactly what the point pips looked like.
 ]]
-local OPTICAL_DESCENDER = 0.09
+local OPTICAL_DESCENDER = 0.06
 
 function TPG.UI.TextInBox(text, font, x, y, w, h, color)
     surface.SetFont(font)
     local tw, th = surface.GetTextSize(text)
     draw.SimpleText(text, font,
-        x + (w - tw) / 2,
-        y + (h - th) / 2 + th * OPTICAL_DESCENDER,
+        math.Round(x + (w - tw) / 2),
+        math.Round(y + (h - th) / 2 + th * OPTICAL_DESCENDER),
         color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 end
 

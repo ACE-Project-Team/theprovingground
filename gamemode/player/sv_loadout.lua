@@ -159,6 +159,11 @@ function TPG.Loadout.Apply(ply)
         end
     end
 
+    -- The re-kit flag covers exactly one death-and-respawn (core/sv_commands.lua
+    -- sets it, the stats and gear systems read it on the death). Cleared here,
+    -- at the end of the spawn it was set for, so the NEXT death is a real one.
+    TPG.State.GetPlayer(ply).rekit = nil
+
     -- Refresh the menu's cooldown countdowns with whatever this spawn just
     -- started (or didn't).
     if TPG.Gear.Sync then TPG.Gear.Sync(ply) end
@@ -197,6 +202,27 @@ local function TopUpAmmo(ply, category, class, wep)
     end
 end
 
+--[[
+    Set a shared ammo pool to an exact total, rather than raising it to a floor.
+
+    The three ACE mines all draw from one ammo type ("CombineHeavyCannon"), and
+    each ships DefaultClip 11, so handing out the set stacked 33 mines into that
+    single pool. TopUpAmmo can't fix that -- it only ever raises -- so this
+    clears the pool and refills it to the configured total.
+
+    `loaded` is subtracted because each mine arrives with one round already in
+    its clip, and those count towards what the player is carrying.
+]]
+local function SetExactAmmo(ply, wep, total, loaded)
+    if not IsValid(wep) then return end
+
+    local ammoType = wep:GetPrimaryAmmoType()
+    if ammoType < 0 then return end
+
+    ply:RemoveAmmo(ply:GetAmmoCount(ammoType), ammoType)
+    ply:GiveAmmo(math.max(total - (loaded or 0), 0), ammoType, true)
+end
+
 -- Returns true if it actually handed the player a weapon (so callers can tell
 -- an empty/"none"/disabled pick from a real one -- e.g. the bonus AT).
 function TPG.Loadout.GiveWeapon(ply, category, weaponId)
@@ -211,8 +237,21 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
 
     -- Multiple weapons (e.g., mines)
     if weapon.multipleClasses then
+        local first
         for _, class in ipairs(weapon.multipleClasses) do
-            TopUpAmmo(ply, category, class, ply:Give(class))
+            local given = ply:Give(class)
+            if not IsValid(first) then first = given end
+
+            -- An exact total replaces the top-up entirely: topping each class up
+            -- first and then trimming the pool would just be the same arithmetic
+            -- done twice.
+            if not weapon.exactAmmo then
+                TopUpAmmo(ply, category, class, given)
+            end
+        end
+
+        if weapon.exactAmmo then
+            SetExactAmmo(ply, first, weapon.exactAmmo, #weapon.multipleClasses)
         end
         return true
     end

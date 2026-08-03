@@ -41,6 +41,31 @@ function TPG.Gear.Claim(ply, kind, id)
     local price = TPG.Gear.Price(kind, id)
     if not price then return true end
 
+    local pState = TPG.State.GetPlayer(ply)
+    local key    = TPG.Gear.Key(kind, id)
+
+    --[[
+        Already bought this life? Then it's yours, and re-spawning to change a
+        different slot doesn't buy it again.
+
+        This is what makes the menu's respawn button safe to press: it charged
+        once per SPAWN before, so tweaking your sidearm and respawning billed
+        you a second time for the Javelin you'd bought and never fired -- and in
+        a team-budget round it denied the Javelin outright, because the cooldown
+        it had started ten seconds earlier was still running.
+
+        The list is cleared on a real death (below), so this only ever covers
+        the life you actually paid for.
+    ]]
+    if pState.gearPaidThisLife and pState.gearPaidThisLife[key] then
+        return true
+    end
+
+    local function record()
+        pState.gearPaidThisLife = pState.gearPaidThisLife or {}
+        pState.gearPaidThisLife[key] = true
+    end
+
     -- Per-player economy: pay points, no cooldown.
     if TPG.Economy and TPG.Economy.Active then
         local cost = price.cost or 0
@@ -48,6 +73,7 @@ function TPG.Gear.Claim(ply, kind, id)
         if not TPG.Economy.Charge(ply, cost, "gear") then
             return false, "afford", cost
         end
+        record()
         return true
     end
 
@@ -58,11 +84,25 @@ function TPG.Gear.Claim(ply, kind, id)
     local left = TPG.Gear.Remaining(ply, kind, id)
     if left > 0 then return false, "cooldown", left end
 
-    local pState = TPG.State.GetPlayer(ply)
     pState.gearCooldowns = pState.gearCooldowns or {}
-    pState.gearCooldowns[TPG.Gear.Key(kind, id)] = CurTime() + cooldown
+    pState.gearCooldowns[key] = CurTime() + cooldown
+    record()
     return true
 end
+
+--[[
+    A life ends, so what that life paid for stops carrying over.
+
+    A re-kit (core/sv_commands.lua) is deliberately not a life ending -- that's
+    the whole point of it -- so it keeps the list and only clears the flag.
+]]
+hook.Add("PlayerDeath", "TPG_GearLifeEnd", function(victim)
+    if not IsValid(victim) then return end
+
+    local pState = TPG.State.GetPlayer(victim)
+    if pState.rekit then return end
+    pState.gearPaidThisLife = nil
+end)
 
 -- Push the player's live cooldowns, plus the picks the server actually has on
 -- record, so the menu shows what they're really set to rather than what they
