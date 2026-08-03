@@ -284,7 +284,8 @@ local function OpenLoadoutMenu()
     respawn:DockMargin(0, S(9), S(9), S(9))
     respawn:SetWide(S(200))
     respawn:SetText("")
-    respawn:SetTooltip("Doesn't count as a death, and doesn't re-charge you for gear you already bought this life.")
+    respawn:SetTooltip("Inside your own spawn zone only. Doesn't count as a death, " ..
+        "and doesn't re-charge you for gear you already bought this life.")
     respawn.Paint = function(self, w, h)
         draw.RoundedBox(S(4), 0, 0, w, h, self:IsHovered() and C.Purple or MC.row)
         TPG.UI.TextInBox("RESPAWN NOW", "TPG.Menu.Head", 0, 0, w, h, C.Text)
@@ -480,26 +481,38 @@ local function OpenLoadoutMenu()
         else
             rule = "Marked items are yours for that whole life. The timer starts when you spawn with one, and until it runs out you spawn with the free equivalent instead."
         end
+        -- Stops short of the search box, which sits in this row.
         draw.SimpleText(TPG.UI.Truncate(activeSlot.hint .. "  " .. rule, "TPG.Menu.Small", w - S(28)),
-            "TPG.Menu.Small", S(14), S(34), C.TextMuted)
+            "TPG.Menu.Small", S(14), S(44), C.TextMuted)
     end
 
-    -- Tab strip + search share one row.
-    local tools = vgui.Create("DPanel", pane)
-    tools:Dock(TOP)
-    tools:DockMargin(S(10), S(58), S(10), S(4))
-    tools:SetTall(S(30))
-    tools.Paint = nil
+    --[[
+        Search lives in the header row, not next to the tabs.
 
-    local search = vgui.Create("DTextEntry", tools)
-    search:Dock(RIGHT)
-    search:SetWide(S(210))
+        Sharing a row meant the tab strip's width was whatever was left over,
+        and Derma doesn't clip children to their parent -- so the moment a slot
+        had one tab too many, "Machine Guns" was drawn straight over the search
+        box. Nothing on the tab row competes for space now, and the tabs wrap.
+    ]]
+    local searchW = S(206)
+    local search = vgui.Create("DTextEntry", pane)
+    search:SetSize(searchW, S(28))
+    search:SetPos(paneW - searchW - S(14), S(10))
     search:SetPlaceholderText("Search...")
     search:SetUpdateOnType(true)
     search:SetFont("TPG.Menu.Small")
+    -- A dark box on a dark panel with a darker border was invisible. It reads
+    -- as a field now: lighter than the panel it sits on, with a border that
+    -- brightens to the slot colour while it has focus.
     search.Paint = function(self, w, h)
-        draw.RoundedBox(S(4), 0, 0, w, h, MC.sunken)
-        Outline(w, h, 1, MC.row)
+        draw.RoundedBox(S(4), 0, 0, w, h, MC.row)
+        Outline(w, h, math.max(S(2), 1),
+            self:HasFocus() and SlotColor(activeSlot.key) or C.PurpleLight)
+
+        if self:GetText() == "" and not self:HasFocus() then
+            draw.SimpleText("Search...", "TPG.Menu.Small", S(10), h / 2, C.TextMuted,
+                TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+        end
         self:DrawTextEntryText(C.Text, C.Purple, C.Text)
     end
     search.OnValueChange = function(_, value)
@@ -507,9 +520,10 @@ local function OpenLoadoutMenu()
         RefreshGrid()
     end
 
-    local tabs = vgui.Create("DPanel", tools)
-    tabs:Dock(FILL)
-    tabs:DockMargin(0, 0, S(8), 0)
+    local tabs = vgui.Create("DPanel", pane)
+    tabs:Dock(TOP)
+    tabs:DockMargin(S(10), S(68), S(10), S(4))
+    tabs:SetTall(1)
     tabs.Paint = nil
 
     local scroll = vgui.Create("DScrollPanel", pane)
@@ -674,20 +688,35 @@ local function OpenLoadoutMenu()
         end
         table.sort(groups)
 
-        if #groups < 2 then return end
+        if #groups < 2 then
+            tabs:SetTall(1)
+            return
+        end
         table.insert(groups, 1, false)   -- the "All" tab
 
-        local col = SlotColor(activeSlot.key)
+        -- Wrapped by hand. Docking LEFT just ran the strip off the end of the
+        -- panel and over whatever was beside it.
+        local col    = SlotColor(activeSlot.key)
+        local tabH   = S(28)
+        local gapX   = S(6)
+        local stripW = paneW - S(20)
+        local x, y   = 0, 0
+
         for _, group in ipairs(groups) do
             local label = group or "All"
 
-            local tab = vgui.Create("DButton", tabs)
-            tab:Dock(LEFT)
-            tab:DockMargin(0, 0, S(6), 0)
-            tab:SetText("")
-
             surface.SetFont("TPG.Menu.Small")
-            tab:SetWide(surface.GetTextSize(label) + S(20))
+            local tabW = math.min(surface.GetTextSize(label) + S(20), stripW)
+
+            if x > 0 and x + tabW > stripW then
+                x, y = 0, y + tabH + S(5)
+            end
+
+            local tab = vgui.Create("DButton", tabs)
+            tab:SetSize(tabW, tabH)
+            tab:SetPos(x, y)
+            tab:SetText("")
+            x = x + tabW + gapX
 
             tab.Paint = function(self, w, h)
                 local active = (activeGroup == (group or nil))
@@ -703,6 +732,8 @@ local function OpenLoadoutMenu()
                 RefreshGrid()
             end
         end
+
+        tabs:SetTall(y + tabH)
     end
 
     RefreshTabs()

@@ -94,14 +94,28 @@ end)
     HAVEN'T paid for still charges normally, so this isn't a way to shop for
     free -- it only stops you being billed twice for the same item.
 
-    Rate-limited because it is, mechanically, a suicide: without the limit it
-    would be a free escape from a losing fight.
+    Safezone only, because mechanically this IS a suicide: out in the field it
+    would be a free escape from a losing fight -- press it as the tank rounds
+    the corner and you reappear at spawn, at full health, having lost nothing.
+    Inside your own spawn there is nothing to escape from. (IsInSafezone treats
+    a map with no published spawns as all-safe, so this doesn't lock the button
+    during the pre-round wait.)
+
+    Still rate-limited on top of that, purely so a held-down bind can't respawn
+    a player every frame.
 ]]
-local REKIT_INTERVAL = 20
+local REKIT_INTERVAL = 5
 
 concommand.Add("tpg_rekit", function(ply)
     if not IsValid(ply) or not ply:Alive() then return end
     if not TPG.Util.IsOnTeam(ply) then return end
+
+    if TPG.Protection and TPG.Protection.IsInSafezone
+        and not TPG.Protection.IsInSafezone(ply) then
+        TPG.Util.ChatMessage(ply, "[TPG] You can only respawn to change loadout " ..
+            "inside your own spawn zone.", Color(255, 200, 0))
+        return
+    end
 
     local pState = TPG.State.GetPlayer(ply)
     local ready  = (pState.lastRekit or -math.huge) + REKIT_INTERVAL

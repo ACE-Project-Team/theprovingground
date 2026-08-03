@@ -45,6 +45,26 @@ local function roundsFor(cfg, swep, class, category)
     return rounds
 end
 
+--[[
+    Which menu tab this weapon belongs under.
+
+    An explicit override wins; otherwise the SWEP's own SubCategory is run
+    through SubCategoryAlias, which merges packs' near-duplicate names and drops
+    the ones that aren't a weapon class at all. A `false` alias means "no tab" --
+    distinct from "no alias entry", which passes the raw string straight
+    through, so an unknown pack still gets sensible grouping for free.
+]]
+local function subCategoryFor(cfg, swep, override)
+    if override.subCategory ~= nil then return override.subCategory or nil end
+
+    local raw = swep and swep.SubCategory
+    if not raw then return nil end
+
+    local alias = cfg.SubCategoryAlias and cfg.SubCategoryAlias[raw]
+    if alias == false then return nil end
+    return alias or raw
+end
+
 local function passesExclude(cfg, swep, class)
     if cfg.Exclude[class] then return false end
 
@@ -102,7 +122,7 @@ function TPG.Weapons.Discover()
             -- Shared, unlike PrintName and Slot on some SWEPs, so both realms
             -- agree on it. The menu groups by this so a forty-weapon Primary
             -- list becomes "Assault Rifles / SMGs / Shotguns / ...".
-            subCategory = override.subCategory or swep.SubCategory,
+            subCategory = subCategoryFor(cfg, swep, override),
             rounds = roundsFor(cfg, swep, class, cat),
             enabled = true,
         }

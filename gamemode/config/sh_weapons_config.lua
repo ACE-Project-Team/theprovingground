@@ -26,6 +26,39 @@ TPG.WeaponConfig = {
         [4] = "Special",
     },
 
+    --[[
+        Tidy-up for the SWEP.SubCategory strings the loadout menu groups by.
+
+        Left alone, the tab strip is whatever every installed pack happened to
+        type: "Assault Rifles" and "Assault Rifles/Rifles" become two tabs
+        holding the same kind of gun, "LMGs" and "Machine Guns" split the
+        machine guns in half, and a pack's dev tag ("/PUBLIC TEST") gets a tab
+        of its own.
+
+        A string on the right merges that raw value into a real group. `false`
+        drops it: those weapons still appear, under "All", they just don't earn
+        a tab. Matching is exact -- these are authored strings, not user input.
+    ]]
+    SubCategoryAlias = {
+        ["Assault Rifles/Rifles"] = "Assault Rifles",
+        ["Rifles"]                = "Assault Rifles",
+        ["Battle Rifles"]         = "Assault Rifles",
+        ["LMGs"]                  = "Machine Guns",
+        ["Light Machine Guns"]    = "Machine Guns",
+        ["SMGs"]                  = "Submachine Guns",
+        ["Snipers"]               = "Sniper Rifles",
+        ["Launchers"]             = "Anti-Tank",
+        ["Rocket Launchers"]      = "Anti-Tank",
+        ["RPGs"]                  = "Anti-Tank",
+        ["Grenades/Mines"]        = "Grenades",
+        ["Tools"]                 = false,
+        ["/PUBLIC TEST"]          = false,
+        -- ACE tags every launcher, the mortar and the AMR alike as "Special",
+        -- which says nothing about any of them. The ones worth grouping get an
+        -- explicit subCategory in Overrides below.
+        ["Special"]               = false,
+    },
+
     -- Baseline move-speed bonus per category (negative = slower). Overrides win.
     DefaultSpeed = {
         Primary   = -5,
@@ -90,7 +123,8 @@ TPG.WeaponConfig = {
         Per-weapon tuning, and the ONE place a realm split can be repaired.
 
         Any field overrides the discovered/default value: name, speedBonus,
-        cost (economy), category (force a bucket).
+        cost (economy), category (force a bucket), subCategory (which tab it
+        shows under in the loadout menu).
 
         Discovery buckets by SWEP.Slot, but a SWEP is free to declare Slot inside
         `if CLIENT then` -- ACE does exactly that for its whole Grenades/Mines
@@ -106,27 +140,46 @@ TPG.WeaponConfig = {
         -- grenades/binocular are Slot 4 in ACE but belong with sidearms
         ["weapon_ace_grenade"]      = { category = "Secondary", speedBonus = 0 },
         ["weapon_ace_smokegrenade"] = { category = "Secondary", speedBonus = 0 },
-        ["weapon_ace_binocular"]    = { category = "Secondary", speedBonus = 8 },
+        ["weapon_ace_binocular"]    = { category = "Secondary", speedBonus = 8, subCategory = "Equipment" },
         -- S.L.A.M. is the third client-only-Slot weapon and the one that had no
         -- override, so it was the one that broke. It's a Special: a placed
         -- charge you take INSTEAD of a launcher, not a sidearm like the
         -- grenades. PrintName is client-only too, hence the explicit name --
         -- otherwise the server logs it as "ACE Base Weapon".
-        ["weapon_ace_slam"]         = { category = "Special", name = "Mine-S.L.A.M.", speedBonus = 0 },
+        ["weapon_ace_slam"]         = { category = "Special", name = "Mine-S.L.A.M.", speedBonus = 0, subCategory = "Mines" },
         -- ACE files the guided launchers and the mortar under Slot 3, the same
         -- slot as its sniper rifles, so discovery bucketed them as Primary --
         -- you could carry a Javelin AS your rifle and still take an AT-4 in the
         -- Special slot on top. They're launchers; put them in the launcher slot,
         -- where they compete with the other anti-tank options.
-        ["weapon_ace_javelin"]        = { category = "Special" },
-        ["weapon_ace_stinger"]        = { category = "Special" },
-        ["weapon_ace_portablemortar"] = { category = "Special" },
+        ["weapon_ace_javelin"]        = { category = "Special", subCategory = "Anti-Tank" },
+        ["weapon_ace_stinger"]        = { category = "Special", subCategory = "Anti-Air" },
+        ["weapon_ace_portablemortar"] = { category = "Special", subCategory = "Grenade Launchers" },
         -- ACE Weapons+ makes the same mistake with its two MANPADS and the M32
         -- revolver grenade launcher -- all three are Slot 3. Its RPGs are
         -- correctly Slot 4 and need no override.
-        ["weapon_ace_9k32"]  = { category = "Special" },
-        ["weapon_ace_9k38"]  = { category = "Special" },
-        ["weapon_ace_m32gl"] = { category = "Special" },
+        ["weapon_ace_9k32"]  = { category = "Special", subCategory = "Anti-Air" },
+        ["weapon_ace_9k38"]  = { category = "Special", subCategory = "Anti-Air" },
+        ["weapon_ace_m32gl"] = { category = "Special", subCategory = "Grenade Launchers" },
+
+        --[[
+            Tab placement for the weapons ACE files under its catch-all
+            "Special" subcategory (see SubCategoryAlias). These are the ones
+            worth finding by group: the anti-tank tube you take to answer a
+            tank, and the airburst launcher you take to answer infantry in
+            cover.
+
+            The anti-materiel rifle is here because it's the odd one out -- it's
+            a PRIMARY, so it never sat with the launchers, and a player looking
+            for something that hurts vehicles has no reason to expect it filed
+            under "Special" among the rifles.
+        ]]
+        ["weapon_ace_amr"]   = { subCategory = "Anti-Tank" },
+        ["weapon_ace_at4"]   = { subCategory = "Anti-Tank" },
+        ["weapon_ace_at4t"]  = { subCategory = "Anti-Tank" },
+        ["weapon_ace_xm25"]  = { subCategory = "Grenade Launchers" },
+        ["weapon_ace_flaregun"]     = { subCategory = "Equipment" },
+        ["weapon_ace_minedetector"] = { subCategory = "Equipment" },
         -- heavy weapons slow you down more
         ["weapon_ace_m249saw"] = { speedBonus = -15 },
         ["weapon_ace_m60"]     = { speedBonus = -15 },
@@ -160,8 +213,9 @@ TPG.WeaponConfig = {
         Secondary = {},
         Special   = {
             ["ace_mines"] = {
-                name       = "Mines",
-                speedBonus = 0,
+                name        = "Mines",
+                subCategory = "Mines",
+                speedBonus  = 0,
                 multipleClasses = {
                     "weapon_ace_antipersonmine",
                     "weapon_ace_boundingmine",

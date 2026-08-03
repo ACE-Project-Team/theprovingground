@@ -97,29 +97,59 @@ local BASE_H = 1080
 
 TPG.UI.scale = 1
 
--- Authored at 1080p; rebuilt whenever the screen size changes.
+--[[
+    Authored at 1080p; rebuilt whenever the screen size changes.
+
+    Two families, and the split is deliberate.
+
+    Exo 2 is the brand face (it's what the logo and the point tool use) and it
+    is a SEMI-CONDENSED display font: narrow letters, and a space barely wider
+    than a stroke. That's exactly right for the things it's used for here --
+    tickets, point letters, compass headings, headings -- single words and
+    numbers, large, read at a glance.
+
+    It is wrong for sentences. At 14-19px a line like "premium gear is paid for
+    with a cooldown" closes its word gaps until it reads as one long word. So
+    everything that forms a SENTENCE uses Roboto, which ships with the game and
+    has normal spacing at small sizes.
+
+    Every entry asks for weight 500 (normal) even where the face is bold,
+    because the weight is already baked into the family name being requested.
+    Asking for 800 on top makes the renderer synthesize more weight over an
+    already extra-bold face: strokes fatten, sidebearings don't, and neighbours
+    end up touching.
+]]
+local DISPLAY   = "Exo 2 ExtraBold"
+local DISPLAYMD = "Exo 2 SemiBold"
+-- Roboto ships with the game and is one family, so its bold comes from the
+-- weight parameter rather than from a second family name -- the opposite of the
+-- Exo faces above, and the reason the two are declared differently below.
+local BODY      = "Roboto"
+
 local FONTS = {
-    ["TPG.HUD.Big"]   = { font = "Exo 2 ExtraBold", size = 30, weight = 800 },
-    ["TPG.HUD.Num"]   = { font = "Exo 2 ExtraBold", size = 22, weight = 800 },
-    ["TPG.HUD.Label"] = { font = "Exo 2 SemiBold",  size = 17, weight = 600 },
-    ["TPG.HUD.Small"] = { font = "Exo 2",           size = 15, weight = 500 },
-    ["TPG.HUD.Pip"]   = { font = "Exo 2 ExtraBold", size = 16, weight = 800 },
+    -- Display: numbers, single words, glanceable.
+    ["TPG.HUD.Big"]   = { font = DISPLAY,   size = 30, weight = 500 },
+    ["TPG.HUD.Num"]   = { font = DISPLAY,   size = 22, weight = 500 },
+    ["TPG.HUD.Pip"]   = { font = DISPLAY,   size = 16, weight = 500 },
 
     -- The compass gets its own pair rather than borrowing Label/Small. It's
     -- read at a glance while moving, from the middle of the screen, with the
     -- world behind it -- the same size that works for a docked panel label is
     -- too small out there.
-    ["TPG.HUD.Compass"]     = { font = "Exo 2 ExtraBold", size = 27, weight = 800 },
-    ["TPG.HUD.CompassNum"]  = { font = "Exo 2 SemiBold",  size = 19, weight = 600 },
+    ["TPG.HUD.Compass"]    = { font = DISPLAY,   size = 27, weight = 500 },
+    ["TPG.HUD.CompassNum"] = { font = DISPLAYMD, size = 19, weight = 500 },
 
-    -- Menus. Same family as the HUD so the loadout screen and the thing it
-    -- configures look like one gamemode rather than two. Sized a step up from
-    -- the HUD's: a HUD label is glanced at, menu text is read.
-    ["TPG.Menu.Title"] = { font = "Exo 2 ExtraBold", size = 28, weight = 800 },
-    ["TPG.Menu.Head"]  = { font = "Exo 2 SemiBold",  size = 19, weight = 600 },
-    ["TPG.Menu.Item"]  = { font = "Exo 2 SemiBold",  size = 18, weight = 600 },
-    ["TPG.Menu.Small"] = { font = "Exo 2",           size = 16, weight = 500 },
-    ["TPG.Menu.Tiny"]  = { font = "Exo 2",           size = 14, weight = 500 },
+    -- Body: anything that can be a phrase.
+    ["TPG.HUD.Label"] = { font = BODY, size = 17, weight = 700 },
+    ["TPG.HUD.Small"] = { font = BODY, size = 15, weight = 500 },
+
+    -- Menus. Sized a step up from the HUD's: a HUD label is glanced at, menu
+    -- text is read. Only the title is display -- it's one word.
+    ["TPG.Menu.Title"] = { font = DISPLAY, size = 28, weight = 500 },
+    ["TPG.Menu.Head"]  = { font = BODY,    size = 18, weight = 700 },
+    ["TPG.Menu.Item"]  = { font = BODY,    size = 17, weight = 700 },
+    ["TPG.Menu.Small"] = { font = BODY,    size = 16, weight = 500 },
+    ["TPG.Menu.Tiny"]  = { font = BODY,    size = 14, weight = 500 },
 }
 
 --[[
