@@ -111,22 +111,60 @@ end
 --[[
     Shared top-HUD layout.
 
-    The three stacked centre elements (score bar, point pips, overtime tag) used
-    to each pick their own Y, two of them off ScrH() percentages, so at some
-    resolutions the overtime tag landed on top of the point row. They're laid
-    out from these constants now, and cl_hud_overtime.lua reads BelowObjectives()
-    rather than guessing -- there is one place that decides what sits where.
-]]
-TPG.UI.Layout = {
-    scoreY = 10, scoreH = 58, scoreW = 750,
-    pipY   = 76, pipSize = 24, pipGap = 6,
-}
+    Everything stacked down the middle (score bar, point pips, compass, overtime
+    tag) and the two corner boxes are laid out from here, in one pass, so no
+    element has to guess where another one ended. Each stacked element asks the
+    one above it where it finished -- BelowObjectives(), BelowCompass() -- which
+    is what stops the overtime tag printing through the point letters and the
+    compass through the pips.
 
--- First free Y under the centre stack, so later elements can never overlap it.
-function TPG.UI.BelowObjectives()
+    All values are authored at 1080p and scaled through TPG.UI.S(). The score
+    panel is the one exception: it also gets CLAMPED against the real screen
+    width, because the corner boxes are anchored to the edges and a fixed 750px
+    centre panel overlaps them below about 1500px of width.
+]]
+TPG.UI.Layout = {}
+
+-- HUDPaint hooks run in an arbitrary order, so any of them may be the first to
+-- need the layout this frame. Recomputing is cheap, but memoising on the frame
+-- number means every element in one frame sees the same numbers even if the
+-- window is being resized while they draw.
+local layoutFrame = -1
+
+function TPG.UI.ComputeLayout()
     local L = TPG.UI.Layout
+    if layoutFrame == FrameNumber() then return L end
+    layoutFrame = FrameNumber()
+
+    local S  = TPG.UI.S
+    local sw = ScrW()
+
+    L.margin = S(20)
+    L.sideW  = S(248)
+    L.sideY  = S(14)
+    L.sideH  = TPG.Config.useACEPoints and S(92) or S(70)
+
+    L.scoreY = S(10)
+    L.scoreH = S(58)
+
+    -- Fit between the corner boxes, never under them, and never so narrow the
+    -- ticket numbers have nowhere to sit.
+    local free = sw - 2 * (L.sideW + L.margin + S(12))
+    L.scoreW = math.max(math.min(S(750), free), S(360))
+    L.scoreX = sw / 2 - L.scoreW / 2
+
+    L.pipY    = L.scoreY + L.scoreH + S(8)
+    L.pipSize = S(24)
+    L.pipGap  = S(6)
+
+    return L
+end
+
+-- Bottom of the point-pip row (or of the score panel when there are no points).
+function TPG.UI.BelowObjectives()
+    local L = TPG.UI.ComputeLayout()
     local hasPips = #objectiveCache > 0
-    return L.pipY + (hasPips and (L.pipSize + 8) or 0)
+    return L.pipY + (hasPips and (L.pipSize + TPG.UI.S(8)) or 0)
 end
 
 -- Main HUD paint
@@ -135,7 +173,8 @@ hook.Add("HUDPaint", "TPG_HUD", function()
     if not IsValid(ply) or not ply:Alive() then return end
 
     local C = TPG.Colors
-    local L = TPG.UI.Layout
+    local S = TPG.UI.S
+    local L = TPG.UI.ComputeLayout()
 
     local teamId = ply:Team()
     local teamColor = C.Team(teamId)
@@ -147,27 +186,27 @@ hook.Add("HUDPaint", "TPG_HUD", function()
 
     -- ── Top left: mode ────────────────────────────────────────────────────
     TPG.UI.Pill(TPG.GetGameTypeName(TPG.UI.State.gameType), "TPG.HUD.Label",
-        20, 14, 34, C.Accent, C.Text)
+        L.margin, S(14), S(34), C.Accent, C.Text)
 
     -- Per-player economy indicator (secondary mode) -- makes clear it's not just
     -- "economy on" but that each player runs a personal budget this round.
     if GetGlobalBool("TPG_EconomyActive", false) then
-        TPG.UI.Pill("PER-PLAYER ECONOMY", "TPG.HUD.Small", 20, 52, 26, C.Good, C.Good)
+        TPG.UI.Pill("PER-PLAYER ECONOMY", "TPG.HUD.Small", L.margin, S(52), S(26), C.Good, C.Good)
     end
 
     -- ── Top right: your team's build budget ───────────────────────────────
     -- The team colour is a 3px edge rather than the panel fill it used to be:
     -- white text on flat #00FF21 was close to unreadable, and a saturated block
     -- that size fought with everything else on screen.
-    local pw, ph = 248, TPG.Config.useACEPoints and 92 or 70
-    local px, py = sw - pw - 20, 14
+    local pw, ph = L.sideW, L.sideH
+    local px, py = sw - pw - L.margin, L.sideY
     TPG.UI.Panel(px, py, pw, ph, teamColor)
-    draw.RoundedBox(0, px, py + 8, 3, ph - 16, teamColor)
+    draw.RoundedBox(0, px, py + S(8), math.max(S(3), 1), ph - S(16), teamColor)
 
     local function stat(row, label, value)
-        local ry = py + 12 + row * 24
-        draw.SimpleText(label, "TPG.HUD.Small", px + 16, ry, C.TextMuted, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
-        draw.SimpleText(value, "TPG.HUD.Small", px + pw - 16, ry, C.Text, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+        local ry = py + S(12) + row * S(24)
+        draw.SimpleText(label, "TPG.HUD.Small", px + S(16), ry, C.TextMuted, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+        draw.SimpleText(value, "TPG.HUD.Small", px + pw - S(16), ry, C.Text, TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
     end
 
     stat(0, "PROPS",  (limits.props or 0) .. " / " .. maxLimits.props)
@@ -178,7 +217,7 @@ hook.Add("HUDPaint", "TPG_HUD", function()
     end
 
     -- ── Top centre: tickets ───────────────────────────────────────────────
-    local sx = sw / 2 - L.scoreW / 2
+    local sx = L.scoreX
     TPG.UI.Panel(sx, L.scoreY, L.scoreW, L.scoreH)
 
     local greenScore = TPG.UI.State.scores[TEAM_GREEN] or 300
@@ -193,24 +232,25 @@ hook.Add("HUDPaint", "TPG_HUD", function()
         edge. Working inward from the panel edge by a text budget instead means
         the numbers are always inside it.
     ]]
-    local PAD, NUMW, GAP, HALFGAP = 16, 48, 8, 26
-    local barH = 22
-    local barY = L.scoreY + 20
+    local PAD, NUMW, GAP, HALFGAP = S(16), S(48), S(8), S(26)
+    local barH = S(22)
+    local barY = L.scoreY + S(20)
     local gx   = sx + PAD + NUMW + GAP
     local barW = (sw / 2 - HALFGAP) - gx
     local rx   = sw / 2 + HALFGAP
+    local barR = S(4)
 
     -- Troughs first, so a team on its last few tickets still shows a bar
     -- against something instead of vanishing into the panel.
-    draw.RoundedBox(4, gx, barY, barW, barH, C.Trough)
-    draw.RoundedBox(4, rx, barY, barW, barH, C.Trough)
+    draw.RoundedBox(barR, gx, barY, barW, barH, C.Trough)
+    draw.RoundedBox(barR, rx, barY, barW, barH, C.Trough)
 
     local gW = math.max(math.Clamp(greenScore / maxScore, 0, 1) * barW, 2)
     local rW = math.max(math.Clamp(redScore   / maxScore, 0, 1) * barW, 2)
     -- Both bars grow away from the centre divider and shrink back toward it, so
     -- "who is winning" reads as which side of the middle is fuller.
-    draw.RoundedBox(4, gx + barW - gW, barY, gW, barH, C.Green)
-    draw.RoundedBox(4, rx, barY, rW, barH, C.Red)
+    draw.RoundedBox(barR, gx + barW - gW, barY, gW, barH, C.Green)
+    draw.RoundedBox(barR, rx, barY, rW, barH, C.Red)
 
     draw.SimpleText(math.floor(greenScore), "TPG.HUD.Num", gx - GAP, barY + barH / 2,
         C.GreenText, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
@@ -236,9 +276,10 @@ hook.Add("HUDPaint", "TPG_HUD", function()
 
                 local bx = startX + (i - 1) * pitch
                 local by = L.pipY
+                local edge = math.max(S(2), 1)
 
-                draw.RoundedBox(4, bx - 2, by - 2, L.pipSize + 4, L.pipSize + 4, C.Shadow)
-                draw.RoundedBox(3, bx, by, L.pipSize, L.pipSize, pointColor)
+                draw.RoundedBox(S(4), bx - edge, by - edge, L.pipSize + edge * 2, L.pipSize + edge * 2, C.Shadow)
+                draw.RoundedBox(S(3), bx, by, L.pipSize, L.pipSize, pointColor)
                 TPG.UI.TextInBox(initial, "TPG.HUD.Pip", bx, by, L.pipSize, L.pipSize,
                     C.Contrast(pointColor))
             end
@@ -266,9 +307,11 @@ function TPG.UI.DrawTeammates(ply, teamId, teamColor)
         local screenPos = pos:ToScreen()
 
         if screenPos.visible then
+            local dot = math.max(TPG.UI.S(6), 3)
             surface.SetDrawColor(teamColor)
-            surface.DrawRect(screenPos.x - 3, screenPos.y - 3, 6, 6)
-            draw.SimpleText(teammate:Nick(), "Default", screenPos.x, screenPos.y + 10, color_white, TEXT_ALIGN_CENTER)
+            surface.DrawRect(screenPos.x - dot / 2, screenPos.y - dot / 2, dot, dot)
+            draw.SimpleText(teammate:Nick(), "TPG.HUD.Small", screenPos.x, screenPos.y + dot + TPG.UI.S(4),
+                color_white, TEXT_ALIGN_CENTER)
         end
     end
 end

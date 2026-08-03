@@ -43,7 +43,12 @@ TPG.Armor = {
         id          = 4,
         name        = "Juggernaut",
         health      = 500,
-        armor       = 999999,
+        -- 15k, not the old 999999. Six-figure armour wasn't a tank-grade tier,
+        -- it was effective immunity to small arms: nothing an infantry weapon
+        -- does could chew through it inside a round, so the only counter was a
+        -- vehicle. 15,000 is still enormous (100x Medium) but it is a pool that
+        -- sustained fire actually empties.
+        armor       = 15000,
         speedBonus  = -40,
         model       = "models/player/combine_super_soldier.mdl",
         canUseSeat  = false,

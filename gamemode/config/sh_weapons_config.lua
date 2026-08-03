@@ -82,13 +82,33 @@ TPG.WeaponConfig = {
         ["disposableat"]              = true,
     },
 
-    -- Per-weapon tuning. Any field overrides the discovered/default value:
-    --   name, speedBonus, cost (economy), category (force a bucket).
+    --[[
+        Per-weapon tuning, and the ONE place a realm split can be repaired.
+
+        Any field overrides the discovered/default value: name, speedBonus,
+        cost (economy), category (force a bucket).
+
+        Discovery buckets by SWEP.Slot, but a SWEP is free to declare Slot inside
+        `if CLIENT then` -- ACE does exactly that for its whole Grenades/Mines
+        family. The client then sees Slot 4 while the server sees the base's
+        Slot 2, so the two realms bucket the same weapon differently: the menu
+        offered S.L.A.M. under Special, the server looked for it in Special,
+        found nothing (it had it under Primary) and answered "that weapon is not
+        available". A `category` override is shared code, so it forces both
+        realms to the same answer -- which is why every client-only-Slot weapon
+        below carries one.
+    ]]
     Overrides = {
         -- grenades/binocular are Slot 4 in ACE but belong with sidearms
         ["weapon_ace_grenade"]      = { category = "Secondary", speedBonus = 0 },
         ["weapon_ace_smokegrenade"] = { category = "Secondary", speedBonus = 0 },
         ["weapon_ace_binocular"]    = { category = "Secondary", speedBonus = 8 },
+        -- S.L.A.M. is the third client-only-Slot weapon and the one that had no
+        -- override, so it was the one that broke. It's a Special: a placed
+        -- charge you take INSTEAD of a launcher, not a sidearm like the
+        -- grenades. PrintName is client-only too, hence the explicit name --
+        -- otherwise the server logs it as "ACE Base Weapon".
+        ["weapon_ace_slam"]         = { category = "Special", name = "Mine-S.L.A.M.", speedBonus = 0 },
         -- ACE files the guided launchers and the mortar under Slot 3, the same
         -- slot as its sniper rifles, so discovery bucketed them as Primary --
         -- you could carry a Javelin AS your rifle and still take an AT-4 in the

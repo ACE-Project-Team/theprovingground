@@ -6,7 +6,10 @@ TPG.GameTypes = {
     [GAMEMODE_CP] = {
         id              = GAMEMODE_CP,
         name            = "Control Points",
-        shortName       = "CP",
+        -- Spelled out rather than "CP": the abbreviation reads as an initialism
+        -- nobody outside the gamemode knows, and the HUD pill sizes itself to
+        -- whatever string it's given (TPG.UI.Pill), so length costs nothing.
+        shortName       = "Control Point",
         description     = "Capture and hold control points",
         useDeathTickets = false,
         defaultCapMul   = 0.02,

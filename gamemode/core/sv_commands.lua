@@ -47,6 +47,32 @@ concommand.Add("tpg_loadout", function(ply, cmd, args)
 
     local weapon = TPG.GetWeapon(key, class)
     if not weapon or weapon.enabled == false then
+        --[[
+            Two very different failures used to share one message.
+
+            An admin-disabled weapon is a real "no". A weapon the server has in
+            a DIFFERENT category is a bug: the client offered it under one slot
+            because the SWEP declares Slot inside `if CLIENT`, so the two realms
+            disagree about where it lives (see sh_weapons_config's Overrides).
+            Nobody could tell those apart from the chat line, and the second one
+            left no trace at all -- so it says so, and names the fix in the
+            server console where an operator will actually see it.
+        ]]
+        if weapon then
+            TPG.Util.ChatMessage(ply, "[TPG] That weapon has been disabled by an admin.", Color(255, 0, 0))
+            return
+        end
+
+        for _, other in ipairs({ "Primary", "Secondary", "Special" }) do
+            if other ~= key and TPG.GetWeapon(other, class) then
+                ErrorNoHalt("[TPG] " .. class .. " was picked as " .. key ..
+                    " but the server has it under " .. other .. ". The SWEP most likely " ..
+                    "sets SWEP.Slot inside `if CLIENT`; add a category override for it " ..
+                    "in config/sh_weapons_config.lua.\n")
+                break
+            end
+        end
+
         TPG.Util.ChatMessage(ply, "[TPG] That weapon is not available.", Color(255, 0, 0))
         return
     end

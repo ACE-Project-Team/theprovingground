@@ -77,25 +77,78 @@ end
 
 if not CLIENT then return end
 
---[[
-    Fonts. Exo 2 is already bundled and resource.AddFile'd for the point tool
-    (see init.lua), so the HUD costs nothing extra to switch onto it and stops
-    looking like stock Derma. Every font falls back to the system default if
-    the download hasn't landed yet, so a first-join client still gets a HUD.
-]]
-surface.CreateFont("TPG.HUD.Big",   { font = "Exo 2 ExtraBold", size = 30, weight = 800, extended = true, antialias = true })
-surface.CreateFont("TPG.HUD.Num",   { font = "Exo 2 ExtraBold", size = 22, weight = 800, extended = true, antialias = true })
-surface.CreateFont("TPG.HUD.Label", { font = "Exo 2 SemiBold",  size = 17, weight = 600, extended = true, antialias = true })
-surface.CreateFont("TPG.HUD.Small", { font = "Exo 2",           size = 15, weight = 500, extended = true, antialias = true })
-surface.CreateFont("TPG.HUD.Pip",   { font = "Exo 2 ExtraBold", size = 16, weight = 800, extended = true, antialias = true })
-
 TPG.UI = TPG.UI or {}
+
+--[[
+    Resolution scaling.
+
+    Every number in the HUD was a raw pixel count picked at 1920x1080. That is
+    only correct at 1080p: on a 1440p or 4K monitor the whole thing shrinks into
+    the top of the screen, and at 1280x720 the 750px score panel is more than
+    half the screen wide and runs into the boxes either side of it.
+
+    So all HUD geometry is authored at 1080p and passed through TPG.UI.S(), and
+    the fonts are built at the matching size. Scale tracks HEIGHT, not width --
+    an ultrawide monitor is not asking for a bigger HUD, it has more room beside
+    the same one. Clamped at both ends so a tiny window still gets legible text
+    and an 8K screen doesn't get a HUD you could read from the next room.
+]]
+local BASE_H = 1080
+
+TPG.UI.scale = 1
+
+-- Authored at 1080p; rebuilt whenever the screen size changes.
+local FONTS = {
+    ["TPG.HUD.Big"]   = { font = "Exo 2 ExtraBold", size = 30, weight = 800 },
+    ["TPG.HUD.Num"]   = { font = "Exo 2 ExtraBold", size = 22, weight = 800 },
+    ["TPG.HUD.Label"] = { font = "Exo 2 SemiBold",  size = 17, weight = 600 },
+    ["TPG.HUD.Small"] = { font = "Exo 2",           size = 15, weight = 500 },
+    ["TPG.HUD.Pip"]   = { font = "Exo 2 ExtraBold", size = 16, weight = 800 },
+
+    -- Menus. Same family as the HUD so the loadout screen and the thing it
+    -- configures look like one gamemode rather than two.
+    ["TPG.Menu.Title"] = { font = "Exo 2 ExtraBold", size = 26, weight = 800 },
+    ["TPG.Menu.Head"]  = { font = "Exo 2 SemiBold",  size = 17, weight = 600 },
+    ["TPG.Menu.Item"]  = { font = "Exo 2 SemiBold",  size = 16, weight = 600 },
+    ["TPG.Menu.Small"] = { font = "Exo 2",           size = 14, weight = 500 },
+    ["TPG.Menu.Tiny"]  = { font = "Exo 2",           size = 12, weight = 500 },
+}
+
+--[[
+    Exo 2 is already bundled and resource.AddFile'd for the point tool (see
+    init.lua), so the HUD costs nothing extra to switch onto it and stops
+    looking like stock Derma. Every font falls back to the system default if the
+    download hasn't landed yet, so a first-join client still gets a HUD.
+]]
+function TPG.UI.BuildFonts()
+    TPG.UI.scale = math.Clamp(ScrH() / BASE_H, 0.72, 2.25)
+
+    for name, def in pairs(FONTS) do
+        surface.CreateFont(name, {
+            font      = def.font,
+            size      = math.max(math.Round(def.size * TPG.UI.scale), 9),
+            weight    = def.weight,
+            extended  = true,
+            antialias = true,
+        })
+    end
+end
+
+TPG.UI.BuildFonts()
+hook.Add("OnScreenSizeChanged", "TPG_UIRescale", TPG.UI.BuildFonts)
+
+-- 1080p-authored pixels -> this screen's pixels. Rounded, because a half-pixel
+-- panel edge draws as a blurry seam.
+function TPG.UI.S(v)
+    return math.Round(v * TPG.UI.scale)
+end
 
 -- Standard panel: dark violet fill with a thin brand-purple top rule, which is
 -- what visually ties every HUD box back to the logo's frame.
 function TPG.UI.Panel(x, y, w, h, accent)
-    draw.RoundedBox(6, x, y, w, h, C.Panel)
-    draw.RoundedBox(0, x + 6, y, w - 12, 2, accent or C.Purple)
+    local inset = TPG.UI.S(6)
+    draw.RoundedBox(TPG.UI.S(6), x, y, w, h, C.Panel)
+    draw.RoundedBox(0, x + inset, y, w - inset * 2, math.max(TPG.UI.S(2), 1), accent or C.Purple)
 end
 
 --[[
@@ -107,7 +160,7 @@ end
     for whatever mode name or font the client actually ends up with.
 ]]
 function TPG.UI.Pill(text, font, x, y, h, accent, color, padX)
-    padX = padX or 14
+    padX = padX or TPG.UI.S(14)
     surface.SetFont(font)
     local tw = surface.GetTextSize(text)
     local w  = tw + padX * 2
@@ -142,4 +195,41 @@ function TPG.UI.TextInBox(text, font, x, y, w, h, color)
         x + (w - tw) / 2,
         y + (h - th) / 2 + th * OPTICAL_DESCENDER,
         color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+end
+
+--[[
+    Fit text to a width, ending in an ellipsis if it doesn't.
+
+    Weapon names come from whatever packs are installed -- "Carl Gustaf M2
+    (HEDP 502)" is a real one -- so no box width is safe on its own. Clipping
+    with a render scissor would hide the overflow but leave a word cut mid-glyph
+    with no sign anything is missing; an ellipsis says "there is more name here"
+    and the full one is in the tooltip.
+
+    Trims from the end one character at a time. Names are short enough that a
+    binary search would only save a few string compares per frame, and this
+    stays correct for multi-byte names (it steps back over UTF-8 continuation
+    bytes rather than splitting a codepoint in half).
+]]
+function TPG.UI.Truncate(text, font, maxW)
+    surface.SetFont(font)
+    if surface.GetTextSize(text) <= maxW then return text end
+
+    local ellipsis = "..."
+    local budget   = maxW - surface.GetTextSize(ellipsis)
+    if budget <= 0 then return ellipsis end
+
+    local cut = string.len(text)
+    while cut > 0 do
+        -- Never cut inside a multi-byte character.
+        while cut > 0 and bit.band(string.byte(text, cut) or 0, 0xC0) == 0x80 do
+            cut = cut - 1
+        end
+        cut = cut - 1
+        if cut <= 0 then break end
+        if surface.GetTextSize(string.sub(text, 1, cut)) <= budget then
+            return string.sub(text, 1, cut) .. ellipsis
+        end
+    end
+    return ellipsis
 end

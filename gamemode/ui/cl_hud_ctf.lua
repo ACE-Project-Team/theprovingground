@@ -62,19 +62,24 @@ hook.Add("HUDPaint", "TPG_CTFHUD", function()
 
     local carrying = (state == flag.STATE_CARRIED and flag:GetCarrier() == ply)
 
+    -- Bottom of the centre stack, not a hardcoded y=118 -- that number was the
+    -- pip row's neighbourhood, so the banner sat on the point letters, and it
+    -- didn't move when the HUD scaled.
+    local S  = TPG.UI.S
     local sw = ScrW()
-    local w, h = 360, 50
-    if carrying then h = h + 44 end   -- room for the prompt + carry-timer bar
-    local x, y = sw / 2 - w / 2, 118
+    local w, h = math.min(S(360), sw * 0.9), S(50)
+    if carrying then h = h + S(44) end   -- room for the prompt + carry-timer bar
+    local x = sw / 2 - w / 2
+    local y = (TPG.UI.BelowOvertime and TPG.UI.BelowOvertime() or TPG.UI.BelowObjectives()) + S(10)
 
-    draw.RoundedBox(6, x, y, w, h, Color(0, 0, 0, 160))
-    draw.SimpleText("CAPTURE THE FLAG", "DermaDefaultBold", x + w / 2, y + 14,
+    draw.RoundedBox(S(6), x, y, w, h, Color(0, 0, 0, 160))
+    draw.SimpleText("CAPTURE THE FLAG", "TPG.HUD.Label", x + w / 2, y + S(14),
         Color(245, 245, 245), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    draw.SimpleText(status, "DermaDefaultBold", x + w / 2, y + 34,
-        sCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    draw.SimpleText(TPG.UI.Truncate(status, "TPG.HUD.Small", w - S(20)), "TPG.HUD.Small",
+        x + w / 2, y + S(34), sCol, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
     if carrying then
-        draw.SimpleText("BRING IT TO YOUR SPAWN!", "DermaDefaultBold", x + w / 2, y + 54,
+        draw.SimpleText("BRING IT TO YOUR SPAWN!", "TPG.HUD.Label", x + w / 2, y + S(54),
             Color(255, 230, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
 
         -- Carry timer: how long before the flag auto-returns (anti-hoarding). The
@@ -83,15 +88,15 @@ hook.Add("HUDPaint", "TPG_CTFHUD", function()
         local total   = TPG.Config.ctfMaxCarryTime or 150
         local remain  = math.max(flag:GetCarryEnd() - CurTime(), 0)
         local frac    = math.Clamp(remain / total, 0, 1)
-        local barW, barH = w - 40, 8
-        local barX, barY = x + 20, y + 68
+        local barW, barH = w - S(40), S(8)
+        local barX, barY = x + S(20), y + S(68)
         local fill = frac > 0.33 and Color(120, 220, 120)
             or Color(240, 90, 70)
 
-        draw.RoundedBox(3, barX - 1, barY - 1, barW + 2, barH + 2, Color(0, 0, 0, 200))
-        draw.RoundedBox(3, barX, barY, barW, barH, Color(45, 45, 45, 220))
-        draw.RoundedBox(3, barX, barY, barW * frac, barH, fill)
-        draw.SimpleText(math.ceil(remain) .. "s", "DermaDefault", x + w / 2, barY + barH + 8,
+        draw.RoundedBox(S(3), barX - 1, barY - 1, barW + 2, barH + 2, Color(0, 0, 0, 200))
+        draw.RoundedBox(S(3), barX, barY, barW, barH, Color(45, 45, 45, 220))
+        draw.RoundedBox(S(3), barX, barY, barW * frac, barH, fill)
+        draw.SimpleText(math.ceil(remain) .. "s", "TPG.HUD.Small", x + w / 2, barY + barH + S(8),
             Color(230, 230, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     end
 end)
