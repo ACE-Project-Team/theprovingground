@@ -7,6 +7,9 @@ include("shared.lua")
 -- Console commands (client-side autocomplete/forwarding shim)
 include("core/sh_commands.lua")
 
+-- Keeps predicted movement in step with the speed the server actually set
+include("player/cl_movement.lua")
+
 -- UI includes
 include("ui/cl_hud.lua")
 include("ui/cl_hud_prep.lua")

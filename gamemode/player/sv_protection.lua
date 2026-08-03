@@ -191,10 +191,42 @@ end
 hook.Add("PlayerGiveSWEP",  "TPG_SWEPRestriction",      RestrictSWEP)
 hook.Add("PlayerSpawnSWEP", "TPG_SWEPSpawnRestriction", RestrictSWEP)
 
--- Spectators are non-combatants: they're in god mode (sv_spawning) and none of
--- the damage they cause lands -- neither from their weapons directly nor from
--- anything they own (a spectator test-tank's gun counts as theirs via CPPI).
-hook.Add("EntityTakeDamage", "TPG_SpectatorNoDamage", function(_, dmg)
+--[[
+    "Am I in a fight right now?"
+
+    Used by the loadout re-kit (core/sv_commands.lua) to decide whether a
+    respawn-to-change-kit is a legitimate one or an escape from a fight that's
+    going badly. Answered by the clock below rather than by proximity or line of
+    sight, because taking fire is the thing that actually matters and it costs
+    one timestamp to know.
+
+    Never having been hit reads as "not in combat", which is the right answer
+    for a fresh spawn and for anyone the round hasn't touched yet.
+]]
+function TPG.Protection.SecondsSinceDamage(ply)
+    local last = TPG.State.GetPlayer(ply).lastDamaged
+    if not last then return math.huge end
+    return CurTime() - last
+end
+
+--[[
+    Two jobs, one hook, in this order on purpose.
+
+    First: spectators are non-combatants. They're in god mode (sv_spawning) and
+    none of the damage they cause lands -- neither from their weapons directly
+    nor from anything they own (a spectator test-tank's gun counts as theirs via
+    CPPI).
+
+    Then: stamp the combat clock. It runs AFTER those returns and checks god
+    mode, so damage that was never going to land doesn't count as being in a
+    fight. That matters for the safezone, which is god mode (see the Think hook
+    above): without the check, a player being plinked at across their own spawn
+    line would be locked out of changing kit by hits that did nothing.
+
+    EntityTakeDamage is a hot hook, so the ordering is also the cheap ordering:
+    everything below is behind a damage-is-actually-happening test.
+]]
+hook.Add("EntityTakeDamage", "TPG_SpectatorNoDamage", function(ent, dmg)
     local attacker = dmg:GetAttacker()
     if IsValid(attacker) and attacker:IsPlayer() and not TPG.Util.IsOnTeam(attacker) then
         return true
@@ -206,5 +238,21 @@ hook.Add("EntityTakeDamage", "TPG_SpectatorNoDamage", function(_, dmg)
         if IsValid(owner) and owner:IsPlayer() and not TPG.Util.IsOnTeam(owner) then
             return true
         end
+    end
+
+    if dmg:GetDamage() <= 0 or not IsValid(ent) then return end
+
+    -- The player themselves, or the one sitting in the thing that got hit --
+    -- being shelled inside a tank is being in a fight just as much as being
+    -- shot on foot is.
+    local hurt
+    if ent:IsPlayer() then
+        hurt = ent
+    elseif ent.GetDriver then
+        hurt = ent:GetDriver()
+    end
+
+    if IsValid(hurt) and hurt:IsPlayer() and not hurt:HasGodMode() then
+        TPG.State.GetPlayer(hurt).lastDamaged = CurTime()
     end
 end)

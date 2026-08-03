@@ -33,6 +33,10 @@ local SLOTS = {
 -- Each slot owns a colour, and it's the same colour on the paperdoll row, on
 -- the panel header and on the border of every box in the grid. That's what
 -- makes a selected box tell you WHICH slot it's selected in.
+-- How much of the panel the paperdoll fills, relative to a snug fit on the
+-- model's render bounds. Under 1 leaves headroom.
+local DOLL_ZOOM = 0.88
+
 local function SlotColor(key)
     local C = TPG.Colors
     if key == "Primary"   then return C.Accent end
@@ -58,10 +62,21 @@ local MC = {
 -- never have to agree.
 local cooldownEnds = {}
 
--- The player's current picks, as the server has them. Panels read this every
--- frame, so a reply that lands after the menu is already open just makes the
--- right things light up rather than needing the menu rebuilt.
+--[[
+    Two different answers to "what have I got".
+
+    `picks` is what the server has SAVED for you -- what you'll get next time you
+    spawn. `live` is what you are carrying right now. They're the same right
+    after a spawn and diverge the moment you click anything, and the menu has to
+    show both: clicking a rifle used to paint "EQUIPPED" across it while the old
+    one was still in your hands, which read as "done" when it meant "next time".
+
+    Panels read these every frame, so a reply that lands after the menu is
+    already open just makes the right things light up rather than needing the
+    menu rebuilt.
+]]
 local picks = {}
+local live  = {}
 
 net.Receive("TPG_GearState", function()
     cooldownEnds = {}
@@ -74,7 +89,34 @@ net.Receive("TPG_GearState", function()
     picks.Secondary = net.ReadString()
     picks.Special   = net.ReadString()
     picks.Armor     = net.ReadUInt(8)
+
+    -- Empty ids / -1 armor mean "hasn't spawned into this loadout yet", which
+    -- is the honest state for anyone waiting on a respawn.
+    live.Primary   = net.ReadString()
+    live.Secondary = net.ReadString()
+    live.Special   = net.ReadString()
+    local armor    = net.ReadInt(9)
+    live.Armor     = armor >= 0 and armor or nil
 end)
+
+-- Is this exact item the one the player is actually carrying, as opposed to the
+-- one they've selected for next time?
+local function IsLive(slotKey, id)
+    local held = live[slotKey]
+    if held == nil or held == "" then return false end
+    return held == id
+end
+
+-- How many slots hold a pick that hasn't been spawned into yet. Four table
+-- lookups, so it's fine to ask every frame.
+local function PendingCount()
+    local n = 0
+    for _, slot in ipairs(SLOTS) do
+        local id = picks[slot.key]
+        if id ~= nil and not IsLive(slot.key, id) then n = n + 1 end
+    end
+    return n
+end
 
 local function CooldownLeft(kind, id)
     local ends = cooldownEnds[TPG.Gear.Key(kind, id)]
@@ -274,8 +316,21 @@ local function OpenLoadoutMenu()
         draw.SimpleText(armor.health .. " health    " .. armor.armor .. " armor    " ..
             speed .. "% move speed", "TPG.Menu.Head", S(14), h / 2 - S(10), C.Text,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
-        draw.SimpleText("Picks are saved as you click them and take effect the next time you spawn.",
-            "TPG.Menu.Small", S(14), h / 2 + S(12), C.TextMuted,
+
+        -- The line only says something reassuring when there IS nothing to do.
+        -- The rest of the time it says the one thing the player needs to know.
+        local pending = PendingCount()
+        local line, lineCol
+        if pending > 0 then
+            line = pending .. (pending == 1 and " change is" or " changes are") ..
+                " waiting -- you keep carrying what you've got until you respawn."
+            lineCol = C.Neutral
+        else
+            line = "Everything selected here is what you're carrying right now."
+            lineCol = C.TextMuted
+        end
+
+        draw.SimpleText(line, "TPG.Menu.Small", S(14), h / 2 + S(12), lineCol,
             TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
     end
 
@@ -284,11 +339,18 @@ local function OpenLoadoutMenu()
     respawn:DockMargin(0, S(9), S(9), S(9))
     respawn:SetWide(S(200))
     respawn:SetText("")
-    respawn:SetTooltip("Inside your own spawn zone only. Doesn't count as a death, " ..
-        "and doesn't re-charge you for gear you already bought this life.")
+    respawn:SetTooltip("In your spawn zone, or anywhere you haven't taken fire for 8 " ..
+        "seconds. Doesn't count as a death, and doesn't re-charge you for gear you " ..
+        "already bought this life.")
+    -- Lit up while there's something to apply, so the button is the answer to
+    -- the footer line rather than a control you have to know about.
     respawn.Paint = function(self, w, h)
-        draw.RoundedBox(S(4), 0, 0, w, h, self:IsHovered() and C.Purple or MC.row)
-        TPG.UI.TextInBox("RESPAWN NOW", "TPG.Menu.Head", 0, 0, w, h, C.Text)
+        local pending = PendingCount() > 0
+        draw.RoundedBox(S(4), 0, 0, w, h,
+            self:IsHovered() and C.Purple or (pending and MC.hover or MC.row))
+        if pending then Outline(w, h, math.max(S(2), 1), C.Neutral) end
+        TPG.UI.TextInBox(pending and "RESPAWN TO APPLY" or "RESPAWN NOW",
+            "TPG.Menu.Head", 0, 0, w, h, C.Text)
     end
     respawn.DoClick = function()
         LocalPlayer():EmitSound("common/wpn_hudoff.wav")
@@ -306,7 +368,19 @@ local function OpenLoadoutMenu()
     local activeSlot = SLOTS[1]
     local activeGroup = nil      -- subcategory filter, nil = all
     local searchText  = ""
-    local RefreshGrid, RefreshTabs   -- forward declarations
+    local RefreshGrid, RefreshTabs, LayoutGrid   -- forward declarations
+    -- Declared up here because the slot buttons below are built before it and
+    -- have to be able to clear it when you change slot.
+    local search
+
+    -- BuildItems walks every SWEP in the slot and stats a model file for each,
+    -- and both the tab strip and the grid want the same answer. Worked out once
+    -- per slot, for as long as this menu is open.
+    local itemCache = {}
+    local function SlotItems(key)
+        if not itemCache[key] then itemCache[key] = BuildItems(key) end
+        return itemCache[key]
+    end
 
     -- Widths are arithmetic, not measured: docking hasn't happened yet when the
     -- grid is first built, so asking a panel how wide it is would return zero.
@@ -365,7 +439,11 @@ local function OpenLoadoutMenu()
         local height = maxs.z - mins.z
         local centre = Vector(0, 0, mins.z + height * 0.52)
         model:SetLookAt(centre)
-        model:SetCamPos(centre + Vector(height * 1.5, 0, height * 0.05))
+        -- Pulled back so the model draws at DOLL_ZOOM of the size it otherwise
+        -- would. Render bounds are the collision-ish box, not the silhouette, so
+        -- the taller helmets sat a little proud of it and clipped through the
+        -- top of the panel; the margin is cheaper than measuring hitboxes.
+        model:SetCamPos(centre + Vector(height * 1.5 / DOLL_ZOOM, 0, height * 0.05))
     end
 
     model.LayoutEntity = function(_, ent)
@@ -426,13 +504,18 @@ local function OpenLoadoutMenu()
                 TEXT_ALIGN_CENTER, TEXT_ALIGN_TOP)
         end
     end
-    vest.DoClick = function()
+    -- Changing slot is changing the question, so the filters that narrowed the
+    -- last one don't carry over -- including the text still sitting in the box.
+    local function SelectSlot(slot)
         surface.PlaySound("buttons/button14.wav")
-        activeSlot = SLOTS[4]
+        activeSlot = slot
         activeGroup, searchText = nil, ""
+        if IsValid(search) then search:SetText("") end
         RefreshTabs()
         RefreshGrid()
     end
+
+    vest.DoClick = function() SelectSlot(SLOTS[4]) end
 
     for _, slot in ipairs(SLOTS) do
         local col = SlotColor(slot.key)
@@ -450,16 +533,23 @@ local function OpenLoadoutMenu()
             if active then Outline(w, h, math.max(S(2), 1), col) end
 
             draw.SimpleText(slot.label, "TPG.Menu.Tiny", S(12), S(7), col)
-            draw.SimpleText(TPG.UI.Truncate(EquippedName(slot.key), "TPG.Menu.Item", w - S(24)),
+
+            -- A row shows the PICK, so it needs to say when the pick isn't what
+            -- you're holding -- otherwise the paperdoll claims you're already
+            -- wearing the armor you just clicked.
+            local id      = picks[slot.key]
+            local pending = id ~= nil and not IsLive(slot.key, id)
+            local nameW   = w - S(24) - (pending and S(64) or 0)
+
+            if pending then
+                draw.SimpleText("ON RESPAWN", "TPG.Menu.Tiny", w - S(12), S(25), C.Neutral,
+                    TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+            end
+
+            draw.SimpleText(TPG.UI.Truncate(EquippedName(slot.key), "TPG.Menu.Item", nameW),
                 "TPG.Menu.Item", S(12), S(23), C.Text)
         end
-        row.DoClick = function()
-            surface.PlaySound("buttons/button14.wav")
-            activeSlot = slot
-            activeGroup, searchText = nil, ""
-            RefreshTabs()
-            RefreshGrid()
-        end
+        row.DoClick = function() SelectSlot(slot) end
     end
 
     -- ── Right: the grid for the active slot ────────────────────────────────
@@ -495,7 +585,7 @@ local function OpenLoadoutMenu()
         box. Nothing on the tab row competes for space now, and the tabs wrap.
     ]]
     local searchW = S(206)
-    local search = vgui.Create("DTextEntry", pane)
+    search = vgui.Create("DTextEntry", pane)
     search:SetSize(searchW, S(28))
     search:SetPos(paneW - searchW - S(14), S(10))
     search:SetPlaceholderText("Search...")
@@ -517,7 +607,7 @@ local function OpenLoadoutMenu()
     end
     search.OnValueChange = function(_, value)
         searchText = string.lower(value or "")
-        RefreshGrid()
+        LayoutGrid()
     end
 
     local tabs = vgui.Create("DPanel", pane)
@@ -544,8 +634,11 @@ local function OpenLoadoutMenu()
     --[[
         One card. Everything static -- the truncated strings, the price, whether
         it even HAS a badge -- is resolved here, once. Paint reads the results.
+
+        Position is NOT set here: cards are built once per slot and then moved
+        around by LayoutGrid as the filter changes (see RefreshGrid).
     ]]
-    local function MakeCard(item, index)
+    local function MakeCard(item)
         local col     = SlotColor(activeSlot.key)
         local dim     = Color(col.r, col.g, col.b, 60)
         local slotKey = activeSlot.key
@@ -554,8 +647,6 @@ local function OpenLoadoutMenu()
 
         local card = vgui.Create("DButton", canvas)
         card:SetSize(cardW, cardH)
-        card:SetPos(((index - 1) % cols) * (cardW + gap),
-                    math.floor((index - 1) / cols) * (cardH + gap))
         card:SetText("")
         card:SetTooltip(item.name)
 
@@ -629,11 +720,22 @@ local function OpenLoadoutMenu()
                 end
             end
 
-            -- "Did I purchase it or not" -- the answer, in words, on the item.
+            --[[
+                "Did I purchase it or not" -- and, just as important, "do I have
+                it yet". Selecting a weapon saves a preference; you keep carrying
+                the old one until you respawn, and a card that just said
+                EQUIPPED made that look like it had already happened.
+
+                Green means it's in your hands. Amber means it isn't yet. The
+                slot's own colour stays on the border, which is what says WHICH
+                slot this is, so the strip is free to mean status instead.
+            ]]
             if selected then
-                draw.RoundedBox(0, 0, h - stripH, w, stripH, col)
-                TPG.UI.TextInBox("EQUIPPED", "TPG.Menu.Tiny", 0, h - stripH, w, stripH,
-                    C.Contrast(col))
+                local held = IsLive(slotKey, item.id)
+                local bar  = held and C.Good or C.Neutral
+                draw.RoundedBox(0, 0, h - stripH, w, stripH, bar)
+                TPG.UI.TextInBox(held and "EQUIPPED" or "RESPAWN TO EQUIP",
+                    "TPG.Menu.Tiny", 0, h - stripH, w, stripH, C.Contrast(bar))
             end
         end
 
@@ -646,25 +748,61 @@ local function OpenLoadoutMenu()
                 chat.AddText(C.Red, "[TPG] " .. item.name .. ": " .. item.warn)
             end
         end
+
+        return card
     end
 
-    RefreshGrid = function()
-        canvas:Clear()
+    --[[
+        Cards for the active slot, built once and then hidden/moved.
 
+        Rebuilding on every keystroke is what made typing in the search box lag:
+        each pass destroyed forty panels and created forty more, and creating a
+        SpawnIcon means asking the icon system for a render of a model it may not
+        have cached yet. Filtering now only ever moves panels that already
+        exist -- a SetVisible and a SetPos each -- so holding a key down costs
+        nothing beyond a string compare per item.
+    ]]
+    local cards = {}
+
+    LayoutGrid = function()
         local shown = 0
-        for _, item in ipairs(BuildItems(activeSlot.key)) do
+
+        for _, entry in ipairs(cards) do
+            local item = entry.item
             local matchesGroup  = (not activeGroup) or item.group == activeGroup
             local matchesSearch = (searchText == "")
                 or string.find(string.lower(item.name), searchText, 1, true) ~= nil
 
             if matchesGroup and matchesSearch then
+                entry.panel:SetPos((shown % cols) * (cardW + gap),
+                                   math.floor(shown / cols) * (cardH + gap))
+                entry.panel:SetVisible(true)
                 shown = shown + 1
-                MakeCard(item, shown)
+            else
+                entry.panel:SetVisible(false)
             end
         end
 
         local rowCount = math.ceil(shown / cols)
         canvas:SetTall(math.max(rowCount * (cardH + gap) - gap, 1))
+
+        -- Back to the top: the list under the scrollbar is a different list now,
+        -- and staying halfway down someone else's results is disorienting.
+        local bar = scroll:GetVBar()
+        if IsValid(bar) then bar:SetScroll(0) end
+    end
+
+    -- Full rebuild: only when the SLOT changes, which is the only time the set
+    -- of cards actually differs.
+    RefreshGrid = function()
+        canvas:Clear()
+        cards = {}
+
+        for _, item in ipairs(SlotItems(activeSlot.key)) do
+            cards[#cards + 1] = { item = item, panel = MakeCard(item) }
+        end
+
+        LayoutGrid()
     end
 
     --[[
@@ -680,13 +818,26 @@ local function OpenLoadoutMenu()
         tabs:Clear()
 
         local groups, seen = {}, {}
-        for _, item in ipairs(BuildItems(activeSlot.key)) do
+        for _, item in ipairs(SlotItems(activeSlot.key)) do
             if item.group and not seen[item.group] then
                 seen[item.group] = true
                 groups[#groups + 1] = item.group
             end
         end
-        table.sort(groups)
+
+        -- Config order, not alphabetical: the strip reads rifle-to-launcher the
+        -- way the slot itself does, instead of putting Anti-Air first because it
+        -- starts with an A. SubCategoryTabs is the whole list of tabs that can
+        -- exist (see sh_weapons_config.lua), so its indices are the order.
+        local order = {}
+        for i, name in ipairs(TPG.WeaponConfig.SubCategoryTabs or {}) do
+            order[name] = i
+        end
+        table.sort(groups, function(a, b)
+            local ia, ib = order[a] or math.huge, order[b] or math.huge
+            if ia ~= ib then return ia < ib end
+            return a < b
+        end)
 
         if #groups < 2 then
             tabs:SetTall(1)
@@ -729,7 +880,7 @@ local function OpenLoadoutMenu()
             tab.DoClick = function()
                 surface.PlaySound("buttons/button14.wav")
                 activeGroup = group or nil
-                RefreshGrid()
+                LayoutGrid()
             end
         end
 

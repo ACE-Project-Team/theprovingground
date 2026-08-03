@@ -126,6 +126,38 @@ local DISPLAYMD = "Exo 2 SemiBold"
 -- Exo faces above, and the reason the two are declared differently below.
 local BODY      = "Roboto"
 
+--[[
+    Cap-height centring correction, per face, read off the font's own metrics.
+
+    TextInBox centres the LINE BOX, and a line box is not symmetrical around the
+    capitals: it runs from the ascender line to the descender line, and neither
+    matches where a lone "T" actually sits. The correction below is the fraction
+    of the line height a capital has to move for its own middle to land on the
+    middle of the box, worked out from the ttf as
+
+        0.5 - ascent/lineHeight + capHeight/(2 * lineHeight)
+
+    using the WINDOWS metrics (usWinAscent/usWinDescent), because that is what
+    GDI reports as the font height and therefore what surface.GetTextSize
+    returns.
+
+    The two faces are wildly different, which is why one shared constant could
+    never be right for both:
+
+        Roboto   ascent 0.950em, descent 0.250em, cap 0.711em  ->  +0.004
+        Exo 2    ascent 1.158em, descent 0.311em, cap 0.690em  ->  -0.053
+
+    Exo 2 reserves more than a full em ABOVE the baseline (accents on capitals),
+    so its line box has a large empty band over the letters and a capital
+    centred in that box sits visibly low -- about 3px low at the point-pip size.
+    That, not the rasteriser, is what kept the pip letters looking off.
+]]
+local CAP_MID = {
+    [DISPLAY]   = -0.053,
+    [DISPLAYMD] = -0.053,
+    [BODY]      =  0.004,
+}
+
 local FONTS = {
     -- Display: numbers, single words, glanceable.
     ["TPG.HUD.Big"]   = { font = DISPLAY,   size = 30, weight = 500 },
@@ -158,6 +190,10 @@ local FONTS = {
     looking like stock Derma. Every font falls back to the system default if the
     download hasn't landed yet, so a first-join client still gets a HUD.
 ]]
+-- Font name -> its face's cap-centring correction, so TextInBox can look it up
+-- by the name it was handed without knowing which family is behind it.
+TPG.UI.CapMid = TPG.UI.CapMid or {}
+
 function TPG.UI.BuildFonts()
     TPG.UI.scale = math.Clamp(ScrH() / BASE_H, 0.72, 2.25)
 
@@ -169,6 +205,7 @@ function TPG.UI.BuildFonts()
             extended  = true,
             antialias = true,
         })
+        TPG.UI.CapMid[name] = CAP_MID[def.font] or 0
     end
 end
 
@@ -218,25 +255,27 @@ end
     visible glyph up by about half of it.
 
     GMod can't measure a glyph's actual bounding box (surface.GetTextSize
-    returns the line height, not the ink), so this applies a fixed optical
-    correction instead: nudge down by OPTICAL_DESCENDER of the line height.
-    0.06 lands capitals on the centre of the tile. Text with real descenders (a
-    "g", a "p") sits a hair low as a result, which is why this is used for the
-    pips and not for body text.
+    returns the line height, not the ink), so the shift comes from the FACE's
+    published metrics instead -- see CapMid above. It's per-font because the two
+    families here disagree by a tenth of a line height, which at pip size is
+    around three pixels: a single number tuned until Roboto looked right left
+    Exo 2 sitting low, and vice versa.
+
+    Text with real descenders (a "g", a "p") sits a hair low as a result, which
+    is why this is used for pips, badges and button captions -- short, capital,
+    centred things -- and not for body text.
 
     Both coordinates are ROUNDED. Centring produces a half-pixel offset whenever
     the box and the glyph differ by an odd number of pixels, and a glyph
     rasterised on a half-pixel is blurred asymmetrically -- it reads as being
     nudged up and to the left, which is exactly what the point pips looked like.
 ]]
-local OPTICAL_DESCENDER = 0.06
-
 function TPG.UI.TextInBox(text, font, x, y, w, h, color)
     surface.SetFont(font)
     local tw, th = surface.GetTextSize(text)
     draw.SimpleText(text, font,
         math.Round(x + (w - tw) / 2),
-        math.Round(y + (h - th) / 2 + th * OPTICAL_DESCENDER),
+        math.Round(y + (h - th) / 2 + th * (TPG.UI.CapMid[font] or 0)),
         color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 end
 

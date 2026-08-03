@@ -46,23 +46,43 @@ local function roundsFor(cfg, swep, class, category)
 end
 
 --[[
-    Which menu tab this weapon belongs under.
+    Fold a pack's SubCategory string down to something matchable.
 
-    An explicit override wins; otherwise the SWEP's own SubCategory is run
-    through SubCategoryAlias, which merges packs' near-duplicate names and drops
-    the ones that aren't a weapon class at all. A `false` alias means "no tab" --
-    distinct from "no alias entry", which passes the raw string straight
-    through, so an unknown pack still gets sensible grouping for free.
+    Lowercased, everything that isn't a letter or a digit removed, and a
+    trailing plural "s" dropped. That is what makes "Submachine Guns",
+    "sub-machine guns" and "Submachine Gun" one key instead of three tabs, and
+    it's why SubCategoryAlias is written in that flattened form.
+]]
+local function normalise(raw)
+    local s = string.gsub(string.lower(raw), "[^%a%d]", "")
+    return (string.gsub(s, "s$", ""))
+end
+
+-- Raw SubCategory strings seen this discovery that aren't in the alias table.
+-- Reported once, at the end of Discover, so adding a new pack's categories is a
+-- deliberate edit rather than a guess.
+local unknownSubCategories
+
+--[[
+    Which menu tab this weapon belongs under, or nil for "no tab".
+
+    An explicit override wins; otherwise the SWEP's own SubCategory is
+    normalised and looked up in SubCategoryAlias. The table is a CLOSED list:
+    anything not in it gets no tab at all rather than inventing one, because
+    letting packs name their own tabs is exactly how the strip filled up with
+    "Machine gun" next to "Machine Guns".
 ]]
 local function subCategoryFor(cfg, swep, override)
     if override.subCategory ~= nil then return override.subCategory or nil end
 
     local raw = swep and swep.SubCategory
-    if not raw then return nil end
+    if not raw or raw == "" then return nil end
 
-    local alias = cfg.SubCategoryAlias and cfg.SubCategoryAlias[raw]
-    if alias == false then return nil end
-    return alias or raw
+    local alias = cfg.SubCategoryAlias and cfg.SubCategoryAlias[normalise(raw)]
+    if alias == nil and unknownSubCategories then
+        unknownSubCategories[raw] = true
+    end
+    return alias or nil
 end
 
 local function passesExclude(cfg, swep, class)
@@ -72,8 +92,11 @@ local function passesExclude(cfg, swep, class)
     -- one, and it doesn't depend on the class name happening to contain a word.
     -- The pack mines are classed weapon_ace_PMN / TM62 / VS50, which no sane
     -- name pattern catches, but all three declare SubCategory "Mines".
+    -- Normalised the same way the tab aliases are, so "Mines", "Mine" and
+    -- "mines" are one rule rather than three that have to be kept in step.
     local sub = swep.SubCategory
-    if sub and cfg.ExcludeSubCategories and cfg.ExcludeSubCategories[sub] then
+    if sub and sub ~= "" and cfg.ExcludeSubCategories
+        and cfg.ExcludeSubCategories[normalise(sub)] then
         return false
     end
 
@@ -89,6 +112,7 @@ function TPG.Weapons.Discover()
     if not cfg then return end
 
     local buckets = { Primary = {}, Secondary = {}, Special = {} }
+    unknownSubCategories = {}
 
     -- "None" option per category.
     for _, cat in ipairs(CATEGORIES) do
@@ -162,6 +186,20 @@ function TPG.Weapons.Discover()
     if TPG.Weapons._state then
         TPG.Weapons.ApplyState(TPG.Weapons._state)
     end
+
+    -- Server-side only: this is an operator note, not something a player can do
+    -- anything about, and printing it on every client is just spam.
+    if SERVER then
+        local unknown = {}
+        for raw in pairs(unknownSubCategories) do unknown[#unknown + 1] = raw end
+        if #unknown > 0 then
+            table.sort(unknown)
+            MsgN("[TPG] Weapon categories with no tab (add them to " ..
+                "SubCategoryAlias in config/sh_weapons_config.lua to group them): \"" ..
+                table.concat(unknown, "\", \"") .. "\"")
+        end
+    end
+    unknownSubCategories = nil
 end
 
 -- Apply admin enable/override state. Shape:

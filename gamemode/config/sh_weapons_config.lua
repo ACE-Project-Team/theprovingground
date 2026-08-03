@@ -27,36 +27,120 @@ TPG.WeaponConfig = {
     },
 
     --[[
-        Tidy-up for the SWEP.SubCategory strings the loadout menu groups by.
+        The loadout menu's tab strip. Manual, and deliberately so.
 
-        Left alone, the tab strip is whatever every installed pack happened to
-        type: "Assault Rifles" and "Assault Rifles/Rifles" become two tabs
-        holding the same kind of gun, "LMGs" and "Machine Guns" split the
-        machine guns in half, and a pack's dev tag ("/PUBLIC TEST") gets a tab
-        of its own.
+        SWEP.SubCategory is free text, and every pack spells it differently:
+        "Submachine Guns" and "sub-machine guns", "Machine Gun" and "Machine
+        Guns", "Pistol" and "Pistols". Taking those at face value gave a strip
+        of near-duplicate tabs that split one kind of gun across two of them, so
+        the tabs are now a CLOSED list -- SubCategoryTabs is every tab that can
+        exist, in the order they appear, and nothing else gets one.
 
-        A string on the right merges that raw value into a real group. `false`
-        drops it: those weapons still appear, under "All", they just don't earn
-        a tab. Matching is exact -- these are authored strings, not user input.
+        SubCategoryAlias maps a pack's raw string onto one of those tabs.
+        Matching is done on a normalised form (lowercased, punctuation and
+        spaces removed, trailing "s" dropped -- see sh_weapons.lua), which is
+        what collapses the dash/plural/capitalisation variants above onto a
+        single key: "sub-machine guns", "Submachine Gun" and "SUBMACHINE GUNS"
+        all arrive here as "submachinegun".
+
+        An unlisted value gets NO tab. Those weapons still appear in the slot,
+        under "All" -- they just don't invent a tab nobody asked for. Discovery
+        prints anything it didn't recognise to the server console once, so a new
+        pack's categories can be added here deliberately.
     ]]
+    SubCategoryTabs = {
+        -- Primary
+        "Assault Rifles",
+        "Submachine Guns",
+        "Shotguns",
+        "Sniper Rifles",
+        "Machine Guns",
+        -- Secondary
+        "Pistols",
+        "Grenades",
+        "Equipment",
+        -- Special
+        "Anti-Tank",
+        "Anti-Air",
+        "Grenade Launchers",
+        "Mines",
+    },
+
     SubCategoryAlias = {
-        ["Assault Rifles/Rifles"] = "Assault Rifles",
-        ["Rifles"]                = "Assault Rifles",
-        ["Battle Rifles"]         = "Assault Rifles",
-        ["LMGs"]                  = "Machine Guns",
-        ["Light Machine Guns"]    = "Machine Guns",
-        ["SMGs"]                  = "Submachine Guns",
-        ["Snipers"]               = "Sniper Rifles",
-        ["Launchers"]             = "Anti-Tank",
-        ["Rocket Launchers"]      = "Anti-Tank",
-        ["RPGs"]                  = "Anti-Tank",
-        ["Grenades/Mines"]        = "Grenades",
-        ["Tools"]                 = false,
-        ["/PUBLIC TEST"]          = false,
-        -- ACE tags every launcher, the mortar and the AMR alike as "Special",
-        -- which says nothing about any of them. The ones worth grouping get an
-        -- explicit subCategory in Overrides below.
-        ["Special"]               = false,
+        -- Rifles
+        ["assaultrifle"]       = "Assault Rifles",
+        ["assaultriflesrifle"] = "Assault Rifles",   -- "Assault Rifles/Rifles"
+        ["rifle"]              = "Assault Rifles",
+        ["battlerifle"]        = "Assault Rifles",
+        ["carbine"]            = "Assault Rifles",
+
+        -- Submachine guns
+        ["submachinegun"] = "Submachine Guns",
+        ["smg"]           = "Submachine Guns",
+        ["machinepistol"] = "Submachine Guns",
+
+        -- Machine guns
+        ["machinegun"]         = "Machine Guns",
+        ["lightmachinegun"]    = "Machine Guns",
+        ["lmg"]                = "Machine Guns",
+        ["heavymachinegun"]    = "Machine Guns",
+        ["hmg"]                = "Machine Guns",
+        ["gpmg"]               = "Machine Guns",
+
+        -- Shotguns / precision
+        ["shotgun"]      = "Shotguns",
+        ["sniperrifle"]  = "Sniper Rifles",
+        ["sniper"]       = "Sniper Rifles",
+        ["marksmanrifle"]= "Sniper Rifles",
+        ["dmr"]          = "Sniper Rifles",
+
+        -- Sidearms and kit
+        ["pistol"]   = "Pistols",
+        ["handgun"]  = "Pistols",
+        ["sidearm"]  = "Pistols",
+        ["revolver"] = "Pistols",
+
+        ["grenade"]      = "Grenades",
+        ["grenadesmine"] = "Grenades",   -- ACE's own "Grenades/Mines"
+        ["explosive"]    = "Grenades",
+        ["throwable"]    = "Grenades",
+
+        ["equipment"] = "Equipment",
+        ["gear"]      = "Equipment",
+        ["utility"]   = "Equipment",
+
+        -- Heavy
+        ["antitank"]       = "Anti-Tank",
+        ["at"]             = "Anti-Tank",
+        ["launcher"]       = "Anti-Tank",
+        ["rocketlauncher"] = "Anti-Tank",
+        ["rpg"]            = "Anti-Tank",
+        ["antimateriel"]   = "Anti-Tank",
+        ["antimaterial"]   = "Anti-Tank",
+
+        ["antiair"] = "Anti-Air",
+        ["aa"]      = "Anti-Air",
+        ["manpad"]  = "Anti-Air",
+        ["sam"]     = "Anti-Air",
+
+        ["grenadelauncher"] = "Grenade Launchers",
+        ["gl"]              = "Grenade Launchers",
+
+        ["mine"] = "Mines",
+
+        --[[
+            Explicitly no tab, so they don't turn up in the console's "didn't
+            recognise this" note every map. ACE tags every launcher, the mortar
+            and the AMR alike as "Special", which says nothing about any of
+            them; the ones worth grouping get an explicit subCategory in
+            Overrides below.
+        ]]
+        ["special"]     = false,
+        ["tool"]        = false,
+        ["publictest"]  = false,
+        ["misc"]        = false,
+        ["other"]       = false,
+        ["uncategorized"] = false,
     },
 
     -- Baseline move-speed bonus per category (negative = slower). Overrides win.
@@ -85,8 +169,10 @@ TPG.WeaponConfig = {
     -- "Grenades/Mines", and they're bundled into the virtual entry via the
     -- Exclude list below. Only packs using a bare "Mines" subcategory are hit,
     -- which is what ACE Weapons+ does.
+    -- Keyed on the normalised form (see SubCategoryAlias above), so "Mines",
+    -- "Mine" and "mines" are all the same rule.
     ExcludeSubCategories = {
-        ["Mines"] = true,
+        ["mine"] = true,
     },
 
     -- Lua patterns (matched against the lowercase class) for dev/test junk to

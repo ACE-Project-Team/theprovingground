@@ -23,6 +23,9 @@ AddCSLuaFile("core/sh_commands.lua")
 AddCSLuaFile("objectives/sh_controlpoint.lua")
 AddCSLuaFile("maps/_loader.lua")
 
+-- Client player systems
+AddCSLuaFile("player/cl_movement.lua")
+
 -- Client UI
 AddCSLuaFile("ui/cl_hud.lua")
 AddCSLuaFile("ui/cl_hud_prep.lua")

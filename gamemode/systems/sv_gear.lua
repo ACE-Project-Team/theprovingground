@@ -104,10 +104,12 @@ hook.Add("PlayerDeath", "TPG_GearLifeEnd", function(victim)
     pState.gearPaidThisLife = nil
 end)
 
--- Push the player's live cooldowns, plus the picks the server actually has on
--- record, so the menu shows what they're really set to rather than what they
--- last clicked in this session. Expired cooldowns are dropped on the way out,
--- which is also the only cleanup that table ever needs.
+-- Push the player's live cooldowns, the picks the server actually has on record
+-- (so the menu shows what they're really set to rather than what they last
+-- clicked in this session), and what they're carrying RIGHT NOW -- which is how
+-- the menu can tell "equipped" apart from "you still have to respawn for this".
+-- Expired cooldowns are dropped on the way out, which is also the only cleanup
+-- that table ever needs.
 function TPG.Gear.Sync(ply)
     if not IsValid(ply) then return end
 
@@ -130,6 +132,10 @@ function TPG.Gear.Sync(ply)
         return isstring(v) and v or default
     end
 
+    -- Nothing carried yet (never spawned this map, or waiting on a respawn) is
+    -- sent as empty ids, which the menu reads as "none of this is live yet".
+    local carried = pState.liveLoadout or {}
+
     net.Start("TPG_GearState")
         net.WriteUInt(table.Count(live), 8)
         for key, ends in pairs(live) do
@@ -141,6 +147,11 @@ function TPG.Gear.Sync(ply)
         net.WriteString(pick("Secondary", dl.Secondary))
         net.WriteString(pick("Special",   dl.Special))
         net.WriteUInt(math.Clamp(tonumber(TPG.Util.GetPData(ply, "Armor", 1)) or 1, 0, 255), 8)
+
+        net.WriteString(carried.Primary   or "")
+        net.WriteString(carried.Secondary or "")
+        net.WriteString(carried.Special   or "")
+        net.WriteInt(carried.Armor and math.Clamp(carried.Armor, -1, 255) or -1, 9)
     net.Send(ply)
 end
 

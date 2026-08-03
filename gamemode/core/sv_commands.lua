@@ -94,17 +94,28 @@ end)
     HAVEN'T paid for still charges normally, so this isn't a way to shop for
     free -- it only stops you being billed twice for the same item.
 
-    Safezone only, because mechanically this IS a suicide: out in the field it
-    would be a free escape from a losing fight -- press it as the tank rounds
-    the corner and you reappear at spawn, at full health, having lost nothing.
-    Inside your own spawn there is nothing to escape from. (IsInSafezone treats
-    a map with no published spawns as all-safe, so this doesn't lock the button
-    during the pre-round wait.)
+    Mechanically this IS a suicide, and the thing worth preventing is using it
+    as a free escape from a losing fight -- press it as the tank rounds the
+    corner and you reappear at spawn, at full health, having lost nothing.
 
-    Still rate-limited on top of that, purely so a held-down bind can't respawn
-    a player every frame.
+    So the gate is combat, not geography. Inside your own spawn it's always
+    allowed (there is nothing to escape from, and IsInSafezone treats a map with
+    no published spawns as all-safe, so the button works during the pre-round
+    wait). Outside, it's allowed once you've gone COMBAT_WINDOW seconds without
+    taking damage -- long enough that you can't use it to dodge the shot that
+    was already on its way, short enough that walking out to the wrong loadout
+    doesn't mean a hike back to spawn.
+
+    "Taking damage" deliberately means damage that LANDED: see
+    sv_protection.lua, where the clock is stamped. Someone under spawn
+    protection or otherwise in god mode isn't in a fight in any sense that
+    matters here, and shouldn't be locked out by hits that did nothing.
+
+    Still rate-limited on top of all that, purely so a held-down bind can't
+    respawn a player every frame.
 ]]
 local REKIT_INTERVAL = 5
+local COMBAT_WINDOW  = 8
 
 concommand.Add("tpg_rekit", function(ply)
     if not IsValid(ply) or not ply:Alive() then return end
@@ -112,9 +123,14 @@ concommand.Add("tpg_rekit", function(ply)
 
     if TPG.Protection and TPG.Protection.IsInSafezone
         and not TPG.Protection.IsInSafezone(ply) then
-        TPG.Util.ChatMessage(ply, "[TPG] You can only respawn to change loadout " ..
-            "inside your own spawn zone.", Color(255, 200, 0))
-        return
+        local since = TPG.Protection.SecondsSinceDamage(ply)
+        if since < COMBAT_WINDOW then
+            TPG.Util.ChatMessage(ply, "[TPG] You're in a fight. Wait " ..
+                math.ceil(COMBAT_WINDOW - since) ..
+                "s without taking damage, or head back to your spawn zone.",
+                Color(255, 200, 0))
+            return
+        end
     end
 
     local pState = TPG.State.GetPlayer(ply)

@@ -112,8 +112,20 @@ function TPG.Loadout.Apply(ply)
     speedBonus = speedBonus + armor.speedBonus
 
     local speedPercent = (TPG.Config.baseSpeedPercent + speedBonus) / 100
-    ply:SetWalkSpeed(TPG.Config.baseWalkSpeed * speedPercent * 2)
-    ply:SetRunSpeed(TPG.Config.baseRunSpeed * speedPercent * 1.7)
+    local walkSpeed = math.Round(TPG.Config.baseWalkSpeed * speedPercent * 2)
+    local runSpeed  = math.Round(TPG.Config.baseRunSpeed * speedPercent * 1.7)
+    ply:SetWalkSpeed(walkSpeed)
+    ply:SetRunSpeed(runSpeed)
+
+    --[[
+        Publish the same two numbers to the client, which needs them to predict
+        movement correctly -- see player/cl_movement.lua. Without this a
+        Juggernaut felt like it was sprinting even though the server had it
+        crawling, because the client was predicting against ACE's fallback
+        speeds instead of the ones set here.
+    ]]
+    ply:SetNWInt("TPG_WalkSpeed", walkSpeed)
+    ply:SetNWInt("TPG_RunSpeed", runSpeed)
 
     -- Give weapons
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
@@ -159,10 +171,26 @@ function TPG.Loadout.Apply(ply)
         end
     end
 
+    local pState = TPG.State.GetPlayer(ply)
+
+    --[[
+        What this player is ACTUALLY carrying, as opposed to what they've got
+        selected in the menu. The two differ whenever a pick was made since the
+        last spawn -- or when a premium pick was denied above and quietly became
+        the free one -- and the menu needs to know which, so it can say "equipped"
+        on the thing in your hands and "on respawn" on the thing that isn't.
+    ]]
+    pState.liveLoadout = {
+        Primary   = primaryId,
+        Secondary = secondaryId,
+        Special   = specialId,
+        Armor     = armorId,
+    }
+
     -- The re-kit flag covers exactly one death-and-respawn (core/sv_commands.lua
     -- sets it, the stats and gear systems read it on the death). Cleared here,
     -- at the end of the spawn it was set for, so the NEXT death is a real one.
-    TPG.State.GetPlayer(ply).rekit = nil
+    pState.rekit = nil
 
     -- Refresh the menu's cooldown countdowns with whatever this spawn just
     -- started (or didn't).
