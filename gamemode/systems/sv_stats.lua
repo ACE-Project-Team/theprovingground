@@ -1,21 +1,34 @@
---[[
-    Persistent Player Stats & Rating (server)
+--[[--
+    Persistent player stats and rating.
 
-    Lifetime stats across all maps/sessions, stored in data/tpg/stats.json
-    keyed by SteamID64 (PData would work per-player, but a file gives us a
-    leaderboard over everyone who's ever played, online or not).
+    Lifetime stats across all maps and sessions, stored in `data/tpg/stats.json`
+    keyed by SteamID64. PData would work per-player, but a file gives us a
+    leaderboard over everyone who has ever played, online or not -- see
+    @{tpg.util.GetPData} for the other half of that split.
 
-    Rating drives the rank ladder (config/sh_ranks.lua) and the skill-based
-    team scramble (sv_teams.lua). Everyone starts at 1000.
+    Rating drives the rank ladder (`config/sh_ranks.lua`) and the skill-based
+    team scramble (`player/sv_teams.lua`). Everyone starts at 1000.
 
-        kill          +10 (+ up to +20 scaled by the victim's vehicle value)
-        death         -4
-        teamkill      -15
-        CP capture    +15 (each player on the point)
-        flag delivery +25
-        round win/loss +30 / -10 (everyone on the team, plus rounds++)
+        kill           +10 (+ up to +20 scaled by the victim's vehicle value)
+        death           -4
+        teamkill       -15
+        CP capture     +15 (each player on the point)
+        flag delivery  +25
+        round result   Elo, see @{OnRoundEnd}
 
-    The profile menu (ui/cl_menu_profile.lua) requests data over TPG_ProfileData.
+    Bots are ignored outright: every accessor here returns nil for them, so
+    nothing a bot does reaches the file.
+
+    The profile menu (`ui/cl_menu_profile.lua`) requests data over the
+    `TPG_ProfileData` net message.
+
+    This file has been broken twice, in ways worth reading before changing it.
+    Both stories are in the comments on the storage section below: one lost
+    every rating to a JSON key coercion, the other meant `Save` never wrote a
+    single byte.
+
+    @module tpg.stats
+    @realm server
 ]]
 
 TPG.Stats = TPG.Stats or {}
@@ -156,6 +169,19 @@ local function Load()
     dirty = true
 end
 
+--[[--
+    Write the leaderboard to disk, if anything has changed since the last write.
+
+    Cheap to call: it returns immediately unless something marked the store
+    dirty, which is why the autosave timer, the shutdown hook and the
+    disconnect hook can all point straight at it.
+
+    On failure it prints a warning and leaves the store dirty, so the next
+    autosave tries again rather than assuming the work is safe. Nothing here
+    deletes a good file before its replacement is in hand.
+
+    @realm server
+]]
 function TPG.Stats.Save()
     if not dirty then return end
     file.CreateDir("tpg")
@@ -237,10 +263,31 @@ local function entry(ply)
     return data[sid]
 end
 
+--[[--
+    A player's lifetime record, creating it on first sight.
+
+    The returned table is the live one, not a copy -- writing to it changes the
+    record, but does *not* mark the store dirty, so a direct write can be lost
+    at the next save. Go through the event functions below unless you have a
+    reason not to.
+
+    @tparam Player ply
+    @treturn ?table `{ sid, name, rating, kills, deaths, teamkills, caps,
+     flags, wins, rounds }`, or nil for a bot or a player whose SteamID64
+     hasn't settled yet.
+    @realm server
+]]
 function TPG.Stats.Get(ply)
     return entry(ply)
 end
 
+--- A player's rating, or 1000 if they have no record.
+-- Safe for anyone, including bots -- unrated players read as the starting
+-- rating rather than nil, which is what lets the scramble weigh a full team
+-- without special-casing newcomers.
+-- @tparam Player ply
+-- @treturn number
+-- @realm server
 function TPG.Stats.GetRating(ply)
     local e = entry(ply)
     return e and e.rating or 1000
@@ -251,11 +298,16 @@ local function addRating(e, amount)
     dirty = true
 end
 
--- Top N by rating, over everyone ever recorded. Duplicate display names are
--- collapsed to a single row (highest rating first, so the best one survives):
--- it keeps the same player from appearing more than once if older junk records
--- exist under a stale key. Two genuinely different players sharing a name is
--- rare enough that showing one of them in a top-N is an acceptable trade.
+--- Top N by rating, over everyone ever recorded, not just who is connected.
+-- Duplicate display names are collapsed to a single row (highest rating first,
+-- so the best one survives): it keeps the same player from appearing more than
+-- once if older junk records exist under a stale key. Two genuinely different
+-- players sharing a name is rare enough that showing one of them in a top-N is
+-- an acceptable trade.
+-- @tparam[opt=10] number n How many rows.
+-- @treturn table List of live record tables, highest rating first. May be
+--  shorter than n, including empty.
+-- @realm server
 function TPG.Stats.GetLeaderboard(n)
     local list = {}
     for _, e in pairs(data) do
@@ -275,7 +327,10 @@ function TPG.Stats.GetLeaderboard(n)
     return top
 end
 
--- Wipe every lifetime record (admin tool for clearing corrupted test data).
+--- Wipe every lifetime record and save immediately.
+-- An admin tool for clearing corrupted test data. There is no undo beyond
+-- whatever `stats.bak.json` still holds, and the next save overwrites that too.
+-- @realm server
 function TPG.Stats.ResetAll()
     data = {}
     dirty = true
@@ -315,7 +370,11 @@ hook.Add("PlayerDeath", "TPG_StatsDeath", function(victim, _inflictor, attacker)
     addRating(ae, 10 + math.min(vehValue / 1000, 20))
 end)
 
--- Control-point capture credit; called from TPG.Objectives.OnCapture per player.
+--- Credit a control-point capture: +1 cap, +15 rating.
+-- Called from `TPG.Objectives.OnCapture` once per player standing on the
+-- point, so a contested cap pays everyone who held it.
+-- @tparam Player ply
+-- @realm server
 function TPG.Stats.OnCapture(ply)
     local e = entry(ply)
     if not e then return end
@@ -323,7 +382,10 @@ function TPG.Stats.OnCapture(ply)
     addRating(e, 15)
 end
 
--- Flag delivery; called from TPG.CTF.OnCapture.
+--- Credit a flag delivery: +1 flag, +25 rating.
+-- Called from `TPG.CTF.OnCapture`, for the carrier only.
+-- @tparam Player ply
+-- @realm server
 function TPG.Stats.OnFlagCapture(ply)
     local e = entry(ply)
     if not e then return end
@@ -358,6 +420,24 @@ local function TeamAverageRating(teamId)
     return total / count
 end
 
+--[[--
+    Apply the round result to everyone on a playing team, then save.
+
+    Elo, not a flat win bonus. The result is predicted from the two teams'
+    average ratings first, and each player only moves by how far the real
+    result was from that prediction: beating a stacked team is worth a lot,
+    beating a team you were always going to beat is worth almost nothing, and
+    losing a match you were expected to lose barely costs you. See the comment
+    above `ELO_K` for why that matters more than it looks.
+
+    Spectators and the unassigned are skipped, and each affected player gets
+    `rounds + 1` (plus `wins + 1` if they won) regardless of the rating move.
+
+    Called from `TPG.Rounds.EndRound`.
+
+    @tparam number winningTeam TEAM_GREEN or TEAM_RED.
+    @realm server
+]]
 function TPG.Stats.OnRoundEnd(winningTeam)
     local avg = {
         [TEAM_GREEN] = TeamAverageRating(TEAM_GREEN),
@@ -382,11 +462,15 @@ function TPG.Stats.OnRoundEnd(winningTeam)
     TPG.Stats.Save()
 end
 
--- How much of a player's record is objective play rather than fragging, as
--- captures+flags per round. The scramble uses this to make sure both sides get
--- people who actually stand on the point (see player/sv_teams.lua) -- rating
--- alone splits the good shooters evenly and can still hand one team every
--- capper on the server.
+--- How much of a player's record is objective play rather than fragging.
+-- Captures plus flags, per round. The scramble uses this to make sure both
+-- sides get people who actually stand on the point (see
+-- `player/sv_teams.lua`) -- rating alone splits the good shooters evenly and
+-- can still hand one team every capper on the server.
+-- @tparam Player ply
+-- @treturn number Objectives per round. 0 under three rounds played, where
+--  there isn't a record yet, just noise.
+-- @realm server
 function TPG.Stats.GetObjectiveRate(ply)
     local e = entry(ply)
     if not e then return 0 end
