@@ -1,5 +1,18 @@
---[[
-    Central Game State Management
+--[[--
+    Central game state: the server's authoritative picture of the round.
+
+    One table, `TPG.State`, holding the current game type, both teams' ticket
+    pools, this round's spawns, the prop/weight/point limits and what each team
+    has spent of them, the live objectives, round bookkeeping, per-player state
+    and the voting state. Clients get a copy of the parts they need through
+    `TPG.Net.SyncState`; nothing here is networked automatically.
+
+    Per-player state is keyed by the player **entity**, so it dies with the
+    player. Anything punitive or spendable that must survive a reconnect is
+    parked under the SteamID by the carryover block at the bottom of this file.
+
+    @module tpg.state
+    @realm server
 ]]
 
 TPG.State = {
@@ -46,19 +59,35 @@ TPG.State = {
     },
 }
 
--- The round's spawn for a team, or nil if there isn't a real one yet.
---
--- "Real" excludes the map origin on purpose. Nothing legitimately spawns at
--- 0,0,0 -- it's what you get from an unset Vector and from TPG.Maps.GetSpawn's
--- own fallback -- and on most maps it's inside the world or under it, which is
--- an out-of-world death that god mode does not stop.
+--[[--
+    The round's spawn for a team, or nil if there isn't a real one yet.
+
+    Always read spawns through this rather than indexing `TPG.State.spawns`,
+    which is empty until @{tpg.rounds.Setup} publishes a round's spawns.
+
+    "Real" excludes the map origin on purpose. Nothing legitimately spawns at
+    0,0,0 -- it is what you get from an unset Vector and from
+    `TPG.Maps.GetSpawn`'s own fallback -- and on most maps it is inside the
+    world or under it, which is an out-of-world death that god mode does not
+    stop. `TPG.State.spawns` used to default to that Vector, which is perfectly
+    truthy, so every "do we have a spawn yet" check said yes and handed out the
+    map origin. See `player/sv_spawning.lua` for what that cost.
+
+    @tparam number teamId TEAM_GREEN or TEAM_RED.
+    @treturn ?Vector The spawn, or nil if none has been published this round.
+    @realm server
+]]
 function TPG.State.GetSpawn(teamId)
     local pos = TPG.State.spawns[teamId]
     if not isvector(pos) or pos:IsZero() then return nil end
     return pos
 end
 
--- Initialize player state
+--- Create a player's state table, discarding anything already there.
+-- Called from `PlayerInitialSpawn`. Prefer @{GetPlayer}, which initialises on
+-- demand; calling this on a connected player wipes their cooldowns and votes.
+-- @tparam Player ply
+-- @realm server
 function TPG.State.InitPlayer(ply)
     TPG.State.players[ply] = {
         dupeCooldown    = 0,
@@ -77,12 +106,32 @@ function TPG.State.InitPlayer(ply)
     }
 end
 
--- Clean up player state
+--- Drop a player's state table.
+-- Called from `PlayerDisconnected`, after the carryover has been stashed.
+-- @tparam Player ply
+-- @realm server
 function TPG.State.CleanupPlayer(ply)
     TPG.State.players[ply] = nil
 end
 
--- Get player state (with auto-init)
+--[[--
+    A player's state table, creating it if needed.
+
+    The normal way in. Returns the live table, so writing to it is how the rest
+    of the gamemode records cooldowns, per-round stats and votes:
+
+        dupeCooldown     CurTime() past which the duplicator is usable again
+        spawnProtection  CurTime() past which spawn protection has expired
+        stats            this round only: kills, killsPerTon, objectiveKills,
+                         captures. Cleared by @{ResetRound}
+        votes            rtv, scramble, map
+        money            wallet, when the per-player economy is running
+        gearCooldowns    [gear key] = CurTime() it becomes available again
+
+    @tparam Player ply
+    @treturn table The live state table.
+    @realm server
+]]
 function TPG.State.GetPlayer(ply)
     if not TPG.State.players[ply] then
         TPG.State.InitPlayer(ply)
@@ -90,7 +139,14 @@ function TPG.State.GetPlayer(ply)
     return TPG.State.players[ply]
 end
 
--- Modify score
+--- Add to (or drain from) a team's ticket pool, clamped at zero.
+-- Scoring drains the *losing* side rather than adding to the winner, so in
+-- practice `amount` is negative. The pool never goes below zero, so a large
+-- overshoot is not carried into the next round.
+-- Does not itself end the round; @{tpg.rounds.CheckWinCondition} notices.
+-- @tparam number teamId TEAM_GREEN or TEAM_RED.
+-- @tparam number amount Signed.
+-- @realm server
 function TPG.State.AddScore(teamId, amount)
     TPG.State.scores[teamId] = TPG.State.scores[teamId] + amount
     
@@ -99,7 +155,13 @@ function TPG.State.AddScore(teamId, amount)
     end
 end
 
--- Reset for new round
+--- Reset per-round state and mark the round live.
+-- Refills both ticket pools to `TPG.Config.startingTickets`, zeroes both teams'
+-- spent limits, stamps the start time, clears every player's duplicator
+-- cooldown and per-round stats, and resets economy wallets if that mode is
+-- running this round. Called from @{tpg.rounds.Setup}, after the map cleanup
+-- and before objectives spawn.
+-- @realm server
 function TPG.State.ResetRound()
     TPG.State.scores[TEAM_GREEN] = TPG.Config.startingTickets
     TPG.State.scores[TEAM_RED] = TPG.Config.startingTickets

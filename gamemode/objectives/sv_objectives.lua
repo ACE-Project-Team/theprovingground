@@ -1,9 +1,34 @@
---[[
-    Objective Management
+--[[--
+    Objective management: the control points, and the scoring that runs off
+    them.
+
+    @{ProcessScoring} is where the gamemode's central rule actually lives. Every
+    control point reports an ownership value; those are summed, and the sign of
+    the total says which side is ahead, so the loser's ticket pool drains in
+    proportion. One team holding everything drains fast, a split map barely
+    drains at all, and a mode that scores some other way (CTF, deathmatch) sets
+    its cap multiplier to zero and does its own accounting.
+
+    Because that drain is the only pressure in an objective mode, a stalemate
+    where neither side can hold a point produces a round that never ends. That
+    is what overtime exists for; see @{GetOvertime}.
+
+    Called from the `Think` in @{tpg.rounds} on a fixed step, not per tick.
+
+    @module tpg.objectives
+    @realm server
 ]]
 
 TPG.Objectives = TPG.Objectives or {}
 
+--- Remove the current control points and spawn this round's set.
+-- Clears `TPG.State.objectives` first, so it is safe to call on a live round.
+-- An empty or missing list leaves the round with no objectives at all, which in
+-- most modes means one that can never end -- a map with no block for the
+-- current game type is the usual cause.
+-- @tparam table objectiveList Entries of `{ pos = Vector, name = string }`, as
+--  returned by `TPG.Maps.GetObjectives`. Names default to "Point N".
+-- @realm server
 function TPG.Objectives.SpawnAll(objectiveList)
     -- Clear existing objectives
     TPG.State.objectives = TPG.State.objectives or {}
@@ -42,6 +67,11 @@ function TPG.Objectives.SpawnAll(objectiveList)
     print("[TPG] Spawned " .. #objectiveList .. " objectives")
 end
 
+--- Put a coloured marker on each team's spawn.
+-- Visual only; the protection itself is in `player/sv_protection.lua`. A team
+-- whose spawn hasn't been published yet gets no marker rather than one at the
+-- map origin -- see @{tpg.state.GetSpawn}.
+-- @realm server
 function TPG.Objectives.SpawnSafezones()
     -- Green safezone
     local greenSpawn = TPG.State.GetSpawn(TEAM_GREEN)
@@ -70,21 +100,31 @@ end
 local overtimeAnnouncedFor = 0
 local objOvertimeAnnouncedFor = 0
 
---[[
-    Objective overtime (CP / KOTH / CTF).
+--[[--
+    How far into objective overtime the round is (CP / KOTH / CTF).
 
     Objective modes have no self-resolving pressure: if neither side can hold
     the point, nobody's tickets move and the round runs until people give up on
-    it. Past TPG.Config.objOvertimeStart this ramps two dials over
-    objOvertimeRamp seconds:
+    it. Past the start threshold this ramps two dials over the ramp duration:
 
-        capture times  ->  collapse toward instant (used by tpg_controlpoint),
-                           so a point can flip under fire instead of needing an
-                           uncontested ten seconds nobody ever gets
+        capture times  ->  collapse toward instant (applied inside
+                           tpg_controlpoint), so a point can flip under fire
+                           instead of needing an uncontested ten seconds
+                           nobody ever gets
         ticket drain   ->  multiplied up, so holding it actually ends the round
 
-    Returns 0..1: how far into the ramp we are. 0 means not in overtime.
-    DM is excluded -- it has its own bleed (dmOvertime* in sh_config).
+    Both thresholds can be set per game type
+    (`TPG.Config.objOvertimeStartByType` / `objOvertimeRampByType`) and fall
+    back to the global `objOvertimeStart` / `objOvertimeRamp`. CP waits much
+    longer and ramps more slowly than KOTH, because several points already
+    resolve rounds on their own.
+
+    Deathmatch is excluded here -- it has its own bleed, applied at the bottom
+    of @{ProcessScoring}.
+
+    @treturn number 0 to 1, how far through the ramp. 0 means not in overtime,
+     including whenever no round is active.
+    @realm server
 ]]
 function TPG.Objectives.GetOvertime()
     if not TPG.State.round.active then return 0 end
@@ -108,13 +148,37 @@ function TPG.Objectives.GetOvertime()
     return math.Clamp(over / math.max(ramp, 1), 0, 1)
 end
 
--- Scale factor for anything that drains tickets while overtime is running.
+--- Scale factor for anything that drains tickets while overtime is running.
+-- Ramps from 1 at the start of overtime to `TPG.Config.objOvertimeDrainMul`
+-- (default 4) at the end of the ramp.
+-- @treturn number 1 when not in overtime.
+-- @realm server
 function TPG.Objectives.GetOvertimeDrainMul()
     local ot = TPG.Objectives.GetOvertime()
     if ot <= 0 then return 1 end
     return 1 + ot * ((TPG.Config.objOvertimeDrainMul or 4) - 1)
 end
 
+--[[--
+    Advance scoring by one step: drain the losing side, and handle overtime.
+
+    Sums every live point's `CapOwnership`, picks the cap multiplier (map config
+    first, then the game type's default, with KOTH forced to
+    `TPG.Config.kothCapMul` so one knob tunes every KOTH map), scales it by
+    overtime if that has opened, and drains the team that is behind. A total of
+    zero -- an even split, or a mode with no points -- drains nobody.
+
+    Deathmatch is handled separately at the end: deaths are its only drain, so a
+    passive round never ended. Past `dmOvertimeStart` *both* teams bleed at a
+    rate that steps up over time, and whoever still holds more tickets when one
+    side hits zero takes the round.
+
+    Called once per fixed score step from the `Think` in @{tpg.rounds}, so the
+    drain rate does not depend on tickrate. Both overtime announcements are
+    latched to the round start time, so they fire once per round.
+
+    @realm server
+]]
 function TPG.Objectives.ProcessScoring()
     local totalCapValue = 0
 
@@ -188,7 +252,15 @@ function TPG.Objectives.ProcessScoring()
     end
 end
 
--- Track captures for commendations
+--- Credit a capture to everyone who was standing on the point.
+-- Called by `tpg_controlpoint` when a point finishes flipping. Pays the
+-- round-local capture stat (for commendations) and the lifetime one via
+-- @{tpg.stats.OnCapture}, to every player of the capturing team within
+-- `TPG.Config.capDistanceMeters` of the point -- so a contested cap rewards
+-- everyone who held it, not just whoever arrived first.
+-- @tparam Entity obj The control point.
+-- @tparam number teamId The team that captured it.
+-- @realm server
 function TPG.Objectives.OnCapture(obj, teamId)
     if not IsValid(obj) then return end
     

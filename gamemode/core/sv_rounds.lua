@@ -1,10 +1,59 @@
---[[
-    Round Management
+--[[--
+    Round management: the loop the whole gamemode runs on.
+
+    A round is set up by @{Setup}, ends when @{CheckWinCondition} sees a ticket
+    pool hit zero, and @{EndRound} either starts the next one or hands off to
+    the map vote. At map start @{BeginInitialWait} sits in front of the first
+    @{Setup} so late loaders aren't left behind.
+
+    Scoring is driven from a `Think` hook at the bottom of this file, on a fixed
+    real-time step rather than per tick: ticket drain used to run at half speed
+    on a 33-tick server and full speed on a 66-tick one. Catch-up is capped at
+    eight steps per frame so a lag spike can't drain a whole pool at once.
+
+    Almost every call out of this file is guarded (`if TPG.X and TPG.X.Y then`).
+    That is deliberate -- the round loop must still run when an optional system
+    isn't loaded -- so a system that silently fails to load shows up as a round
+    that runs with a feature missing, not as an error.
+
+    @module tpg.rounds
+    @realm server
 ]]
 
 -- Initialize namespace FIRST
 TPG.Rounds = TPG.Rounds or {}
 
+--[[--
+    Start a round: pick the mode, reset the map and state, spawn objectives,
+    and open the prep window.
+
+    In order, this ends the wait-for-players window, clears overtime, loads the
+    map config, maybe scrambles the teams, rolls the game type and the economy,
+    swaps the two sides' spawns, applies the map's prop and point limits, cleans
+    the map, resets round state, spawns objectives, safezones and (in CTF) the
+    flags, respawns everyone on a team, syncs to clients, and calls
+    `TPG.Prep.Begin`.
+
+    Two things only happen from the second round on, both gated on
+    `TPG.State.round.startTime > 0`: the spawn swap, so the first round of a map
+    uses the config as written; and the auto-scramble, which also needs at least
+    four players on teams.
+
+    Respawning kills only players who are on a playing team. Spectators are
+    skipped on purpose: they have no spawn to be moved to, so killing them was a
+    death for nothing, and at map start (nobody has picked a side yet) that is a
+    death for *everyone* on the server as their first impression of the
+    gamemode.
+
+    Safe to call at any time -- an admin restart or a points reload comes
+    through here too, which is why it force-clears the wait window rather than
+    assuming it is already closed.
+
+    @tparam[opt=false] boolean skipCleanup Skip `game.CleanUpMap`. Used when the
+     caller has already cleaned, or is reloading config mid-round and wants
+     players' builds left standing.
+    @realm server
+]]
 function TPG.Rounds.Setup(skipCleanup)
     -- If a round is being set up by any path (admin restart, points reload),
     -- the wait-for-players window is over -- never leave building blocked.
@@ -114,6 +163,12 @@ function TPG.Rounds.Setup(skipCleanup)
     end
 end
 
+--- End the round if either team's ticket pool has run out.
+-- Called from the scoring `Think` after each batch of steps, and does nothing
+-- unless a round is active. Both pools can cross zero in the same tick under
+-- the deathmatch overtime bleed, so that case is resolved by whoever has the
+-- higher remaining count, and an exact tie by coin flip.
+-- @realm server
 function TPG.Rounds.CheckWinCondition()
     if not TPG.State.round.active then return end
 
@@ -138,6 +193,22 @@ function TPG.Rounds.CheckWinCondition()
     end
 end
 
+--[[--
+    Close out a round and decide what happens next.
+
+    Marks the round inactive, credits the win, announces it, plays a win or loss
+    cue to each player, clears duplicator cooldowns, awards commendations and
+    applies the round result to everyone's lifetime rating via
+    @{tpg.stats.OnRoundEnd}.
+
+    Then one of two things: once the two teams' wins add up to
+    `TPG.Config.winsToMapVote` it hands off to the map vote, otherwise it
+    queues the next @{Setup} ten seconds later.
+
+    @tparam number winningTeam TEAM_GREEN or TEAM_RED. There is no draw path --
+     @{CheckWinCondition} resolves a simultaneous wipe before calling here.
+    @realm server
+]]
 function TPG.Rounds.EndRound(winningTeam)
     TPG.State.round.active = false
     TPG.State.round.wins[winningTeam] = TPG.State.round.wins[winningTeam] + 1
@@ -224,6 +295,24 @@ local function AnyoneConnecting()
     return false
 end
 
+--[[--
+    Hold the first round of a map until players have finished loading in.
+
+    Fast loaders used to join, take a team, and start burning the team budget
+    (or earning economy income) while slow loaders were still on the loading
+    screen. This waits `TPG.Config.waitBaseTime` as a floor, pushes the start
+    `waitJoinExtend` further out whenever someone is mid-connect, and gives up
+    at `waitMaxTotal` so one stuck client cannot hold the server hostage. A
+    connection that goes quiet is forgotten after three minutes.
+
+    While it runs, `TPG.State.waitingForPlayers` is true and building is blocked
+    (`sv_duplication` and the `PlayerSpawnProp` check read that flag). @{Setup}
+    force-clears it, so no path can leave building blocked.
+
+    Called once from `GM:Initialize`. It ends by calling @{Setup} itself.
+
+    @realm server
+]]
 function TPG.Rounds.BeginInitialWait()
     local beganAt = CurTime()
     local startAt = beganAt + (TPG.Config.waitBaseTime or 5)
