@@ -63,12 +63,23 @@ local FORMAT_VERSION = 2
     was all it took to lose everyone's lifetime record.
 
     So writes go to a temp file first and only replace the real one once they're
-    complete, the previous good file is kept as .bak, and a file that fails to
-    parse is preserved (never overwritten) so the ratings can be recovered by
-    hand if the .bak is somehow bad too.
+    complete, the previous good file is kept as a backup, and a file that fails
+    to parse is preserved (never overwritten) so the ratings can be recovered by
+    hand if the backup is somehow bad too.
+
+    The names below are stats.TMP.json and not stats.json.TMP, and that is not a
+    style choice. file.Write only accepts a fixed list of extensions and takes
+    the extension as whatever follows the LAST dot, so "stats.json.tmp" is a
+    ".tmp" file and is refused outright. The first version of this wrote to
+    exactly that path, checked whether it had appeared, found it hadn't, printed
+    a warning to a console nobody was reading and returned -- which meant that
+    from the day the crash-safety was added until this was measured, Save() had
+    never once written a byte and no rating had ever survived a restart.
 ]]
-local TMP = FILE .. ".tmp"
-local BAK = FILE .. ".bak"
+local TMP        = "tpg/stats.tmp.json"
+local BAK        = "tpg/stats.bak.json"
+local CORRUPT    = "tpg/stats.corrupt.json"
+local UNFINISHED = "tpg/stats.unfinished.json"
 
 -- Read one candidate file into `data`. Returns how many records it yielded,
 -- or nil if the file is unreadable/unparseable (as opposed to legitimately
@@ -111,18 +122,18 @@ local function ReadInto(path)
 end
 
 local function Load()
-    -- A .tmp left behind means the last write never finished. The real file is
+    -- A leftover temp file means the last write never finished. The real file is
     -- still the last complete one, so the leftover is just noise -- but keep it
     -- rather than delete it, on the off chance it's the newer of the two.
     if file.Exists(TMP, "DATA") then
-        file.Delete(FILE .. ".unfinished")
-        file.Rename(TMP, FILE .. ".unfinished")
+        file.Delete(UNFINISHED)
+        file.Rename(TMP, UNFINISHED)
     end
 
     if not file.Exists(FILE, "DATA") then
         -- No main file, but a backup from a previous run is a complete file.
         if ReadInto(BAK) then
-            print("[TPG] stats.json missing; recovered the leaderboard from stats.json.bak.")
+            print("[TPG] stats.json missing; recovered the leaderboard from stats.bak.json.")
             dirty = true
         end
         return
@@ -131,15 +142,14 @@ local function Load()
     if ReadInto(FILE) then return end
 
     -- The main file exists and did not parse. Do not let it be overwritten --
-    -- move it aside under a name nothing writes to, then fall back to .bak.
-    local kept = FILE .. ".corrupt"
-    file.Delete(kept)
-    file.Rename(FILE, kept)
+    -- move it aside under a name nothing writes to, then fall back to the backup.
+    file.Delete(CORRUPT)
+    file.Rename(FILE, CORRUPT)
 
-    print("[TPG] WARNING: data/tpg/stats.json is unreadable. Kept it as stats.json.corrupt.")
+    print("[TPG] WARNING: data/tpg/stats.json is unreadable. Kept it as stats.corrupt.json.")
 
     if ReadInto(BAK) then
-        print("[TPG] Recovered the leaderboard from stats.json.bak.")
+        print("[TPG] Recovered the leaderboard from stats.bak.json.")
     else
         print("[TPG] No usable backup either -- starting from an empty leaderboard.")
     end
@@ -156,22 +166,50 @@ function TPG.Stats.Save()
         out.players[#out.players + 1] = e
     end
 
+    local body = util.TableToJSON(out, true)
+
     -- Write the whole thing somewhere disposable first, so a write that dies
     -- half way through costs us the temp file and nothing else.
     file.Delete(TMP)
-    file.Write(TMP, util.TableToJSON(out, true))
+    file.Write(TMP, body)
 
     if not file.Exists(TMP, "DATA") then
-        print("[TPG] WARNING: could not write data/tpg/stats.json.tmp -- leaderboard NOT saved.")
+        print("[TPG] WARNING: could not write data/" .. TMP .. " -- leaderboard NOT saved.")
         return   -- stay dirty; the next autosave tries again
     end
 
-    -- Swap it in: current file becomes the backup, temp becomes current.
+    --[[
+        Swap it in: the current file becomes the backup, the temp becomes
+        current. file.Rename will NOT overwrite an existing target -- it returns
+        false and leaves both files where they were -- so the target is cleared
+        first.
+
+        Nothing here deletes a good file before its replacement is in hand. If
+        the server dies between the two renames the main file is gone and the
+        backup is the last complete one, which is the case Load() already
+        recovers from; and if the first rename simply doesn't take, the main
+        file is still the old good one and gets written over directly rather
+        than being removed on the hope that the second rename works.
+    ]]
     if file.Exists(FILE, "DATA") then
         file.Delete(BAK)
         file.Rename(FILE, BAK)
     end
-    file.Rename(TMP, FILE)
+
+    if file.Exists(FILE, "DATA") then
+        file.Write(FILE, body)
+    else
+        file.Rename(TMP, FILE)
+    end
+
+    file.Delete(TMP)
+
+    -- Only now is the work actually on disk. Staying dirty on failure is what
+    -- makes the next autosave try again rather than assume it succeeded.
+    if not file.Exists(FILE, "DATA") then
+        print("[TPG] WARNING: could not put data/" .. FILE .. " in place -- leaderboard NOT saved.")
+        return
+    end
 
     dirty = false
 end
