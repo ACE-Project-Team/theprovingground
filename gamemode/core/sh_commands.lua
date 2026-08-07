@@ -1,21 +1,44 @@
---[[
-    Console commands made visible + usable from a client console (admin
-    commands plus everyday ones like tpg_team).
+--[[--
+    Client-console autocomplete shim for server-only concommands.
 
-    The gameplay/admin concommands are registered server-side (sv_commands.lua,
-    sv_custom_points.lua). Server-only concommands never appear in a CLIENT's
+    Console commands made visible and usable from a client console: admin
+    commands plus everyday ones like `tpg_team`.
+
+    The gameplay/admin concommands are registered server-side (`sv_commands.lua`,
+    `sv_custom_points.lua`). Server-only concommands never appear in a CLIENT's
     console autocomplete, so an admin on a dedicated server "can't see" them and
     has to know the exact spelling. This module registers a matching client-side
-    stub for each so it autocompletes, then forwards the call to the server over a
-    net channel where the ORIGINAL server concommand runs (via concommand.Run),
-    keeping its own admin/superadmin checks. Nothing about the server logic
-    changes -- this is purely a discoverability/forwarding shim.
+    stub for each so it autocompletes, then forwards the call to the server over
+    a net channel where the ORIGINAL server concommand runs (via
+    `concommand.Run`), keeping its own admin/superadmin checks. Nothing about
+    the server logic changes, this is purely a discoverability/forwarding shim.
+
+    @{tpg.commands.List} is the single source of truth for which commands get
+    this treatment; adding an admin concommand elsewhere and forgetting to list
+    it here means it stays invisible in a client's autocomplete, though it
+    still works if typed exactly.
+
+    On the server this file installs an allow-list gate on the forwarding net
+    message, so a crafted `TPG_ClientCmd` message can only invoke one of the
+    listed commands, never an arbitrary server concommand; the commands' own
+    admin/superadmin checks still apply on top, so this channel grants no extra
+    privilege by itself. On the client it registers the stub concommands that
+    forward into that channel.
+
+    @module tpg.commands
+    @realm shared
 ]]
 
 TPG.Commands = TPG.Commands or {}
 
--- The commands worth surfacing in a client console. Names must match the
--- server concommands exactly. `help` is shown in autocomplete.
+--- The commands surfaced in a client console via the forwarding shim above.
+-- Each entry is `{ name = <concommand>, help = <shown in autocomplete> }`;
+-- `name` must match the real server concommand exactly. This is the allow-list
+-- consulted server-side, so a command left out here cannot be invoked through
+-- this net channel at all, even by an admin who types it correctly, though
+-- typing it directly still works if the client happens to be running on the
+-- listen-server host.
+-- @realm shared
 TPG.Commands.List = {
     { name = "tpg_team",           help = "Join a team: tpg_team green | red | spec" },
     { name = "tpg_admin_restart",  help = "Admin: restart the current round." },

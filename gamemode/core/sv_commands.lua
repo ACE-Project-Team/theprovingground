@@ -1,5 +1,15 @@
---[[
-    Console Commands
+--[[--
+    Gameplay and admin console commands: team/loadout changes, re-kit, votes, admin actions.
+
+    Pure hook/concommand registration, no exported API; every `concommand.Add`
+    below is reachable directly from a server console, and (for the ones
+    listed in `core/sh_commands.lua`) also from a client console through that
+    file's forwarding shim. Each command re-checks its own admin/superadmin
+    requirement, since the forwarding channel is only an allow-list, not a
+    privilege grant.
+
+    @module tpg.consolecommands
+    @realm server
 ]]
 
 -- Team change. Accepts friendly names and short numbers as well as raw team

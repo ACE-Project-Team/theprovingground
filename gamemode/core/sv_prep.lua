@@ -1,18 +1,28 @@
---[[
-    Preparation Period (per round)
+--[[--
+    Preparation period: a build-and-stage window at the start of every round.
 
-    Every round opens with a staging window: once at least prepMinPlayers players
-    are split across BOTH teams, a prepTime-second countdown starts during which
-    everyone is confined to their own safezone -- wander out and you're teleported
-    straight back. It gives both sides a fair moment to build and stage in spawn
-    instead of one team already rolling out onto the map.
+    Every round opens with a staging window: once at least `prepMinPlayers`
+    players are split across BOTH teams, a `prepTime`-second countdown starts
+    during which everyone is confined to their own safezone, wander out and
+    you're teleported straight back. It gives both sides a fair moment to
+    build and stage in spawn instead of one team already rolling out onto the
+    map.
 
-    Before both teams are present there's no countdown and no confinement, so a
-    lone player (or an empty enemy team) can still move around freely.
+    Before both teams are present there's no countdown and no confinement, so
+    a lone player (or an empty enemy team) can still move around freely.
+
+    @{tpg.prep.Begin} must be called by @{tpg.rounds.Setup} at the start of
+    each round to arm the window; nothing else starts it. If it is never called,
+    `prepActive` stays false and this file's `Think` hook is permanently a
+    no-op, so a round would run with no staging period at all.
 
     State is mirrored to clients through two globals for the HUD countdown:
-        TPG_PrepActive (bool)  -- the round is in its prep window
-        TPG_PrepEnd    (float) -- CurTime the confinement lifts (0 = not counting)
+
+        TPG_PrepActive (bool)  the round is in its prep window
+        TPG_PrepEnd    (float) CurTime the confinement lifts (0 = not counting)
+
+    @module tpg.prep
+    @realm server
 ]]
 
 TPG.Prep = TPG.Prep or {}
@@ -28,7 +38,11 @@ local function BothTeamsPresent()
     return g >= 1 and r >= 1 and (g + r) >= (TPG.Config.prepMinPlayers or 2)
 end
 
--- Is the confinement currently in force? (Used by other systems if needed.)
+--- Is the safezone confinement currently in force? True only once the
+-- countdown has actually started (both teams present) and hasn't elapsed;
+-- false while waiting for a matchup or after the window ends.
+-- @treturn boolean
+-- @realm server
 function TPG.Prep.IsConfining()
     return prepActive and prepEnd > 0 and CurTime() < prepEnd
 end
@@ -50,7 +64,11 @@ local function ConfineToSpawn(ply, silent)
     end
 end
 
--- Called from TPG.Rounds.Setup at the start of each round.
+--- Arm the prep window for a new round: clears any stale warn-throttle state
+-- and resets the clock to "waiting for both teams", but does not itself start
+-- the countdown (see the `Think` hook below for that). Must be called from
+-- @{tpg.rounds.Setup} at the start of each round.
+-- @realm server
 function TPG.Prep.Begin()
     prepActive = true
     prepEnd    = 0

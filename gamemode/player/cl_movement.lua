@@ -1,5 +1,5 @@
---[[
-    Movement prediction repair (client)
+--[[--
+    Movement prediction repair (client).
 
     The bug this exists for: a Juggernaut felt like it was sprinting, even
     though the server had it moving at roughly a third of normal speed.
@@ -19,10 +19,31 @@
     speeds it set, and this writes them onto the client's copy of every weapon
     the player holds. No ACE file is touched, and where the base DOES snapshot
     correctly this just writes back the value already there.
+
+    @module tpg.movement
+    @realm client
 ]]
 
 local lastWalk, lastRun, lastWeapon = 0, 0, nil
 
+--[[--
+    Re-applies the server's authoritative walk/run speeds to the local player
+    and to every ACE weapon they are carrying, so movement prediction agrees
+    with the server between snapshots.
+
+    Reads `TPG_WalkSpeed` / `TPG_RunSpeed`, the networked ints
+    `player/sv_loadout.lua` publishes. A walk speed of 0 means the server has
+    not run a loadout for this player yet (spectating, or still connecting) and
+    the hook does nothing, leaving engine defaults in place.
+
+    Cheap on a normal frame: three comparisons against the last-seen values,
+    then an early return. The loop over held weapons only runs when the loadout
+    changes or a different weapon is drawn, which is exactly when a stale
+    snapshot could be reintroduced.
+
+    @realm client
+    @function TPG_SpeedPrediction
+]]
 hook.Add("Think", "TPG_SpeedPrediction", function()
     local ply = LocalPlayer()
     if not IsValid(ply) then return end

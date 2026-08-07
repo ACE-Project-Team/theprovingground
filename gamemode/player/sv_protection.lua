@@ -1,9 +1,34 @@
---[[
-    Spawn Protection and Restrictions
+--[[--
+    Safezones, spawn protection, build/noclip restrictions and the combat clock.
+
+    Everything about a team's spawn area being safe: which players are in
+    their own or the enemy's safezone, god mode timing, a noclip momentum
+    brake so spawn noclip can't be used to slingshot across the map, killing
+    players who linger in the enemy's spawn or drown, blocking building and
+    SWEP spawning outside the safezone, and the "seconds since last real
+    damage" clock that `core/sv_commands.lua`'s re-kit command reads to tell a
+    legitimate loadout change from a combat escape.
+
+    Most of this runs from one `Think` hook (`TPG_ProtectionThink`) that walks
+    every player once a tick; the individual checks below are also exposed as
+    functions because other systems (prep period, re-kit) need the same
+    safezone answer outside that hook.
+
+    @module tpg.protection
+    @realm server
 ]]
 
 TPG.Protection = {}
 
+--- Is `ply` inside their own team's safezone?
+-- A player off a team (spectator) is always considered safe. Before any round
+-- has published spawns (map start, the pre-round wait), there is no
+-- "outside" to be on the wrong side of, so this returns true for everyone,
+-- rather than telling players their spawn protection just expired on a map
+-- they can't even build on yet.
+-- @tparam Player ply
+-- @treturn boolean
+-- @realm server
 function TPG.Protection.IsInSafezone(ply)
     local teamId = ply:Team()
     if not TPG.Util.IsOnTeam(ply) then return true end
@@ -18,6 +43,14 @@ function TPG.Protection.IsInSafezone(ply)
     return TPG.Util.IsWithinDistance(ply, spawn, TPG.Config.safezoneRadius)
 end
 
+--- Is `ply` inside the ENEMY team's safezone?
+-- Off a team, or the enemy's spawn not published yet, returns false (there's
+-- nothing to be "in"). Used by the protection Think loop to kill loitering
+-- players; unlike @{IsInSafezone}, this is never a state a player should
+-- passively sit in.
+-- @tparam Player ply
+-- @treturn boolean
+-- @realm server
 function TPG.Protection.IsInEnemySafezone(ply)
     local teamId = ply:Team()
     if not TPG.Util.IsOnTeam(ply) then return false end
@@ -191,7 +224,7 @@ end
 hook.Add("PlayerGiveSWEP",  "TPG_SWEPRestriction",      RestrictSWEP)
 hook.Add("PlayerSpawnSWEP", "TPG_SWEPSpawnRestriction", RestrictSWEP)
 
---[[
+--[[--
     "Am I in a fight right now?"
 
     Used by the loadout re-kit (core/sv_commands.lua) to decide whether a
@@ -202,6 +235,12 @@ hook.Add("PlayerSpawnSWEP", "TPG_SWEPSpawnRestriction", RestrictSWEP)
 
     Never having been hit reads as "not in combat", which is the right answer
     for a fresh spawn and for anyone the round hasn't touched yet.
+
+    @tparam Player ply
+    @treturn number Seconds since `ply` last took damage that actually landed
+     (stamped by the `EntityTakeDamage` hook below), or `math.huge` if they
+     never have this life.
+    @realm server
 ]]
 function TPG.Protection.SecondsSinceDamage(ply)
     local last = TPG.State.GetPlayer(ply).lastDamaged

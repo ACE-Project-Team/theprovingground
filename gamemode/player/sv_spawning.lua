@@ -1,5 +1,19 @@
---[[
-    Player Spawning
+--[[--
+    Where players actually end up: spawn positioning and the out-of-world safety net.
+
+    Owns `GM:PlayerSpawn` (positioning, colours, spawn protection, loadout) and
+    `GM:PlayerSetModel`, plus the initial team auto-assign on first join. This
+    file exists to prevent one specific bug: `TPG.State.spawns` used to
+    default to `Vector(0, 0, 0)`, a
+    perfectly truthy value, so before the first round's spawns were published
+    every "do we have a spawn yet" check said yes and every player on a team
+    was teleported to the map origin, which is inside or under the world on
+    most maps, an out-of-world death that god mode does not stop. The other
+    half of the fix lives in `core/sv_gamestate.lua`: @{tpg.state.GetSpawn}
+    rejects the zero vector at the source, before it ever reaches this file.
+
+    @module tpg.spawning
+    @realm server
 ]]
 
 TPG.Spawning = TPG.Spawning or {}
@@ -64,10 +78,18 @@ local function FindMapSpawn()
     end
 end
 
--- A position that is definitely not the void, for someone we have nowhere
--- better to put. Preference order: this round's team spawns, then the map
--- config's spawns (which TPG.Maps.Get loads on demand, so this works before
--- the first round), then whatever spawn entities the map ships.
+--- A position that is definitely not the void, for someone with nowhere
+-- better to go. Preference order: `ply`'s own team's round spawn (falling
+-- back to trying both teams if `ply` is invalid or unteamed), then the map
+-- config's spawns (which `TPG.Maps.Get` loads on demand, so this works before
+-- the first round), then whatever spawn entities the map ships (see
+-- `SPAWN_CLASSES` above). Every candidate is re-checked against the same
+-- in-world/non-zero test, so a bad round spawn can't leak through even if
+-- one were ever published.
+-- @tparam Player ply Used only to prefer their own team; may be invalid.
+-- @treturn ?Vector nil only if the map has no round spawns, no configured
+--  spawns and none of `SPAWN_CLASSES` at all, meaning the map is unplayable.
+-- @realm server
 function TPG.Spawning.FallbackPos(ply)
     local preferred = IsValid(ply) and ply:Team() or nil
 
@@ -91,10 +113,15 @@ function TPG.Spawning.FallbackPos(ply)
     return FindMapSpawn()
 end
 
--- Last line of defence, run on every spawn: if wherever the player ended up
--- isn't inside the world, move them somewhere that is. Cheap (one trace-free
--- bounds check) and it can't misfire, since a legitimate spawn is always in
--- the world and never exactly at the origin.
+--- Last line of defence, run on every spawn: if wherever the player ended up
+-- isn't inside the world, move them somewhere that is via @{FallbackPos}.
+-- Cheap (one trace-free bounds check) and it can't misfire, since a
+-- legitimate spawn is always in the world and never exactly at the origin.
+-- If even the fallback finds nothing, this leaves the player where the engine
+-- put them and logs a one-time warning that the map has no usable spawn at
+-- all, since that means the map is unplayable as configured.
+-- @tparam Player ply
+-- @realm server
 function TPG.Spawning.EnsureInWorld(ply)
     if not IsValid(ply) then return end
     if IsUsablePos(ply:GetPos()) then return end
@@ -116,6 +143,23 @@ function TPG.Spawning.EnsureInWorld(ply)
     end
 end
 
+--[[--
+    Position, colour, protect and kit a player on every spawn.
+
+    On a team: moves them to this round's published spawn if one exists yet
+    (before that, the engine's own spawn choice is trusted, since it beats
+    anything this module has to offer), sets team colours, and starts spawn
+    protection (longer while the player's team is the underdog, via
+    `TPG.Underdog.GetProtectionTime` if loaded) with god mode. Off a team
+    (spectator): god mode only, permanently, since spectators are non-combatant.
+
+    Either way, @{EnsureInWorld} runs after positioning as the final safety
+    check, and `TPG.Loadout.Apply` runs last so a player who got moved by the
+    safety check still gets kitted at their real position.
+
+    @tparam Player ply
+    @realm server
+]]
 function GM:PlayerSpawn(ply)
     self.BaseClass:PlayerSpawn(ply)
 
@@ -153,6 +197,10 @@ function GM:PlayerSpawn(ply)
     TPG.Loadout.Apply(ply)
 end
 
+--- Sets the player's model from their saved armor tier PData (default 1),
+-- via `TPG.GetArmorModel`.
+-- @tparam Player ply
+-- @realm server
 function GM:PlayerSetModel(ply)
     local armorId = TPG.Util.GetPData(ply, "Armor", 1)
     local model = TPG.GetArmorModel(armorId)

@@ -1,10 +1,19 @@
---[[
-    Weapon State Persistence (server)
+--[[--
+    Weapon-enable state persistence: admin picks survive map changes and restarts.
 
-    Loads/saves admin weapon choices (which bases / weapons are enabled) to
-    data/tpg/weapons.json so they survive map changes and restarts, applies them
-    on top of the discovered list, and syncs them to clients so loadout menus
-    match. Edited via the admin panel (ui/cl_menu_weapons.lua).
+    Loads/saves admin weapon choices (which bases and weapons are enabled) to
+    `data/tpg/weapons.json` so they survive map changes and restarts, applies
+    them on top of the discovered list via `TPG.Weapons.ApplyState`
+    (`config/sh_weapons.lua`), and syncs them to clients so loadout menus
+    match. Edited via the admin panel (`ui/cl_menu_weapons.lua`).
+
+    Load order matters: this file calls `TPG.Weapons.ApplyState` at file scope,
+    below, in addition to from the `InitPostEntity` hook, so
+    `config/sh_weapons.lua` (which defines `TPG.Weapons` and `ApplyState`)
+    must already have loaded, or that call errors.
+
+    @module tpg.weaponrules
+    @realm server
 ]]
 
 util.AddNetworkString("TPG_WeaponState")     -- server -> client (current state)
@@ -12,17 +21,24 @@ util.AddNetworkString("TPG_WeaponStateSet")  -- client(admin) -> server (save)
 
 local STATE_PATH = "tpg/weapons.json"
 
+-- Read the saved state from data/tpg/weapons.json. Returns an empty table
+-- (not nil) both when the file has never been written and when it exists but
+-- fails to parse, so callers never need a separate nil check.
 local function loadState()
     if not file.Exists(STATE_PATH, "DATA") then return {} end
     local raw = file.Read(STATE_PATH, "DATA")
     return (raw and util.JSONToTable(raw)) or {}
 end
 
+-- Persist `state` to data/tpg/weapons.json, creating the data/tpg directory
+-- first if this is the first save on this server.
 local function saveState(state)
     file.CreateDir("tpg")
     file.Write(STATE_PATH, util.TableToJSON(state, true))
 end
 
+-- Push the current TPG.Weapons.ServerState to one player, or everyone when
+-- `ply` is nil/invalid.
 local function sendState(ply)
     net.Start("TPG_WeaponState")
         net.WriteString(util.TableToJSON(TPG.Weapons.ServerState or {}))

@@ -1,5 +1,17 @@
---[[
-    Player Loadout System
+--[[--
+    Applying a player's chosen weapons and armor at spawn.
+
+    Reads the loadout picks stored as PData by `core/sv_commands.lua`
+    (`tpg_loadout`), charges for any premium picks (config/sh_gear.lua) through
+    `TPG.Gear.Claim`, computes and sets movement speed from the armor/weapon
+    penalties, hands out the actual weapons and ammo, and re-stamps a couple of
+    ACE quirks (see @{tpg.loadout.StampSpeed}) that would otherwise silently
+    override the speed just set. `TPG.Loadout.Apply` is the entry point, called
+    once per spawn from `GM:PlayerSpawn` (player/sv_spawning.lua), last, after
+    positioning.
+
+    @module tpg.loadout
+    @realm server
 ]]
 
 TPG.Loadout = {}
@@ -55,18 +67,18 @@ local function ResolveArmor(ply, armorId)
     return TPG.Gear.FreeArmor
 end
 
---[[
+--[[--
     Hold every ACE weapon the player carries to the speed the loadout set.
 
     weapon_ace_base's Think force-sets its owner's walk/run speed every tick
     from SWEP.NormalPlayerWalkSpeed / NormalPlayerRunSpeed (shared.lua Think).
-    The base fills those in from the owner's real speed in its Deploy -- but
+    The base fills those in from the owner's real speed in its Deploy, but
     Deploy is just a method, and several ACE weapons define their own without
     ever calling the base's: weapon_ace_grenade, weapon_ace_smokegrenade and
     weapon_ace_slam all do. Those inherit the speed-forcing Think and keep the
     SWEP table's fallbacks, a flat 200 walk / 400 run (shared.lua:72).
 
-    So pulling out a grenade -- which every loadout carries -- pinned the player
+    So pulling out a grenade, which every loadout carries, pinned the player
     to 200/400 on the SERVER for as long as it was out, and left them there.
     Most armour tiers sit near enough to those numbers to pass unnoticed; a
     Juggernaut is meant to move at 60/89 and instead sprinted at over three
@@ -77,6 +89,13 @@ end
     the right answer whether or not the weapon ever snapshotted anything. Its
     CarrySpeedMul still applies on top, so per-weapon weight penalties (the
     SLAM's 0.6, say) survive.
+
+    A no-op until @{tpg.loadout.Apply} has run at least once for this player
+    (walk speed networked as 0 means "no loadout yet") and while the player is
+    dead.
+
+    @tparam Player ply
+    @realm server
 ]]
 function TPG.Loadout.StampSpeed(ply)
     if not IsValid(ply) or not ply:Alive() then return end
@@ -116,6 +135,29 @@ hook.Add("PlayerSwitchWeapon", "TPG_StampSpeed", function(ply)
     TPG.Loadout.StampSpeed(ply)
 end)
 
+--[[--
+    Strip and re-kit a player: weapons, armor, movement speed and ammo.
+
+    Not on a team (spectator): only the default weapons and building tools, no
+    team kit, no speed changes. On a team: reads the saved Primary/Secondary/
+    Special/Armor PData picks (a legacy non-string save falls back to the
+    default loadout), charges premium picks through `TPG.Gear.Claim` if that
+    system is loaded (a denial swaps in the free equivalent and messages why),
+    applies armor stats, computes and sets walk/run speed from the resulting
+    armor + weapon penalties BEFORE handing out any weapon (ACE's weapon base
+    snapshots the owner's speed on Deploy, so setting it after would let a
+    weapon deploy against the stale pre-loadout speed), then gives the actual
+    weapons, tops up their ammo, and hands out a consolation disposable AT only
+    if the Special slot came up empty. Underdog perks (smoke, medkit) are added
+    last. Finishes by publishing `pState.liveLoadout` (what the player is
+    actually carrying, which can differ from the PData picks after a denial),
+    clearing the `rekit` flag, restamping speed via @{tpg.loadout.StampSpeed}
+    for weapons that never got a fresh Deploy snapshot, and syncing the gear
+    menu's cooldowns.
+
+    @tparam Player ply
+    @realm server
+]]
 function TPG.Loadout.Apply(ply)
     -- Strip existing weapons
     ply:StripWeapons()
@@ -332,8 +374,16 @@ local function SetExactAmmo(ply, wep, total, loaded)
     ply:GiveAmmo(math.max(total - (loaded or 0), 0), ammoType, true)
 end
 
--- Returns true if it actually handed the player a weapon (so callers can tell
--- an empty/"none"/disabled pick from a real one -- e.g. the bonus AT).
+--- Give `ply` the weapon(s) behind `weaponId` in `category`, topping up ammo
+-- to the configured floor (or, for `exactAmmo` entries like the ACE mines, to
+-- an exact pool total rather than merely raising it).
+-- @tparam Player ply
+-- @tparam string category "Primary", "Secondary" or "Special".
+-- @tparam string weaponId Looked up via `TPG.GetWeapon`.
+-- @treturn boolean True if it actually handed over a weapon, so callers can
+--  tell an empty/"none"/disabled pick from a real one, e.g. the bonus AT logic
+--  in @{tpg.loadout.Apply} that only fires when this returns false.
+-- @realm server
 function TPG.Loadout.GiveWeapon(ply, category, weaponId)
     local weapon = TPG.GetWeapon(category, weaponId)
     if not weapon or weapon.enabled == false then return false end
@@ -374,6 +424,12 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
     return false
 end
 
+--- Set `ply`'s model, health and armor from the `armorId` tier's stats
+-- (`TPG.GetArmor`). Sets both current and max health to the tier's value, so
+-- an armor change also resets the health pool rather than merely capping it.
+-- @tparam Player ply
+-- @tparam number armorId
+-- @realm server
 function TPG.Loadout.ApplyArmor(ply, armorId)
     local armor = TPG.GetArmor(armorId)
     

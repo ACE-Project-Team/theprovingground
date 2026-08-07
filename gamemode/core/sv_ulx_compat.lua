@@ -1,20 +1,33 @@
---[[
-    ULX / UTeam compatibility
+--[[--
+    Strips ULX's UTeam auto-assignment hooks so they stop fighting TPG's own teams.
 
-    ULX's "Manage Teams" (UTeam, ulx/modules/uteam.lua) binds usergroups to GMod
-    teams and FORCES group members onto them on every spawn:
+    ULX's "Manage Teams" (UTeam, `ulx/modules/uteam.lua`) binds usergroups to
+    GMod teams and FORCES group members onto them on every spawn:
 
         hook.Add("PlayerSpawn", "UTeamSpawnAuth", assignTeam, HOOK_MONITOR_HIGH)
         hook.Add("UCLAuthed",   "UTeamAuth",      assignTeam, HOOK_MONITOR_HIGH)
 
-    In a team gamemode that fights TPG's own GREEN/RED assignment -- e.g. a
-    superadmin keeps getting yanked onto their "superadmin" team, so TPG reports
-    "not on a team". We strip those enforcement hooks while TPG is active. The
-    teams themselves stay registered (rank scoreboards still colour correctly),
-    UTeam just stops reassigning players. This file only loads under TPG, so
-    UTeam behaves normally again under sandbox.
+    In a team gamemode that fights TPG's own GREEN/RED assignment: a
+    superadmin keeps getting yanked onto their "superadmin" team, so TPG
+    reports "not on a team". This file strips those enforcement hooks while
+    TPG is active. The teams themselves stay registered (rank scoreboards
+    still colour correctly), UTeam just stops reassigning players. This file
+    only loads under TPG, so UTeam behaves normally again under sandbox.
+
+    Installs no exported API beyond `TPG.DisableExternalTeamForcing` itself;
+    the value of this file is entirely in the two hooks it registers below. If
+    it does not load, ULX (when installed) will silently keep overriding team
+    assignment on every spawn and every usergroup auth, with no error to point
+    at, since nothing here fails loudly, it just stops running.
+
+    @module tpg.ulx
+    @realm server
 ]]
 
+--- Remove ULX UTeam's forced-team-assignment hooks. Safe to call even when
+-- ULX/UTeam isn't installed, `hook.Remove` on a hook name that was never
+-- added is a no-op.
+-- @realm server
 function TPG.DisableExternalTeamForcing()
     -- ULX UTeam
     hook.Remove("PlayerSpawn", "UTeamSpawnAuth")

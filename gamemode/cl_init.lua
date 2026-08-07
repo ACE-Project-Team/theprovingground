@@ -1,5 +1,23 @@
---[[
-    The Proving Ground - Client Entry Point
+--[[--
+    Client entry point: the client's include list, and nothing else.
+
+    This runs on every connecting client. It only `include`s -- a file has to
+    already have been sent by an `AddCSLuaFile` in `init.lua` for the include
+    to find it, so the two lists have to be kept in step. A client-side file
+    added here but not AddCSLuaFile'd there fails to load with a file-not-found
+    that names the client file, not the missing server line.
+
+    Note that this list is SHORTER than init.lua's AddCSLuaFile block, and that
+    is correct: shared config files (`config/sh_*.lua`, `maps/_loader.lua`,
+    `objectives/sh_controlpoint.lua`) are shipped to the client but included by
+    `shared.lua`, not here, so they load on both realms from one place.
+
+    Order barely matters on this side -- the UI files register hooks and build
+    panels on demand rather than reading each other at load time -- with the
+    exception of `shared.lua`, which must be first because it creates `TPG`.
+
+    @module tpg.clinit
+    @realm client
 ]]
 
 include("shared.lua")
