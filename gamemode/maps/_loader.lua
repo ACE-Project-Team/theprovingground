@@ -1,8 +1,31 @@
---[[
-    Map Configuration Loader
-    
-    Balance formula: 150 ACE points per ton of weight limit
-    Props: 1.5x multiplier applied to all maps
+--[[--
+    Map configuration: spawns, build budgets and objective positions.
+
+    Every map is a table keyed by game type, merged over `TPG.Maps.Default`, so
+    a map only has to state what differs. A map with no block for a given game
+    type gets no objectives for it -- which in most modes is a round that can
+    never end, so either cover the maps or gate the roll. Adding a mode means
+    adding a `[GAMEMODE_X]` block here as well as to the default;
+    `ARCHITECTURE.md` covers the full sequence.
+
+    A map config holds:
+
+        spawns          [TEAM_GREEN] / [TEAM_RED], swapped each round
+        limits          weight (tons), props, points -- the team build budget
+        safezoneRadius  spawn protection radius
+        winsToMapVote   rounds before the map vote opens
+        [GAMEMODE_X]    capMultiplier, and a list of objective positions
+
+    Budgets are authored per map and then scaled by `TPG.Maps.LimitMult` at load
+    time, so the numbers written below are not the numbers in play. The
+    balance intent behind them is 150 ACE points per ton of weight limit.
+
+    Shared, because the map-vote screen shows the same budgets the server
+    enforces. Admin-placed custom points are overlaid on top at load time and
+    are server-side only; see `maps/sv_custom_points.lua`.
+
+    @module tpg.maps
+    @realm shared
 ]]
 
 TPG.Maps = TPG.Maps or {}
@@ -957,7 +980,15 @@ local function ApplyLimitMult(limits)
     limits.props  = math.floor((limits.props  or 0) * (m.props  or 1))
 end
 
--- Load map configuration
+--- Load a map's config and make it current.
+-- Merges the map's entry over `TPG.Maps.Default`, applies the limit
+-- multipliers, and (on the server) overlays admin-placed custom points. A map
+-- with no entry gets the defaults, which are generic enough to be playable but
+-- are not tuned for it. Called from @{tpg.rounds.Setup} each round, so editing
+-- a map config and restarting the round is enough to see the change.
+-- @tparam[opt] string mapName Defaults to the running map.
+-- @treturn table The merged config, also stored as `TPG.Maps.Current`.
+-- @realm shared
 function TPG.Maps.Load(mapName)
     mapName = mapName or game.GetMap()
 
@@ -991,7 +1022,9 @@ function TPG.Maps.Load(mapName)
     return TPG.Maps.Current
 end
 
--- Get current map config (load if not loaded)
+--- The current map config, loading it on first use.
+-- @treturn table
+-- @realm shared
 function TPG.Maps.Get()
     if not TPG.Maps.Current then
         TPG.Maps.Load()
@@ -999,13 +1032,35 @@ function TPG.Maps.Get()
     return TPG.Maps.Current
 end
 
--- Get spawn position for team
+--[[--
+    A team's spawn as written in the map config.
+
+    This is the *authored* spawn, not the one in play: @{tpg.rounds.Setup} swaps
+    the two sides each round and publishes the result to `TPG.State`. To find
+    out where a team actually spawns this round, use @{tpg.state.GetSpawn}.
+
+    Note the fallback is `Vector(0, 0, 0)`, never nil, so a missing spawn reads
+    as the map origin -- which is truthy, and on most maps is inside the world
+    or under it. That is an out-of-world death god mode does not stop.
+    @{tpg.state.GetSpawn} exists to reject exactly this value; do not paper over
+    a missing spawn by calling here instead.
+
+    @tparam number teamId TEAM_GREEN or TEAM_RED.
+    @treturn Vector The authored spawn, or the map origin if there isn't one.
+    @realm shared
+]]
 function TPG.Maps.GetSpawn(teamId)
     local config = TPG.Maps.Get()
     return config.spawns[teamId] or Vector(0, 0, 0)
 end
 
--- Get objectives for current gametype
+--- The current map's objective positions for a game type.
+-- Returns an empty list when the map has no block for that mode, which is why
+-- a new mode can appear to run but never end. Fed straight to
+-- @{tpg.objectives.SpawnAll}.
+-- @tparam number gameType A `GAMEMODE_*` constant.
+-- @treturn table List of `{ pos = Vector, name = string }`; empty, never nil.
+-- @realm shared
 function TPG.Maps.GetObjectives(gameType)
     local config = TPG.Maps.Get()
     local gtConfig = config[gameType]
@@ -1017,7 +1072,9 @@ function TPG.Maps.GetObjectives(gameType)
     return {}
 end
 
--- Get limits (weight, props, points)
+--- The current map's build budget, after the limit multipliers.
+-- @treturn table `{ weight (tons), props, points }`.
+-- @realm shared
 function TPG.Maps.GetLimits()
     local config = TPG.Maps.Get()
     return config.limits
@@ -1039,7 +1096,14 @@ local function prettifyMapName(mapName)
     return s:gsub("(%a)([%w']*)", function(a, b) return a:upper() .. b end)
 end
 
--- Display info + budgets for a map, used by the map-vote menu.
+--- Display name and budgets for any map, for the map-vote screen.
+-- Works on maps other than the running one and does not disturb the loaded
+-- config. The objective count reported is the CP-mode one, as a stand-in for
+-- how big the map plays.
+-- @tparam string mapName
+-- @treturn table `{ map, displayName, points, weight, props, objectives }`.
+--  `displayName` falls back to the map name tidied up.
+-- @realm shared
 function TPG.Maps.GetVoteInfo(mapName)
     local cfg = mergedConfig(mapName)
     local limits = cfg.limits or {}
