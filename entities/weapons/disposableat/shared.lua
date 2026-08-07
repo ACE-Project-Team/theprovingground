@@ -1,16 +1,30 @@
---[[
-    Disposable AT
+--[[--
+    `disposableat`: single-shot, throwaway AT launcher (60mm THEAT).
 
-    One THEAT rocket, then the tube is gone (the weapon strips itself after
-    firing). Rebuilt on weapon_ace_base: the original was written against the
-    long-removed "ace_basewep" base, so it had been silently dead -- wrong
-    base, no fire functions, and nothing in the loadout system offered it.
-    It's now discovered like any other ACE SWEP (Slot 4 -> Special).
+    One rocket, then the tube is gone -- @{SWEP:OnPrimaryAttack} strips the
+    weapon off the owner shortly after firing. Rebuilt on `weapon_ace_base`:
+    the original was written against the long-removed `"ace_basewep"` base, so
+    it had been silently dead -- wrong base, no fire functions, and nothing in
+    the loadout system offered it. It's now discovered like any other ACE SWEP
+    (Slot 4 -> Special).
 
-    Ballistics are the original's 60mm THEAT round. NOTE: field names must be
-    the modern ACF spelling "Area" (FrArea/PenArea/SlugPenArea) -- the original
-    used the long-dead "Ae" + "ra" spelling, so ACF read nil PenArea/SlugPenArea and
-    errored on deploy (DoAmmoStatDisplay) and on ground impact (PenetrateGround).
+    Ballistics are the original's 60mm THEAT round, built in
+    @{SWEP:InitBulletData}. NOTE for anyone porting another old ACF weapon the
+    same way: field names must be the modern ACF spelling "Area"
+    (`FrArea`/`PenArea`/`SlugPenArea`) -- the original used the long-dead "Ae" +
+    "ra" spelling, so ACF read nil `PenArea`/`SlugPenArea` and errored on
+    deploy (`DoAmmoStatDisplay`) and on ground impact (`PenetrateGround`).
+
+    Accuracy note: `SWEP.DeployDelay` is set to `2` here, but `init.lua`
+    (loaded after this file, server-only) overwrites it to `3` with the
+    comment "No more rocket 2 taps or sprinting lawnchairs" -- the value that
+    actually takes effect in game is `3`, not the `2` visible in this file.
+    `init.lua`'s `SWEP:Equip()` also re-arms `NextPrimaryFire` to
+    `CurTime() + DeployDelay` on every equip, which is what that exploit fix
+    depends on.
+
+    @module tpg.weapon.disposableat
+    @realm shared
 ]]
 
 AddCSLuaFile("shared.lua")
@@ -70,6 +84,11 @@ SWEP.HasScope = false
 
 SWEP.CarrySpeedMul = 0.8   -- lighter than a reloadable launcher
 
+--- Builds `self.BulletData` for ACF: a 60mm THEAT round with a fixed
+-- charge/filler/cone geometry. Standard ACF derived-stat block -- see the
+-- module header for the one field-naming pitfall worth knowing before editing
+-- it (the ACF "Area" spelling, not the original mod's dead "Ae"/"ra" one).
+-- @realm shared
 function SWEP:InitBulletData()
 
 	self.BulletData = {}
@@ -156,8 +175,10 @@ function SWEP:InitBulletData()
 
 end
 
--- Single use: the tube is spent after one rocket. Strip shortly after the shot
--- resolves; OnRemove (below) hands the carry-speed penalty back.
+--- Single use: the tube is spent after one rocket. Strips the weapon off the
+-- owner 0.1s after firing (server only) so the shot has time to actually
+-- resolve first; @{SWEP:OnRemove} hands the carry-speed penalty back.
+-- @realm shared
 function SWEP:OnPrimaryAttack()
 	if not SERVER then return end
 
@@ -169,10 +190,12 @@ function SWEP:OnPrimaryAttack()
 	end)
 end
 
--- The base's OnRemove only restores the carry-speed penalty when its fake crate
--- is still valid -- and a tube stripped the instant it fires usually isn't, so
--- the 0.8x slow stuck permanently. Always restore the snapshotted speed here,
--- then defer to the base for its crate cleanup.
+--- The base's OnRemove only restores the carry-speed penalty when its fake
+-- crate is still valid -- and a tube stripped the instant it fires usually
+-- isn't, so the 0.8x (`CarrySpeedMul`) slow stuck permanently without this
+-- override. Always restores the snapshotted speed here first, then defers to
+-- the base class for its own crate cleanup.
+-- @realm shared
 function SWEP:OnRemove()
 	if SERVER then
 		local owner = self:GetOwner()

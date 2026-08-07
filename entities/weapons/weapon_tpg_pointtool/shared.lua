@@ -1,16 +1,38 @@
---[[
-    TPG Point Tool
+--[[--
+    `weapon_tpg_pointtool`: admin SWEP for placing gamemode points live.
 
-    Admin weapon (sits under "ACE Tools" in the Q-menu, beside the torch) for
-    placing gamemode points live: control points, KOTH hills, CTF flag homes and
-    team spawns. Placements persist per map via maps/sv_custom_points.lua.
+    Sits under "ACE Tools" in the Q-menu, beside the torch, for placing
+    control points, KOTH hills, the CTF flag home and team spawns without
+    editing `_loader.lua`. Placements persist per map via
+    @{tpg.custompoints} (`gamemode/maps/sv_custom_points.lua`).
 
         Left click   place the selected point type at your aim
         Right click  cycle the point type
         Reload (R)   remove the nearest placed point
 
-    After placing, run  tpg_points_reload  to rebuild the round with the new
-    layout. Themed HUD uses TPG's red palette + Exo 2.
+    After placing, run `tpg_points_reload` to rebuild the round with the new
+    layout -- this weapon only writes to the saved point list, it does not
+    itself restart the round or touch the currently-loaded config.
+
+    Every action (fire, secondary, reload) is admin-gated server-side via the
+    local `isAdmin(owner)` helper, which just checks `ply:IsAdmin()` -- there
+    is no separate permission tier, any admin can place or remove any point.
+    The point-type cycle state (`TPG_PtType`, an index into `PointTypes`) is a
+    plain NWInt with no validation on read beyond a `math.Clamp`, so it is
+    safe even if desynced.
+
+    Themed HUD (`SWEP:DrawHUD`, client-only) uses TPG's red palette + the Exo 2
+    font family, and a `PostDrawTranslucentRenderables` hook draws a ghost
+    sphere + line at the aim point matching the currently-selected type's tint
+    -- purely a client-side preview, it has no effect on where a placement
+    actually lands (that is always the owner's live eye-trace at fire time).
+
+    This single file covers both realms: the HUD/ghost-marker code near the
+    bottom is wrapped in `if CLIENT then ... end` rather than split into a
+    separate client file.
+
+    @module tpg.weapon.pointtool
+    @realm shared
 ]]
 
 if SERVER then AddCSLuaFile() end
@@ -69,23 +91,40 @@ SWEP.PointTypes = {
     { id = "spawn", label = "SPAWN · RED",   team = TEAM_RED,   tint = Color(220, 70, 70) },
 }
 
+--- The current point-type index, clamped into range regardless of what the
+-- networked value actually holds.
+-- @treturn number 1-based index into `self.PointTypes`.
+-- @realm shared
 function SWEP:GetTypeIndex()
     return math.Clamp(self:GetNWInt("TPG_PtType", 1), 1, #self.PointTypes)
 end
 
+--- The point-type table entry currently selected (`{ id, label, team, tint }`).
+-- @treturn table
+-- @realm shared
 function SWEP:CurrentType()
     return self.PointTypes[self:GetTypeIndex()]
 end
 
+--- Sets the revolver hold type and, server-side only, initialises the type
+-- cycle to index 1 (control point).
+-- @realm shared
 function SWEP:Initialize()
     self:SetHoldType("revolver")
     if SERVER then self:SetNWInt("TPG_PtType", 1) end
 end
 
+-- Shared admin gate for every action below: valid player + IsAdmin, no
+-- separate permission tier.
 local function isAdmin(ply)
     return IsValid(ply) and ply:IsAdmin()
 end
 
+--- Places the currently-selected point type at the owner's eye-trace hit
+-- position, via `TPG.Maps.AddPoint`. Admin-gated server-side; a non-admin
+-- owner is refused with a chat message and nothing is placed. Does nothing
+-- if the trace didn't hit anything.
+-- @realm shared
 function SWEP:PrimaryAttack()
     self:SetNextPrimaryFire(CurTime() + 0.3)
     if not SERVER then return end
@@ -108,6 +147,12 @@ function SWEP:PrimaryAttack()
         pt.label, TPG.Maps.CountPoints()))
 end
 
+--- Cycles to the next point type (wrapping), server-side, and plays a UI
+-- rollover sound client-side. Not admin-gated on its own -- cycling the type
+-- is harmless without a place/remove action, so any holder can do it, though
+-- only an admin owner will ever be holding this weapon in practice
+-- (`AdminOnly = true`, `AdminSpawnable = true`).
+-- @realm shared
 function SWEP:SecondaryAttack()
     self:SetNextSecondaryFire(CurTime() + 0.2)
 
@@ -118,6 +163,11 @@ function SWEP:SecondaryAttack()
     if CLIENT then surface.PlaySound("ui/buttonrollover.wav") end
 end
 
+--- Removes whichever placed point is nearest the owner's eye-trace hit, within
+-- 300 units (via `TPG.Maps.RemoveNearest`). Throttled to once per 0.4s by
+-- `self.NextReload` and admin-gated; a non-admin's Reload silently does
+-- nothing (no chat message, unlike @{SWEP:PrimaryAttack}'s refusal).
+-- @realm shared
 function SWEP:Reload()
     if not SERVER then return end
     if (self.NextReload or 0) > CurTime() then return end
@@ -167,6 +217,9 @@ if CLIENT then
         surface.DrawRect(x + 2, y + 2, w - 4, 2)
     end
 
+    --- Draws the bottom-centre "POINT TOOL / PLACING <type>" panel in TPG's
+    -- red theme, plus the LMB/RMB/R hint line.
+    -- @realm client
     function SWEP:DrawHUD()
         local pt = self:CurrentType()
         local sw, sh = ScrW(), ScrH()
@@ -188,11 +241,18 @@ if CLIENT then
             TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
     end
 
-    -- Ghost marker at the aim point so placement is precise.
+    --- Ghost marker at the aim point so placement is precise. World-model draw
+    -- is unmodified (plain `DrawModel`); the actual ghost is the sphere+line
+    -- drawn by the `PostDrawTranslucentRenderables` hook just below.
+    -- @realm client
     function SWEP:DrawWorldModel()
         self:DrawModel()
     end
 
+    -- Draws a tinted ghost sphere + vertical line at the LOCAL player's own
+    -- eye-trace hit, but only while they are actively holding this weapon --
+    -- it re-derives everything from LocalPlayer() each frame rather than
+    -- reading anything off a specific SWEP instance's state.
     hook.Add("PostDrawTranslucentRenderables", "TPG_PointToolGhost", function(depth, sky)
         if depth or sky then return end
         local ply = LocalPlayer()

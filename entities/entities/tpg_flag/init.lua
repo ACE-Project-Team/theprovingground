@@ -1,3 +1,13 @@
+--[[--
+    tpg_flag (server): all gameplay, meaning pickup, carry, drop, return and
+    delivery, lives in this file.
+
+    See the module header in `shared.lua` for the spawn contract:
+    @{tpg.ctf.SpawnFlags} must set `HomePos`, call `Spawn`, then `SetHome`.
+
+    @module tpg.ent.flag.server
+    @realm server
+]]
 AddCSLuaFile("cl_init.lua")
 AddCSLuaFile("shared.lua")
 include("shared.lua")
@@ -5,6 +15,11 @@ include("shared.lua")
 local PICKUP_RADIUS = 100
 local STEP          = 0.1   -- real-time gameplay step (tickrate-independent)
 
+--- Resets flag state to STATE_HOME/no possessor. `self.HomePos` is only
+-- initialised here if not already set by the spawner (`TPG.CTF.SpawnFlags`
+-- normally sets it first), so a flag created any other way still gets a
+-- sane home rather than nil.
+-- @realm server
 function ENT:Initialize()
     self:SetModel("models/props_gameplay/cap_point_base.mdl")
     self:PhysicsInit(SOLID_NONE)
@@ -21,22 +36,42 @@ function ENT:Initialize()
     self:SetCarrier(NULL)
 end
 
--- The flag's HUD marker looks it up clientside, so it must be networked to
--- everyone regardless of PVS (same as tpg_controlpoint).
+--- The flag's HUD marker looks it up clientside, so it must be networked to
+-- everyone regardless of PVS (same as `tpg_controlpoint`).
+-- @treturn number TRANSMIT_ALWAYS
+-- @realm server
 function ENT:UpdateTransmitState()
     return TRANSMIT_ALWAYS
 end
 
+--- Sets `.HomePos` and teleports the flag there. Called by the spawner right
+-- after `:Spawn()`; also usable to relocate a live flag directly (bypassing
+-- the reset/broadcast that @{ENT:ReturnHome} does).
+-- @tparam Vector pos
+-- @realm server
 function ENT:SetHome(pos)
     self.HomePos = pos
     self:SetPos(pos)
 end
 
+--[[--
+    Reset the flag to STATE_HOME with no possessor, broadcast why, and
+    teleport it to a freshly-rolled home spot.
+
+    Re-rolls the home spot on every reset (via `TPG.CTF.RollFlagPoint`) rather
+    than returning to a fixed position, so the flag moves around the map over
+    a round (KOTH point vs. the CP points) instead of living wherever it first
+    rolled at spawn. `RollFlagPoint` returns a fixed custom point if an admin
+    placed one, so overridden maps still stay put. Called after a capture
+    (from `TPG.CTF.OnCapture`), after a carry timeout, and after a
+    drop-return timeout -- `reason` is only used for the chat line, it does
+    not change any behaviour.
+
+    @tparam ?string reason Shown in the broadcast, e.g. `"captured"`,
+     `"carried too long"`, `"timed out"`. Omit for a bare reset message.
+    @realm server
+]]
 function ENT:ReturnHome(reason)
-    -- Re-roll the home spot on every reset so the flag moves around the map over
-    -- a round (KOTH point vs. the CP points) instead of living wherever it first
-    -- rolled at spawn. RollFlagPoint returns a fixed custom point if an admin
-    -- placed one, so overridden maps still stay put.
     if TPG.CTF and TPG.CTF.RollFlagPoint then
         local pt = TPG.CTF.RollFlagPoint()
         if pt then self.HomePos = pt + Vector(0, 0, 5) end
@@ -51,6 +86,11 @@ function ENT:ReturnHome(reason)
         (reason and (" (" .. reason .. ")") or "") .. ".", Color(230, 230, 230))
 end
 
+--- Enters STATE_CARRIED for `ply`, starts the carry clock and networks
+-- `CarryEnd` (`CurTime() + TPG.Config.ctfMaxCarryTime`) so the carrier's HUD
+-- can count it down independently.
+-- @tparam Player ply
+-- @realm server
 function ENT:PickUp(ply)
     self:SetFlagState(self.STATE_CARRIED)
     self:SetPossessTeam(ply:Team())
@@ -65,16 +105,24 @@ function ENT:PickUp(ply)
         td.name .. "!", td.color)
 end
 
+--[[--
+    Enter STATE_DROPPED at (roughly) the carrier's last position, tracing
+    straight down to land it on solid ground rather than floating.
+
+    A carrier killed in the air (in an aircraft, off a cliff, rocket-jumping)
+    would otherwise leave the flag floating at head height with a 100u pickup
+    radius nobody on the ground can reach -- it'd just sit there until the
+    return timer. The trace runs through world + props/vehicles (but not
+    players, and not the ex-carrier) and drops it onto whatever surface is
+    beneath; falls back to the old head-height spot if nothing's hit
+    (`tr.Hit` false, or the trace went out to the skybox).
+
+    @realm server
+]]
 function ENT:Drop()
     local c    = self:GetCarrier()
     local base = (IsValid(c) and c:GetPos()) or self:GetPos()
 
-    -- Snap the drop down to the ground below. A carrier killed in the air (in an
-    -- aircraft, off a cliff, rocket-jumping) would otherwise leave the flag
-    -- floating at head height with a 100u pickup radius nobody on the ground can
-    -- reach -- it'd just sit there until the return timer. Trace straight down
-    -- through world + props/vehicles (but not players) and drop it onto whatever
-    -- surface is beneath; fall back to the old head-height spot if nothing's hit.
     local tr = util.TraceLine({
         start  = base + Vector(0, 0, 16),
         endpos = base - Vector(0, 0, 16384),
@@ -94,11 +142,22 @@ function ENT:Drop()
     TPG.Util.ChatBroadcast("[CTF] The flag was dropped!", Color(255, 200, 80))
 end
 
+--- Whether the current carrier is still a legitimate holder: valid, a player,
+-- alive, and on a team. Used by @{ENT:Think} to decide whether to drop the
+-- flag every tick -- a carrier who disconnects, dies, or gets moved to
+-- spectate all fail this the same way.
+-- @treturn boolean
+-- @realm server
 function ENT:CarrierStillValid()
     local c = self:GetCarrier()
     return IsValid(c) and c:IsPlayer() and c:Alive() and TPG.Util.IsOnTeam(c)
 end
 
+--- Runs every server tick: rides the flag above an invalidated-or-not carrier
+-- (dropping it the instant @{ENT:CarrierStillValid} fails), and throttles the
+-- rest of gameplay (@{ENT:GameplayStep}) to a fixed `STEP` (0.1s) real-time
+-- cadence so it isn't tied to tickrate.
+-- @realm server
 function ENT:Think()
     self:NextThink(CurTime())
 
@@ -118,6 +177,26 @@ function ENT:Think()
     return true
 end
 
+--[[--
+    Per-state gameplay for one `STEP`: carry-timeout and delivery checks while
+    carried, drop-timeout while dropped, and pickup scanning while home or
+    dropped.
+
+    Delivery is judged by `TPG.Protection.IsInSafezone(c)` when that module is
+    loaded, falling back to a flat-radius check (`ctfDeliverRadius`, default
+    500) against `TPG.State.spawns[c:Team()]` otherwise -- the fallback path
+    exists so this still works if load order ever puts this file ahead of
+    `TPG.Protection`, but it uses a DIFFERENT radius/shape than the real
+    safezone, so a flag near the safezone edge could read as delivered under
+    one path and not the other depending on which is active.
+
+    Pickup: the FIRST alive, teamed player found within `PICKUP_RADIUS` in
+    `player.GetAll()` iteration order grabs it -- not the nearest one -- so if
+    two teammates are both in range on the same tick, which one gets credited
+    depends on `player.GetAll()`'s ordering, not proximity.
+
+    @realm server
+]]
 function ENT:GameplayStep()
     local state = self:GetFlagState()
 

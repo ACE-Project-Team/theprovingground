@@ -1,10 +1,17 @@
-include("shared.lua")
+--[[--
+    tpg_flag (client): AAS-style waving flag, adapted for TPG -- a pole with a
+    cloth that waves on a sine, plus a 3D2D status billboard. Tinted by the
+    carrying team, grey while neutral.
 
---[[
-    AAS-style waving flag, adapted for TPG: a pole with a cloth that waves on a
-    sine, plus a 3D2D status billboard. Tinted by the carrying team, grey while
-    neutral.
+    Deliberately does NOT call `DrawModel()`: the underlying prop
+    (`cap_point_base.mdl`) is the same capture-point platform model, which read
+    as "capture this point" and looked wrong floating over a carrier's head, so
+    this file renders just the pole and cloth by hand instead.
+
+    @module tpg.ent.flag.client
+    @realm client
 ]]
+include("shared.lua")
 
 local POLE_H      = 92
 local SEGS        = 8
@@ -21,12 +28,21 @@ local function possessColor(teamId)
     return NEUTRAL
 end
 
+--- We draw the pole/cloth manually and skip the model, so give the entity
+-- generous render bounds or the engine culls it by the (undrawn) model.
+-- @realm client
 function ENT:Initialize()
-    -- We draw the pole/cloth manually and skip the model, so give the entity
-    -- generous render bounds or the engine culls it by the (undrawn) model.
     self:SetRenderBounds(Vector(-80, -80, 0), Vector(80, 80, POLE_H + 60))
 end
 
+--- Draws the waving cloth as a strip of quads, `SEGS` segments long, each
+-- offset by a sine of time plus its own segment index so the wave travels
+-- down the cloth rather than bobbing uniformly.
+-- @tparam Vector top World position of the cloth's top-left corner (pole tip).
+-- @tparam Vector fwd Forward direction the cloth extends along.
+-- @tparam Vector right Right direction, used for the wave's sideways offset.
+-- @tparam Color col Tint (team colour, or grey while neutral).
+-- @realm client
 function ENT:DrawCloth(top, fwd, right, col)
     local t = CurTime() * 5
     local prevTop, prevBot = top, top - Vector(0, 0, SEGH)
@@ -43,6 +59,10 @@ function ENT:DrawCloth(top, fwd, right, col)
     end
 end
 
+--- Pole beam, tip sphere, waving cloth (only inside `RENDER_DIST`, 4000u), and
+-- a 3D2D billboard reading NEUTRAL / HELD: &lt;name&gt; / DROPPED. The billboard
+-- yaws to face the local player each frame.
+-- @realm client
 function ENT:Draw()
     -- Intentionally NOT DrawModel(): the underlying prop is a cap-point base
     -- platform, which read as "capture this point" and looked wrong floating
