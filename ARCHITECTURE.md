@@ -147,6 +147,25 @@ Two stores, on purpose:
   connected. See the comments at the top of `systems/sv_stats.lua`; that file
   has been broken twice in ways worth reading about before touching it.
 
+## Running the tests
+
+```bash
+lua tests/run.lua
+```
+
+Any Lua 5.1 will do; nothing needs installing. These load the **shared** files
+against a stub of the GMod API and assert on the config tables, the lookups
+over them, and the pure functions — the part that is honest to test outside the
+game. The server files are hook and net plumbing whose behaviour is the engine
+calling them in an order the harness does not reproduce, so they are out of
+scope here; boot a real server for those. `tests/README.md` covers what a test
+in this repo is for, and where the stub could drift.
+
+Adding a shared config or a lookup means adding a case. Cross-file invariants
+are the highest-value ones: a `subCategory` override naming a tab that does not
+exist, or a gear price for an armor id with no tier, breaks nothing loudly — it
+just quietly stops working.
+
 ## Generating the reference
 
 ```bash

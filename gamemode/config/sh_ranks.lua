@@ -63,6 +63,10 @@ end
 --  ladder.
 -- @realm shared
 function TPG.GetRankProgress(rating)
+    -- Defaulted here as well as in GetRank: GetRank applies the default
+    -- internally but returns the entry, not the rating, so the arithmetic
+    -- below would still see the nil it was handed.
+    rating = rating or 1000
     local _, idx = TPG.GetRank(rating)
     local cur, nxt = TPG.Ranks[idx], TPG.Ranks[idx + 1]
     if not nxt then return 1, nil end

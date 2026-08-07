@@ -90,7 +90,7 @@ function TPG.GetArmor(armorId)
 end
 
 --- The player model to use for an armor tier, resolving any random variant.
--- Some tiers (currently only None) use a model path with a literal `%d`
+-- Some tiers (currently None and Light) use a model path with a literal `%d`
 -- placeholder for several numbered models (`Male_01.mdl` .. `Male_09.mdl`);
 -- this picks one at random each call, so calling it twice for the same armor
 -- can return different models. Tiers with a fixed model path return it
