@@ -1,15 +1,54 @@
---[[
-    Prop and Weight Tracking
-    Uses ACE/CFW data when available
+--[[--
+    Team prop/weight/point totals: the shared-budget side of the build limits.
+
+    Recomputes each team's props, weight and ACE points every 2 seconds (a
+    `Think` hook, not event-driven) and stores both the per-team sums
+    (`TPG.State.limits`) and a per-player snapshot (`TPG.PropTracking.Players`)
+    that other systems read via @{TPG.PropTracking.GetPlayerUsage} instead of
+    recomputing it themselves.
+
+    Only vehicles above `lightVehicleWeight`/`lightVehicleProps` count toward
+    a team's total at all -- a player's snapshot in `.Players` always reflects
+    their real build, but a genuinely light vehicle contributes nothing to the
+    team limit it is checked against, which is why a fleet of light buggies
+    does not visibly move the team's used points.
+
+    Uses ACE/CFW's own tracking (@{tpg.ace}) when available, and otherwise
+    falls back to a manual `ents.GetAll()` scan by owner with a synthetic
+    points-from-weight formula -- the fallback path only exists for a server
+    running without ACE/CFW loaded and is not what a normal TPG server uses.
+
+    Point totals are the expensive read (ACE recalculates them lazily; see
+    @{tpg.ace}), so forcing a fresh rebuild is throttled separately from the
+    2-second prop/weight cadence by `tpg_points_refresh_interval` -- 0 means
+    never force a rebuild, which is the first thing to try if a round is
+    lagging.
+
+    @module tpg.proptracking
+    @realm server
 ]]
 
 TPG.PropTracking = TPG.PropTracking or {}
 TPG.PropTracking.Players = {}
 
--- `refreshPoints` forces ACE to rebuild stale point totals before we read them.
--- Props and weight don't need it -- CFW maintains con.ents and con.totalMass for
--- us, so those are just table reads. ACE points are the expensive one (lazy,
--- rebuilt on demand), which is why the caller decides how often it's worth it.
+--[[--
+    Recompute every playing team's props/weight/points, and each player's own usage.
+
+    `refreshPoints` forces ACE to rebuild stale point totals before reading
+    them. Props and weight don't need it: CFW maintains `con.ents` and
+    `con.totalMass` live, so those are just table reads. ACE points are the
+    expensive one (lazy, rebuilt on demand), which is why the caller decides
+    how often it's worth paying for -- see the `tpg_points_refresh_interval`
+    convar below, which drives the periodic caller.
+
+    Fully replaces `TPG.State.limits` and `TPG.PropTracking.Players` each
+    call; nothing here is incremental. Syncs the result to clients via
+    `TPG.Net.SyncLimits` if that exists.
+
+    @tparam[opt=false] boolean refreshPoints Force ACE to rebuild point
+     totals before reading them.
+    @realm server
+]]
 function TPG.PropTracking.UpdateTeamTotals(refreshPoints)
     -- Reset team totals
     TPG.State.limits[TEAM_GREEN] = { props = 0, weight = 0, points = 0 }
@@ -58,6 +97,13 @@ function TPG.PropTracking.UpdateTeamTotals(refreshPoints)
     end
 end
 
+--- Fallback prop/weight count for a player via a full entity scan, no ACE/CFW.
+-- Only used when `TPG.CFWAvailable` is false; a normal server never takes
+-- this path.
+-- @tparam Player ply
+-- @treturn number props
+-- @treturn number weight
+-- @realm server
 function TPG.PropTracking.ManualCount(ply)
     local props = 0
     local weight = 0
@@ -81,10 +127,39 @@ function TPG.PropTracking.ManualCount(ply)
     return props, weight
 end
 
+--- A player's last-computed props/weight/points, from the periodic team update.
+-- This is a read of the snapshot @{TPG.PropTracking.UpdateTeamTotals} last
+-- wrote, not a live recount -- it can be up to 2 seconds (or one
+-- `tpg_points_refresh_interval` for the points figure) behind reality.
+-- @tparam Player ply
+-- @treturn table `{ props, weight, points }`; zeroed if the player has no
+--  recorded usage yet.
+-- @realm server
 function TPG.PropTracking.GetPlayerUsage(ply)
     return TPG.PropTracking.Players[ply] or { props = 0, weight = 0, points = 0 }
 end
 
+--[[--
+    Would spawning this add-on push the player's team over any shared limit.
+
+    Not currently called anywhere in this codebase -- the actual spawn-time
+    enforcement lives in `sv_duplication.lua`, split across two places that do
+    not agree on the comparison:
+
+      * its post-paste check (in the `AdvDupe_FinishPasting` handler) uses `>`,
+        strictly over, for points, weight and props alike;
+      * its `PlayerSpawnProp` gate uses `>=`, at-or-over, on props only.
+
+    This function uses `>=` throughout, so if it is ever wired back in it will
+    refuse a team at exactly the cap on all three axes, which matches the prop
+    gate but is one build stricter than the paste check.
+
+    @tparam Player ply
+    @tparam[opt=0] number additionalWeight Weight the pending spawn would add.
+    @treturn boolean
+    @treturn ?string Reason it was refused, if it was.
+    @realm server
+]]
 function TPG.PropTracking.CanSpawn(ply, additionalWeight)
     local teamId = ply:Team()
     if not TPG.Util.IsOnTeam(ply) then return false, "Not on a team" end

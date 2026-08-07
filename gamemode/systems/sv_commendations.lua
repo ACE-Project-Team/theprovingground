@@ -1,5 +1,21 @@
---[[
-    End-of-Round Commendations
+--[[--
+    End-of-round medals: one winner per category, no ties broken.
+
+    Tracks four per-round stats on `pState.stats` (kills, kills-per-ton,
+    objective kills, captures -- captures itself is credited elsewhere, see
+    @{tpg.ctf}) and, at round end, awards whoever led each category a
+    persistent medal count in PData. `pState.stats` is reset with the rest of
+    round state (see `TPG.State.ResetRound`), so these are per-round tallies;
+    only the medal counts in PData survive across rounds and reconnects.
+
+    The kill hook here ALSO drains deathmatch/CTF tickets on a kill -- that is
+    not a commendations concern, it lives in this file because it shares the
+    same `PlayerDeath` hook and the per-kill bookkeeping (tonnage, near-an-
+    objective) it needs. See the ticket-drain comment on the hook itself for
+    the per-mode/per-population scaling.
+
+    @module tpg.commendations
+    @realm server
 ]]
 
 TPG.Commendations = TPG.Commendations or {}
@@ -11,6 +27,26 @@ TPG.Commendations.Types = {
     { key = "captures",       name = "Most Captures",         pdataKey = "Medal_Captures" },
 }
 
+--[[--
+    Announce and award one medal per category to that round's leader.
+
+    For each entry in `TPG.Commendations.Types`, finds the highest `pState.stats[key]`
+    across everyone in `TPG.State.players`, bumps their lifetime medal count in
+    PData (`commType.pdataKey`) by one, and broadcasts it. Ties are not
+    detected -- `pairs()` iteration order picks whichever player it reaches
+    first among equal values.
+
+    There is no bot exclusion here, unlike @{tpg.stats}: `TPG.State.players`
+    is not filtered by `IsPlayer()`/`IsBot()`, so if a bot ever leads a
+    category it receives a PData medal write like anyone else. A leader with 0
+    in every category still wins that category, since the running best starts
+    at -1 -- there is no "nobody qualifies" case as long as at least one
+    tracked player exists.
+
+    Meant to be called once, from the round-end flow.
+
+    @realm server
+]]
 function TPG.Commendations.Award()
     for _, commType in ipairs(TPG.Commendations.Types) do
         local bestPlayer = nil
@@ -41,7 +77,28 @@ function TPG.Commendations.Award()
     end
 end
 
--- Track kills
+--[[--
+    Per-kill bookkeeping: commendation stats, safezone punishment, ticket drain.
+
+    On every non-suicide kill by a player, credits the attacker's `kills` and
+    `killsPerTon` (1 divided by their fielded tonnage, floored at 1 ton so a
+    featherweight buggy does not inflate the ratio) commendation stats, and
+    `objectiveKills` if the victim died within 2000 units of a live
+    objective. Then, if the attacker was firing from inside their own
+    safezone, kills them on the spot as the penalty.
+
+    Finally drains tickets from the victim's team, but only in modes that use
+    death-based scoring: the full amount in any `useDeathTickets` game type
+    (deathmatch), a smaller `TPG.Config.ctfKillTicketFrac` share in CTF (so
+    fighting matters between flag runs without out-scoring the flag itself),
+    and nothing everywhere else. The loss scales with the victim's fielded
+    weight (a "weight kill" -- a 40T tank drains more than a buggy) and with
+    how few players are active (`TPG.Config.dmTicketRefPlayers` /
+    `dmTicketMaxMult`), so a small-population round does not crawl.
+
+    @realm server
+    @function TPG_TrackKills
+]]
 hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
     if victim == attacker then return end
     if not IsValid(attacker) or not attacker:IsPlayer() then return end

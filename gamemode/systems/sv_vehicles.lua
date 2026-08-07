@@ -1,5 +1,20 @@
---[[
-    Vehicle Systems
+--[[--
+    Vehicle seat tracking, easy-entry, and the juggernaut seat lock.
+
+    Three small, unrelated pieces of vehicle glue that did not earn their own
+    files: a live table of every `prop_vehicle_prisoner_pod` seat in the map
+    (kept up to date purely by `OnEntityCreated`/`EntityRemoved`, not by
+    scanning `ents.GetAll()`), the "look at your vehicle, hold still, get
+    teleported into the nearest seat you own" bind, and a hook that keeps the
+    heaviest armor tiers out of seats entirely.
+
+    `TPG.Vehicles.Seats` is reset on `TPG_TrackSeats`/`TPG_UntrackSeats` only,
+    never rebuilt wholesale, so it survives round transitions -- seats that
+    still exist stay tracked, and only entities that are actually removed drop
+    out.
+
+    @module tpg.vehicles
+    @realm server
 ]]
 
 TPG.Vehicles = {}
@@ -24,7 +39,22 @@ hook.Add("EntityRemoved", "TPG_UntrackSeats", function(ent)
     TPG.Vehicles.Seats[ent] = nil
 end)
 
--- Easy vehicle entry
+--[[--
+    Teleport a player into the nearest seat they own, after a short delay.
+
+    Looks at what the player is aiming at and requires it to be owned by them
+    (this is an ownership check on the eye-trace target, not on the seat
+    itself -- aim at any prop you own, not necessarily the vehicle). Then
+    finds the closest tracked seat within `TPG.Config.easyEntryRange` that
+    they also own, warns them, and after `TPG.Config.easyEntryDelay` seconds
+    enters them into it, provided they have not moved more than 100 units
+    from where they were standing when the timer started.
+
+    Bound from `core/sv_commands.lua`'s easy-entry command.
+
+    @tparam Player ply
+    @realm server
+]]
 function TPG.Vehicles.EasyEntry(ply)
     local tr = ply:GetEyeTrace()
     local owner = tr.Entity:CPPIGetOwner()
@@ -72,7 +102,13 @@ function TPG.Vehicles.EasyEntry(ply)
     end)
 end
 
--- Check juggernaut in vehicle
+--- Block heavy-armor players from entering any seat.
+-- Reads the player's equipped armor (`TPG.GetArmor`, which always resolves to
+-- a real entry -- it falls back to armor id 1 for anything unknown, so this
+-- never sees a nil armor table) and denies entry when that armor's
+-- `canUseSeat` flag is false, the juggernaut tier being the current example.
+-- @realm server
+-- @function TPG_JuggernautCheck
 hook.Add("CanPlayerEnterVehicle", "TPG_JuggernautCheck", function(ply, veh)
     local armorId = TPG.Util.GetPData(ply, "Armor", 1)
     local armor = TPG.GetArmor(armorId)

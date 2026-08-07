@@ -1,15 +1,34 @@
---[[
-    Premium Gear (server)
+--[[--
+    Premium gear: charging for loadout picks and reporting what a player can take.
 
-    Charges for the items listed in config/sh_gear.lua and tells the client what
-    it's allowed to take. Nothing here decides what an item costs -- that's the
-    config -- this only enforces it and reports it.
+    Charges for the items listed in `config/sh_gear.lua` and tells the client
+    what it's allowed to take. Nothing here decides what an item costs --
+    that's the config -- this only enforces it and reports it.
 
-    Cooldowns run on CurTime and are stored per player (and stashed across a
-    reconnect in core/sv_gamestate.lua, so dropping out isn't a way to clear
+    Two entirely different payment models apply depending on whether the
+    per-player economy (@{tpg.economy}) is running, and @{TPG.Gear.Claim}
+    switches between them by checking `TPG.Economy.Active` at claim time:
+
+        - Economy active: pay points, no cooldown. A destroyed loadout pick
+          is not refunded any more than a destroyed vehicle is.
+        - Economy inactive (the shared team-budget mode): pay time. Taking
+          the item starts a per-player, per-item cooldown
+          (`pState.gearCooldowns`) instead of spending anything.
+
+    Cooldowns run on `CurTime` and are stored per player (and stashed across a
+    reconnect in `core/sv_gamestate.lua`, so dropping out isn't a way to clear
     one). They are NOT reset between rounds: a cooldown is a rate limit on a
     strong item, and a round boundary landing mid-cooldown shouldn't hand
     everyone a free Javelin.
+
+    Separately, `pState.gearPaidThisLife` tracks what the CURRENT life has
+    already paid for, so re-opening the loadout menu and respawning to change
+    an unrelated slot does not charge again for an item already bought this
+    life -- see @{TPG.Gear.Claim} for the incident that made this necessary.
+    That table is cleared on a real death, but deliberately not on a re-kit.
+
+    @module tpg.gearsystem
+    @realm server
 ]]
 
 TPG.Gear = TPG.Gear or {}
@@ -17,7 +36,14 @@ TPG.Gear = TPG.Gear or {}
 util.AddNetworkString("TPG_GearState")     -- server -> client (cooldowns)
 util.AddNetworkString("TPG_GearRequest")   -- client -> server (menu opened)
 
--- Seconds left on an item, or 0 if it's ready.
+--- Seconds left on an item's cooldown, or 0 if it's ready (or was never taken).
+-- Only meaningful under the team-budget payment model; the economy model
+-- never sets a cooldown entry in the first place.
+-- @tparam Player ply
+-- @tparam string kind
+-- @tparam string id
+-- @treturn number
+-- @realm server
 function TPG.Gear.Remaining(ply, kind, id)
     if not IsValid(ply) then return 0 end
     local cds = TPG.State.GetPlayer(ply).gearCooldowns
@@ -25,15 +51,31 @@ function TPG.Gear.Remaining(ply, kind, id)
     return math.max((cds[TPG.Gear.Key(kind, id)] or 0) - CurTime(), 0)
 end
 
---[[
+--[[--
     Take an item, paying whatever this round's price is.
 
-    Returns true on success. On failure returns false plus a reason
-    ("cooldown" / "afford") and the number that goes with it (seconds left, or
-    the cost), so the caller can say something useful instead of "denied".
+    Free items (no `TPG.Gear.Price` entry) always succeed and cost nothing, so
+    callers can run every pick through here without checking first.
 
-    Free items always succeed and cost nothing, so callers can run every pick
-    through here without checking first.
+    Already bought this life? Then it's yours, and re-spawning to change a
+    different slot doesn't buy it again. This is what makes the loadout
+    menu's respawn button safe to press: it used to charge once per SPAWN,
+    which meant tweaking your sidearm and respawning billed you a second time
+    for the Javelin you'd bought and never fired -- and in a team-budget round
+    it denied the Javelin outright, because the cooldown it had started ten
+    seconds earlier was still running. `pState.gearPaidThisLife` is what
+    fixes that; it's cleared on a real death (see the `PlayerDeath` hook
+    below), so it only ever covers the life actually paid for.
+
+    @tparam Player ply
+    @tparam string kind
+    @tparam string id
+    @treturn boolean True on success.
+    @treturn ?string Failure reason, `"cooldown"` or `"afford"` (also
+     `"invalid"` for an invalid player), absent on success.
+    @treturn ?number The number that goes with the reason: seconds left, or
+     the cost, so the caller can say something useful instead of "denied".
+    @realm server
 ]]
 function TPG.Gear.Claim(ply, kind, id)
     if not IsValid(ply) then return false, "invalid", 0 end
@@ -90,11 +132,15 @@ function TPG.Gear.Claim(ply, kind, id)
     return true
 end
 
---[[
+--[[--
     A life ends, so what that life paid for stops carrying over.
 
-    A re-kit (core/sv_commands.lua) is deliberately not a life ending -- that's
-    the whole point of it -- so it keeps the list and only clears the flag.
+    A re-kit (`core/sv_commands.lua`) is deliberately not a life ending --
+    that's the whole point of it -- so it keeps the list and only clears the
+    flag.
+
+    @realm server
+    @function TPG_GearLifeEnd
 ]]
 hook.Add("PlayerDeath", "TPG_GearLifeEnd", function(victim)
     if not IsValid(victim) then return end
@@ -104,12 +150,22 @@ hook.Add("PlayerDeath", "TPG_GearLifeEnd", function(victim)
     pState.gearPaidThisLife = nil
 end)
 
--- Push the player's live cooldowns, the picks the server actually has on record
--- (so the menu shows what they're really set to rather than what they last
--- clicked in this session), and what they're carrying RIGHT NOW -- which is how
--- the menu can tell "equipped" apart from "you still have to respawn for this".
--- Expired cooldowns are dropped on the way out, which is also the only cleanup
--- that table ever needs.
+--[[--
+    Push a player's gear state to their own client, over `TPG_GearState`.
+
+    Sends the player's live cooldowns, the picks the server actually has on
+    record (so the menu shows what they're really set to rather than what
+    they last clicked in this session), and what they're carrying RIGHT
+    NOW -- which is how the menu can tell "equipped" apart from "you still
+    have to respawn for this". Expired cooldowns are dropped on the way out,
+    which is also the only cleanup that table ever needs.
+
+    Called on `TPG_GearRequest` (menu opened) and wherever else the server
+    needs to push a fresh state.
+
+    @tparam Player ply
+    @realm server
+]]
 function TPG.Gear.Sync(ply)
     if not IsValid(ply) then return end
 

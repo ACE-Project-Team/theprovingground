@@ -1,21 +1,33 @@
---[[
-    Entity / Weapon Spawn Restrictions (server)
+--[[--
+    Entity and weapon spawn restrictions.
 
-    TPG is a vehicle-combat gamemode. The only things a player should be putting
-    into the world are props, ACE components and vehicles. Everything else the
-    sandbox spawn menu offers is either a free power-up that sidesteps the whole
-    damage model (health kits, suit batteries, the bouncy ball's heal-on-touch)
-    or a way to hurt people outside the vehicle fight (combine mines, NPCs, hand
-    weapons lying on the ground). None of it was ever meant to be reachable --
-    it just was, because sandbox's spawn menu is wide open.
+    TPG is a vehicle-combat gamemode. The only things a player should be
+    putting into the world are props, ACE components and vehicles. Everything
+    else the sandbox spawn menu offers is either a free power-up that
+    sidesteps the whole damage model (health kits, suit batteries, the bouncy
+    ball's heal-on-touch) or a way to hurt people outside the vehicle fight
+    (combine mines, NPCs, hand weapons lying on the ground). None of it was
+    ever meant to be reachable -- it just was, because sandbox's spawn menu is
+    wide open.
 
-    Blocked on every path we can see:
-        PlayerSpawnSENT / PlayerSpawnNPC / PlayerSpawnSWEP / PlayerGiveSWEP
-        the *Spawned* variants (belt and braces, in case something spawns an
-            entity without asking first)
-        dupe pastes (TPG.Restrictions.StripBlocked, called from sv_duplication)
+    Blocked on every path this file watches:
+
+        PlayerSpawnSENT / PlayerSpawnNPC (the gate; can return false)
+        PlayerSpawnedSENT / PlayerSpawnedNPC / PlayerSpawnedSWEP (the sweep;
+            belt and braces, in case something spawns an entity without
+            asking first)
+        dupe pastes (@{R.StripBlocked}, called from `sv_duplication.lua`)
+
+    SWEPs are deliberately NOT class-listed or gated here: `PlayerSpawnSWEP`/
+    `PlayerGiveSWEP` are covered by the blanket admin-only rule in
+    `player/sv_protection.lua`, so this file only sweeps up SWEP entities that
+    slip past that rule (`PlayerSpawnedSWEP`) rather than gating the request
+    itself.
 
     Admins bypass everything -- they need the tools to run an event.
+
+    @module tpg.entrestrictions
+    @realm server
 ]]
 
 TPG.Restrictions = TPG.Restrictions or {}
@@ -41,7 +53,11 @@ R.Blocked = {
     ["item_healthcharger"] = "pickups (health, armour and ammo) are not part of this gamemode",
 }
 
--- Returns nil if the class is fine, or the reason string if it's blocked.
+--- Why a class is restricted, or nil if it is not.
+-- Checks the exact-class table first, then the lowercase family patterns.
+-- @tparam string class
+-- @treturn ?string nil if the class is fine, else the human-readable reason.
+-- @realm server
 function R.BlockReason(class)
     if not isstring(class) then return nil end
     class = string.lower(class)
@@ -56,6 +72,10 @@ function R.BlockReason(class)
     return nil
 end
 
+--- Is this class restricted at all.
+-- @tparam string class
+-- @treturn boolean
+-- @realm server
 function R.IsBlocked(class)
     return R.BlockReason(class) ~= nil
 end
@@ -94,9 +114,15 @@ hook.Add("PlayerSpawnedSENT", "TPG_RestrictSweepSENT", Sweep)
 hook.Add("PlayerSpawnedNPC",  "TPG_RestrictSweepNPC",  Sweep)
 hook.Add("PlayerSpawnedSWEP", "TPG_RestrictSweepSWEP", Sweep)
 
+--- Remove every restricted entity from a just-pasted dupe.
 -- Dupes are the other way in: a saved contraption can carry a health kit or a
--- mine bolted to the hull. Called from sv_duplication on paste. Returns how
--- many entities were pulled out so the caller can tell the player.
+-- mine bolted to the hull. Called from `sv_duplication.lua` on paste, before
+-- anything else looks at the build; a no-op for admins.
+-- @tparam table entList Entities from the paste.
+-- @tparam Player ply The pasting player.
+-- @treturn number How many entities were removed, so the caller can tell the
+--  player.
+-- @realm server
 function R.StripBlocked(entList, ply)
     if IsValid(ply) and ply:IsAdmin() then return 0 end
 

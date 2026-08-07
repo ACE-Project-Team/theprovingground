@@ -1,10 +1,58 @@
---[[
-    Duplication Handling
-    Enforces limits AFTER ACE calculates points
+--[[--
+    Dupe-paste and prop-spawn enforcement: restricted entities, team/economy limits, cooldowns.
+
+    Where a pasted contraption or spawned entity gets checked against
+    everything TPG cares about: the wait-for-players window, restricted
+    entity classes (@{tpg.entrestrictions}), the team weight/prop/point
+    budget OR the per-player economy wallet (@{tpg.economy}, whichever mode
+    is active), and the duplicator cooldown.
+
+    The point/economy check happens on a `timer.Simple(0.5)` after the paste,
+    not synchronously in the paste hook -- ACE's point calculation runs on its
+    own `timer.Simple(0)` and needs to have actually settled before
+    `TPG.PropTracking.UpdateTeamTotals()` reads a real number. Pasting under
+    the economy is a TRUE PURCHASE charged exactly once at this point; a
+    contraption that fails any OTHER limit check (weight, props) is deleted
+    before the economy charge happens, so a rejected build is never billed.
+
+    Two independent, non-stacking pacing mechanisms exist depending on mode:
+    under the shared team budget, spawning a heavy build starts a duplicator
+    cooldown (`pState.dupeCooldown`, driven by whichever of weight or points
+    is larger); under the economy, there is no cooldown at all, because
+    spending the wallet down is itself the pacing.
+
+    @module tpg.duplication
+    @realm server
 ]]
 
 TPG.Duplication = TPG.Duplication or {}
 
+--[[--
+    Validate and (if the economy is active) charge for a just-pasted dupe.
+
+    Runs, in order: the wait-for-players guard (the whole build is deleted,
+    no partial credit); `TPG.Restrictions.StripBlocked` to yank any smuggled
+    restricted entity out of the dupe; a spectator bypass (no team, no
+    budget, no charge -- their sandbox is for testing builds between
+    matches); the team-budget duplicator cooldown, checked BEFORE the
+    (slower) point settle so an on-cooldown paste is rejected immediately
+    without waiting on ACE.
+
+    After a 0.5s settle, re-derives team totals and checks, in order: the
+    economy wallet (if active) or the team point budget (if
+    `TPG.Config.useACEPoints` and the economy is not active), then the team
+    weight limit, then the team prop limit. Any failure deletes the whole
+    build and refreshes team totals; passing all of them charges the economy
+    wallet if applicable, stamps the paid price onto the contraption via
+    `TPG.Economy.MarkContraptionsBilled` (done in BOTH modes, so post-spawn
+    edits have a baseline to re-bill against either way), and then -- only
+    outside the economy -- computes and applies the duplicator cooldown,
+    skipping it entirely for a build under
+    `TPG.Config.lightVehicleWeight`/`lightVehicleProps`.
+
+    @realm server
+    @function TPG_DupeFinished
+]]
 hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
     if not istable(data) or table.IsEmpty(data) then return end
     
@@ -173,7 +221,22 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
     end)
 end)
 
--- Also check when spawning individual props
+--[[--
+    Block an individual prop spawn (not a dupe paste) if the team is already at its prop cap.
+
+    Checks ONLY the team prop count against `maxLimits.props`; it does not
+    check weight, points, or the economy wallet, so a single spawned prop is
+    never charged under the economy -- only props that arrive as part of an
+    ACE contraption via a dupe paste (`AdvDupe_FinishPasting` above) get
+    billed. This hook can return `false` to actually block the spawn, unlike
+    the SENT check below.
+
+    @tparam Player ply
+    @tparam string model
+    @treturn ?boolean false to block the spawn; nil/true to allow.
+    @realm server
+    @function TPG_PropLimitCheck
+]]
 hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, model)
     if TPG.State.waitingForPlayers then
         TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
@@ -195,7 +258,26 @@ hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, model)
     end
 end)
 
--- Check when spawning SENTs (ACE entities, etc.)
+--[[--
+    Warn (but do NOT block) when spawning a SENT pushes the team over its point limit.
+
+    Point limits are advisory here. The only thing this hook ever blocks is a
+    spawn attempted before the round has started (`waitingForPlayers`); past
+    that, it always allows the spawn and the actual point check happens 0.5s
+    LATER, in a timer, purely to send a chat warning when
+    `TPG.Config.useACEPoints` is on and the team is over its cap. Contrast
+    @{TPG_PropLimitCheck} above, which refuses the spawn outright. A single
+    spawned ACE entity is therefore always allowed through no matter how far
+    over the team already is. Also unrelated to restricted-class blocking,
+    which is a separate hook on the same event in `sv_entrestrictions.lua`.
+
+    @tparam Player ply
+    @tparam string class
+    @treturn ?boolean false to block for the wait-for-players case; otherwise
+     always allows.
+    @realm server
+    @function TPG_SENTLimitCheck
+]]
 hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, class)
     if TPG.State.waitingForPlayers then
         TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
