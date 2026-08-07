@@ -1,12 +1,23 @@
---[[
-    Objective overtime banner (client)
+--[[--
+    Objective overtime banner: a big alert, then a small persistent tag.
 
-    The server flips TPG_ObjOvertime when an objective round has run long enough
-    that it starts closing itself out (objectives/sv_objectives.lua). Players
-    need to know the rules changed under them -- a point that used to take ten
-    seconds now flips almost on contact, and tickets are pouring out -- so this
-    is a full banner for BANNER_TIME, then a small persistent tag so nobody who
-    joined late is left wondering why the hill is behaving strangely.
+    The server flips the global bool `TPG_ObjOvertime` when an objective round
+    has run long enough that it starts closing itself out
+    (`objectives/sv_objectives.lua`). Players need to know the rules changed
+    under them -- a point that used to take ten seconds now flips almost on
+    contact, and tickets are pouring out -- so this is a full pulsing banner
+    for `BANNER_TIME` (8s) seconds after `TPG_ObjOvertimeStart`, then a small
+    persistent tag for as long as overtime stays active, so nobody who joined
+    late is left wondering why the hill is behaving strangely.
+
+    Exports @{BelowOvertime}, which every element that stacks under the
+    centre HUD column (currently the CTF banner) calls to find its own top
+    rather than hardcoding a y-offset. Reads `TPG.UI.BelowCompass` (falling
+    back to `TPG.UI.BelowObjectives` if the compass module hasn't loaded) to
+    find where the stack already ends above it.
+
+    @module tpg.hud.overtime
+    @realm client
 ]]
 
 local BANNER_TIME = 8
@@ -26,11 +37,17 @@ local function TagMetrics()
     return tw, th + TPG.UI.S(7)
 end
 
---[[
-    Bottom of the centre stack INCLUDING the overtime tag, for anything that
-    stacks below it (the CTF banner). Returns the compass bottom when overtime
-    isn't showing a tag, so nothing leaves a hole waiting for a tag that may
-    never appear.
+--[[--
+    Bottom of the centre stack including the overtime tag, for anything that
+    stacks below it (the CTF banner).
+
+    Returns the compass bottom when overtime isn't showing a persistent tag
+    (either not in overtime, or still within the first `BANNER_TIME` seconds
+    where the big banner is drawn instead), so nothing leaves a hole waiting
+    for a tag that may never appear.
+
+    @treturn number Y coordinate in screen pixels.
+    @realm client
 ]]
 function TPG.UI.BelowOvertime()
     local base  = TPG.UI.BelowCompass and TPG.UI.BelowCompass() or TPG.UI.BelowObjectives()

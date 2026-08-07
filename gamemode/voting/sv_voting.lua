@@ -1,5 +1,19 @@
---[[
-    Voting System - RTV, Scramble, Map Vote
+--[[--
+    Voting: Rock the Vote, team scramble, and the end-of-round map vote.
+
+    Three independent vote flows share this file because they share the same
+    per-player state (`TPG.State.GetPlayer(ply).votes`) and the same
+    threshold pattern: tally live votes against the current player count every
+    time someone votes, and act the moment the count clears the bar -- there is
+    no fixed voting window for RTV or scramble, only for the map vote.
+
+    The map vote itself is timer-driven: @{TPG.Voting.StartMapVote} opens a
+    window of `TPG.Config.mapVoteTime` seconds, schedules its own countdown
+    chat lines and its own tally via `timer.Simple`, and hands off to
+    @{TPG.Voting.TallyVotes} when the window closes.
+
+    @module tpg.voting
+    @realm server
 ]]
 
 TPG.Voting = TPG.Voting or {}
@@ -21,6 +35,19 @@ TPG.Voting.MapLists = {
     },
 }
 
+--[[--
+    Register `ply`'s RTV vote and start the map vote once enough players agree.
+
+    Any connected player counts toward both the numerator and `totalPlayers`,
+    spectators included -- there is no team check here, unlike most other TPG
+    systems. The threshold is `max(ceil(totalPlayers * TPG.Config.rtvPercentRequired),
+    TPG.Config.rtvMinPlayers)`, recomputed from scratch on every vote. Voting
+    again after already voting is harmless (it just re-sets the same flag to
+    true); there is no way to un-vote.
+
+    @tparam Player ply The voter.
+    @realm server
+]]
 function TPG.Voting.RockTheVote(ply)
     local pState = TPG.State.GetPlayer(ply)
     pState.votes.rtv = true
@@ -55,6 +82,18 @@ function TPG.Voting.RockTheVote(ply)
     end
 end
 
+--[[--
+    Register `ply`'s scramble vote and scramble teams once enough players agree.
+
+    Same shape as @{TPG.Voting.RockTheVote}: any connected player counts,
+    threshold is `max(ceil(totalPlayers * TPG.Config.scramblePercent), 2)`,
+    recomputed on every vote, and there is no un-vote. Passing calls
+    `TPG.PlayerTeams.ScrambleAll()` (a different module, not documented here)
+    directly and immediately, mid-round.
+
+    @tparam Player ply The voter.
+    @realm server
+]]
 function TPG.Voting.VoteScramble(ply)
     local pState = TPG.State.GetPlayer(ply)
     pState.votes.scramble = true
@@ -89,6 +128,28 @@ function TPG.Voting.VoteScramble(ply)
     end
 end
 
+--[[--
+    Open the end-of-round map vote: pick candidates, sync them to clients, and
+    schedule the whole vote's lifecycle with `timer.Simple`.
+
+    Candidates are drawn without replacement from `TPG.Voting.MapLists.Open`
+    and `.Urban` per `TPG.Config.mapVoteSlots` (default `{ open = 3, urban = 2,
+    bonus = 1 }`), each tagged with its category (1=Open, 2=Urban, 3=Bonus) so
+    the vote screen can label the card. The bonus slot draws from whatever is
+    left of BOTH pools after Open/Urban picks are removed, so it can never
+    repeat a map already offered. If a pool runs out early its remaining slots
+    are simply skipped -- the candidate list can come back shorter than the
+    slot config asked for.
+
+    Schedules, all via `timer.Simple` relative to `TPG.Config.mapVoteTime`:
+    opening every player's vote menu (`tpg_menu_mapvote` -- deferred 0.25s so the
+    synced map data has already arrived), a 10s-left and 5s-left chat
+    countdown, and the final call to @{TPG.Voting.TallyVotes} one second after
+    the window closes. None of these timers are named, so calling this again
+    before they fire stacks a second full set rather than replacing the first.
+
+    @realm server
+]]
 function TPG.Voting.StartMapVote()
     TPG.State.voting.active = true
     TPG.State.voting.endTime = CurTime() + TPG.Config.mapVoteTime
@@ -169,6 +230,21 @@ function TPG.Voting.StartMapVote()
     end)
 end
 
+--[[--
+    Record (or change) `ply`'s vote for a map-vote candidate and broadcast the
+    new tally.
+
+    `mapIndex` is whatever the client's `tpg_votemap` concommand sent -- an
+    unchecked number from the player. It is safe here only because the lookup
+    is bounds-checked: `TPG.State.voting.maps[mapIndex]` returns nil for
+    anything out of range and the function returns immediately, so a forged
+    index can neither crash the server nor vote for a map that isn't a
+    candidate. No-ops entirely while no vote is active.
+
+    @tparam Player ply The voter.
+    @tparam number mapIndex Index into `TPG.State.voting.maps`, 1-based.
+    @realm server
+]]
 function TPG.Voting.CastMapVote(ply, mapIndex)
     if not TPG.State.voting.active then return end
     local choice = TPG.State.voting.maps[mapIndex]
@@ -185,7 +261,9 @@ function TPG.Voting.CastMapVote(ply, mapIndex)
     TPG.Voting.BroadcastTally()
 end
 
--- Send the current per-candidate vote counts to all clients.
+--- Recompute the per-candidate vote counts from every player's live vote and
+-- send the tally to all clients.
+-- @realm server
 function TPG.Voting.BroadcastTally()
     local counts = {}
     for i = 1, #TPG.State.voting.maps do counts[i] = 0 end
@@ -200,6 +278,19 @@ function TPG.Voting.BroadcastTally()
     end
 end
 
+--[[--
+    Close the map vote, pick the winner, announce it, and change level.
+
+    Tie-break trap: the winner scan uses `>=`, not `>`, so on a tie the LAST
+    candidate reached with the highest count wins, not the first -- a straight
+    iteration in list order means later candidates beat earlier ones on equal
+    votes. `bestMap` starts at 1 with `bestVotes = 0`, so a round with zero
+    votes cast still "wins" for candidate 1 rather than falling back to the
+    current map. Schedules `changelevel` 3 seconds later via `timer.Simple` so
+    the announcement has time to reach chat first.
+
+    @realm server
+]]
 function TPG.Voting.TallyVotes()
     TPG.State.voting.active = false
     

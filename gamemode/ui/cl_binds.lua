@@ -1,5 +1,15 @@
---[[
-    Key Bindings
+--[[--
+    Maps a few default GMod key binds onto TPG's own menus.
+
+    Exports nothing; it is a single `PlayerBindPress` hook. `gm_showteam`,
+    `gm_showspare1` and `gm_showspare2` are the sandbox-gamemode binds for the
+    default F2/F3/F4 keys (rebindable under Options > Keyboard), repointed here
+    at the team menu, the loadout menu and easy-entry respectively. Returning
+    `true` from the hook suppresses GMod's own handling of that bind, which is
+    what stops the default spawn menus these binds normally open.
+
+    @module tpg.binds
+    @realm client
 ]]
 
 hook.Add("PlayerBindPress", "TPG_Binds", function(ply, bind, pressed)

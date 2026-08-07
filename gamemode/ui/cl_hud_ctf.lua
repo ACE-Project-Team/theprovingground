@@ -1,11 +1,28 @@
---[[
-    CTF status HUD. Two parts, only during a Capture the Flag round:
+--[[--
+    CTF status HUD: a world-space marker over the flag, plus a status banner.
 
-      1. A world-space marker over the flag (like control points get), so you can
-         always see where it is on screen.
-      2. A top-centre status banner -- but only while the flag is actually in play
-         (carried or dropped). When it's sitting neutral at home there's no nag to
-         "capture it"; the world marker is enough to find it.
+    Only draws during a Capture the Flag round (`TPG.UI.State.gameType ==
+    GAMEMODE_CTF`). Two parts:
+
+      1. A world-space marker over the flag, matching the `tpg_controlpoint`
+         markers drawn by `cl_hud_objectives.lua`, so you can always see where
+         it is on screen.
+      2. A top-centre status banner -- but only while the flag is actually in
+         play (carried or dropped). When it's sitting neutral at home there's
+         no nag to "capture it"; the world marker is enough to find it.
+
+    Exports nothing. Finds the single `tpg_flag` entity via
+    `ents.FindByClass("tpg_flag")[1]` on a 0.5s cache and reads its networked
+    `FlagState`/`PossessTeam`/`Carrier`/`CarryEnd` directly -- there is no net
+    message specific to this file. The carry timer bar reads `CarryEnd`
+    (a `CurTime()` deadline the entity networks) rather than counting down
+    independently, so it stays correct even if this HUD element opens partway
+    through a carry. Stacks itself under `TPG.UI.BelowOvertime` (falling back
+    to `TPG.UI.BelowObjectives`), so it moves down automatically while the
+    overtime tag is showing.
+
+    @module tpg.hud.ctf
+    @realm client
 ]]
 
 local flagCache, lastCache = nil, 0

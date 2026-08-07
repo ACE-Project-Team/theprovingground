@@ -1,5 +1,21 @@
---[[
-    Main HUD
+--[[--
+    Main HUD: the score bar, point pips, team-budget box, mode pill, teammate
+    markers, and the shared top-of-screen layout every other HUD file builds on.
+
+    This file owns `TPG.UI.State`, the client's whole picture of round state
+    (scores, budgets, game type, map-vote data) -- every `net.Receive` handler
+    in this file exists only to keep one field of it current, and nothing here
+    validates what the server sends beyond the wire types `net.Read*` already
+    enforce. It also owns @{TPG.UI.ComputeLayout}, the single layout pass every
+    stacked HUD element (compass, overtime banner, CTF banner) reads from
+    instead of hardcoding its own y-offset -- see the comment above `TPG.UI.Layout`
+    for why that matters and how the memoisation-per-frame works.
+
+    Hides no default HUD elements (`hideElements` is empty by design): see the
+    note above `HUDShouldDraw` for why `CHudBattery` in particular must stay.
+
+    @module tpg.hud
+    @realm client
 ]]
 
 TPG.UI = TPG.UI or {}
@@ -108,7 +124,7 @@ local function UpdateObjectiveCache()
     objectiveCache = ents.FindByClass("tpg_controlpoint")
 end
 
---[[
+--[[--
     Shared top-HUD layout.
 
     Everything stacked down the middle (score bar, point pips, compass, overtime
@@ -131,6 +147,13 @@ TPG.UI.Layout = {}
 -- window is being resized while they draw.
 local layoutFrame = -1
 
+--- The current frame's top-HUD layout, computing it once per frame and
+-- caching the result for every subsequent caller that frame (see the file
+-- comment above `TPG.UI.Layout` for why memoisation-per-frame matters here).
+-- @treturn table `TPG.UI.Layout`, with `margin`, `sideW/sideY/sideH`
+--  (corner boxes), `scoreX/scoreY/scoreW/scoreH` (centre score panel, width
+--  clamped to the real screen width) and `pipY/pipSize/pipGap` (point pips).
+-- @realm client
 function TPG.UI.ComputeLayout()
     local L = TPG.UI.Layout
     if layoutFrame == FrameNumber() then return L end
@@ -160,7 +183,12 @@ function TPG.UI.ComputeLayout()
     return L
 end
 
--- Bottom of the point-pip row (or of the score panel when there are no points).
+--- Bottom of the point-pip row, for whatever stacks below it (the compass).
+-- Falls back to the bottom of the score panel when there are no points to
+-- show pips for at all -- checked against the cached objective count, so it
+-- reflects the same 0.5s-stale list `UpdateObjectiveCache` maintains.
+-- @treturn number
+-- @realm client
 function TPG.UI.BelowObjectives()
     local L = TPG.UI.ComputeLayout()
     local hasPips = #objectiveCache > 0
@@ -293,6 +321,22 @@ hook.Add("HUDPaint", "TPG_HUD", function()
     TPG.UI.DrawTeammates(ply, teamId, teamColor)
 end)
 
+--[[--
+    Draw a name-tagged dot over every teammate visible on screen.
+
+    Prefers the server-pushed position from `TPG.UI.teamPositions` (populated
+    by the `TPG_TeamPositions` net message, which the server sends for the
+    local player's OWN team only, keyed by entity index -- see the comment
+    above that `net.Receive`), which stays accurate even for a teammate outside
+    this client's PVS. Falls back to the entity's own `GetPos()` when no
+    server position has arrived yet for that index, which happens for anyone
+    who joined since the last `TPG_TeamPositions` broadcast.
+
+    @tparam Player ply The local player (used only to skip drawing over self).
+    @tparam number teamId The team to draw markers for.
+    @tparam Color teamColor Dot colour.
+    @realm client
+]]
 function TPG.UI.DrawTeammates(ply, teamId, teamColor)
     local positions = TPG.UI.teamPositions or {}
     for _, teammate in ipairs(team.GetPlayers(teamId)) do

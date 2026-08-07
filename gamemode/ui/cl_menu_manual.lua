@@ -1,12 +1,20 @@
---[[
-    Field Manual (client)
+--[[--
+    Field manual: in-game explainer for TPG's mechanics.
 
-    In-game explainer for TPG's mechanics: modes, tickets, building, economy,
-    underdog bonuses, ranks, controls. Opened with tpg_menu_manual, or the
-    MANUAL buttons in the F2 team menu and the profile screen.
+    Covers modes, tickets, building, economy, underdog bonuses, ranks and
+    controls. Opened with `tpg_menu_manual`, or the MANUAL buttons in the F2
+    team menu and the profile screen. Exports nothing.
 
-    Content lives in the SECTIONS table below -- keep entries short; this is a
-    crib sheet, not documentation.
+    Content lives entirely in the `SECTIONS` table below as plain arrays of
+    pre-wrapped line strings -- there is no text-wrapping at render time, so an
+    edited line that runs long simply overflows its panel rather than
+    reflowing. Keep entries short; this is a crib sheet, not documentation, and
+    it intentionally does not stay in sync with balance numbers that live in
+    `TPG.Config` (e.g. the "10 minutes" overtime figure is prose here, not read
+    from config).
+
+    @module tpg.menu.manual
+    @realm client
 ]]
 
 local COL = {

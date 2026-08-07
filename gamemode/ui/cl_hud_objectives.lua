@@ -1,5 +1,23 @@
---[[
-    Objective Markers
+--[[--
+    World-space markers over every `tpg_controlpoint` on the map, plus a
+    capture-progress bar under any point actively being contested.
+
+    Exports nothing; it is a single `HUDPaint` hook. Re-scans
+    `ents.FindByClass("tpg_controlpoint")` on a 0.5s cache rather than every
+    frame, and reads each point's networked `PointName`, `CapProgress` and
+    `CapOwnership` (set by the entity's own `tpg_controlpoint/init.lua`) --
+    this file has no server-side counterpart and does no capture math itself.
+    The progress bar only draws while `CapOwnership == 0` (a point mid-flip
+    from one team toward the other, or being pushed back to neutral) and
+    `abs(CapProgress) > 0.5`, so a point sitting untouched at neutral shows no
+    bar at all.
+
+    This is distinct from the point PIPS drawn in `cl_hud.lua` (the small
+    lettered boxes in the top-centre score stack) -- this file draws the
+    in-world marker and name tag that floats over the point itself.
+
+    @module tpg.hud.objectives
+    @realm client
 ]]
 
 local objectiveCache = {}
@@ -9,7 +27,7 @@ local lastUpdate = 0
 local function GetContrastColor(bgColor)
     -- Calculate luminance
     local luminance = (0.299 * bgColor.r + 0.587 * bgColor.g + 0.114 * bgColor.b) / 255
-    
+
     -- If light background, use dark text; if dark, use white
     if luminance > 0.5 then
         return Color(0, 0, 0)  -- Black text

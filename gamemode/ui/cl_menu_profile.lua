@@ -1,10 +1,22 @@
---[[
-    Player Profile & Rankings (client)
+--[[--
+    Player profile and rankings screen: lifetime stats, rank progress and a
+    server top-10 leaderboard.
 
-    Lifetime stats and the rank ladder (config/sh_ranks.lua), plus a top-10
-    leaderboard over everyone who's ever played on the server. Opened with
-    tpg_menu_profile or the PROFILE button in the F2 menu. Data arrives over
-    TPG_ProfileData (systems/sv_stats.lua).
+    Exports nothing. Opened with `tpg_menu_profile` or the PROFILE button in
+    the F2 team menu; `OpenProfile` re-requests fresh data every time it opens
+    by sending an empty `TPG_ProfileData` message to the server and rendering
+    with whatever is cached from the previous reply in the meantime, so the
+    frame never blocks on the round trip. The reply's `net.Receive` handler
+    reads a fixed sequence of unsigned ints (rating, kills, deaths, teamkills,
+    caps, flags, wins, rounds) followed by up to 15 leaderboard entries
+    (`net.ReadUInt(4)` count, capped by that 4-bit width) -- the read order
+    here must exactly match whatever `systems/sv_stats.lua` writes, since
+    net messages carry no field names. An open profile window repaints from
+    the shared `profile` table every frame, so a reply that lands after the
+    menu is already open just makes the numbers update in place.
+
+    @module tpg.menu.profile
+    @realm client
 ]]
 
 local COL = {

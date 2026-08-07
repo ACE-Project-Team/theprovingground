@@ -1,9 +1,28 @@
---[[
-    Map Vote Menu
+--[[--
+    Map vote menu: a card per candidate, opened automatically at the end of a
+    round or after a successful Rock the Vote.
 
-    Shows a card per candidate map: preview image, display name + category,
-    point/weight/prop budgets and objective count, and a live vote tally with a
-    countdown bar. Click a card to (re)cast your vote.
+    Exports nothing; `OpenLoadoutMenu`'s sibling here is `OpenMapVoteMenu`,
+    bound to the `tpg_menu_mapvote` concommand that `tpg.voting`'s
+    `StartMapVote` runs on every client (see `TPG.State.voting` in
+    `gamemode/voting/sv_voting.lua`). Reads candidate data from
+    `TPG.UI.State.mapVote` (populated by the `TPG_SyncMapVote` net message in
+    `cl_hud.lua`) and live counts from `TPG.UI.State.voteTally`
+    (`TPG_SyncVoteTally`) -- both are pushed by the server, this file never
+    computes a tally itself. Each card shows a preview image loaded from
+    `materials/maps/<mapname>.png`, falling back to a "No Preview" placeholder
+    when that material doesn't exist or fails to load.
+
+    Clicking a card runs the `tpg_votemap <index>` concommand, which the
+    server resolves via `TPG.Voting.CastMapVote` -- the click sends only the
+    card's position in the candidate list, not the map name, so a stale or
+    reordered `TPG.UI.State.mapVote` would vote for the wrong map without any
+    error. The menu closes itself 3 seconds after `TPG.UI.State.voteEnd`
+    passes, via a `Think` check rather than a scheduled close, so it disappears
+    even if the server's own end-of-vote broadcast is lost.
+
+    @module tpg.menu.voting
+    @realm client
 ]]
 
 local CATEGORY_NAMES = { [0] = "Map", [1] = "Open Map", [2] = "Urban Map", [3] = "Bonus Map" }

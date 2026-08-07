@@ -1,11 +1,27 @@
---[[
-    Economy HUD (BETA)
-    Shows the local player's wallet, only while the per-player economy is active.
-    Sits just under the team stats box (top-right).
+--[[--
+    Per-player economy HUD (BETA): the local player's wallet and a floating
+    feed of what changed it and why.
 
-    Every wallet change the server reports over TPG_MoneyDelta floats a small
-    labelled +N / -N popup off the budget box (kill, income, point hold, vehicle,
-    team kill), so you can see exactly what moved your budget and why.
+    Only draws while the global bool `TPG_EconomyActive` is true, and sits just
+    under the team stats box (top-right), anchored to
+    `TPG.UI.ComputeLayout()`'s `sideY + sideH` rather than a hardcoded y so it
+    never overlaps that box regardless of whether it's showing the ACE-points
+    row. Reads the wallet balance straight off the local player's networked
+    `TPG_Money` int.
+
+    Every wallet change the server reports over the `TPG_MoneyDelta` net
+    message (sent by `systems/sv_economy.lua`) floats a small labelled +N / -N
+    popup off the budget box (kill, income, point hold, vehicle, team kill),
+    so a player can see exactly what moved their budget and why. Popups are
+    capped at 6 in flight (`while #popups > 6 do popups[#popups] = nil end`,
+    dropping the OLDEST) and each lives `POPUP_LIFE` (2.2s) with an ease-out
+    fade and upward drift; an unrecognised reason code falls back to the raw
+    code as its label and a colour chosen only from the delta's sign.
+
+    Exports nothing.
+
+    @module tpg.hud.economy
+    @realm client
 ]]
 
 -- Friendly label + colour per reason code (sent by systems/sv_economy.lua).

@@ -1,5 +1,6 @@
---[[
-    Compass HUD Element
+--[[--
+    Compass HUD element: a heading ladder (N/NE/E/.../NW) and a bearing number,
+    centred under the main HUD's score panel.
 
     Two things were wrong with the old one, and they had the same root cause:
     bare text drawn straight onto the world at a hardcoded y=60/80.
@@ -16,6 +17,13 @@
          chrome -- and gets its contrast from a real outline instead. An outline
          surrounds every edge of every glyph, so the letters hold up over sky,
          concrete and muzzle flash alike without a panel behind them.
+
+    Exports @{CompassY} and @{BelowCompass}, which
+    `cl_hud_overtime.lua` and `cl_hud_ctf.lua` use to stack themselves under
+    this element instead of guessing its height.
+
+    @module tpg.hud.compass
+    @realm client
 ]]
 
 local compassDirections = {
@@ -59,11 +67,17 @@ local function CompassBox()
     return ScrW() / 2 - w / 2, TPG.UI.BelowObjectives() + S(8), w, h, labelH
 end
 
+--- Top of the compass block, in screen pixels.
+-- @treturn number
+-- @realm client
 function TPG.UI.CompassY()
     local _, y = CompassBox()
     return y
 end
 
+--- Bottom of the compass block, for anything that stacks below it.
+-- @treturn number
+-- @realm client
 function TPG.UI.BelowCompass()
     local _, y, _, h = CompassBox()
     return y + h

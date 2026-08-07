@@ -1,9 +1,16 @@
---[[
-    Preparation-period countdown (client)
+--[[--
+    Preparation-period countdown banner.
 
-    While the round's prep window is confining players to spawn (core/sv_prep.lua
-    sets TPG_PrepEnd), show a centred countdown so everyone knows how long until
-    they can move out.
+    While the round's prep window is confining players to spawn
+    (`core/sv_prep.lua` sets the global float `TPG_PrepEnd`), shows a centred
+    countdown so everyone knows how long until they can move out. Exports
+    nothing; a single `HUDPaint` hook that reads `GetGlobalFloat("TPG_PrepEnd",
+    0)` directly rather than a net message, so it stays correct for a client
+    that joins mid-prep with no extra sync step. Only draws for players
+    actually on a team (`TPG.Util.IsOnTeam`), so spectators never see it.
+
+    @module tpg.hud.prep
+    @realm client
 ]]
 
 hook.Add("HUDPaint", "TPG_PrepHUD", function()

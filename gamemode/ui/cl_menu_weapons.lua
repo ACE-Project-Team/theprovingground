@@ -1,6 +1,25 @@
---[[
-    Weapon Admin Panel (admin-only) + client weapon-state receiver.
-    Open with the console command: tpg_menu_weapons
+--[[--
+    Weapon admin panel, plus the client-side weapon-state receiver every
+    client needs regardless of admin status.
+
+    Two halves. `net.Receive("TPG_WeaponState", ...)` runs for every client and
+    applies the server's enable/override state to `TPG.Weapons.ApplyState` so
+    the loadout menu's item lists match what the round actually allows -- this
+    part is not admin-gated because everyone needs to know the current rules.
+    `OpenWeaponAdmin` (bound to `tpg_menu_weapons`) is the admin editor: it
+    checks `LocalPlayer():IsAdmin()` and refuses to open otherwise, but that
+    check is purely a UI courtesy, since the server enforces admin status
+    independently when `TPG_WeaponStateSet` arrives (see the note on Save,
+    below).
+
+    Exports nothing. `OpenWeaponAdmin` builds a working COPY of
+    `TPG.Weapons._state` (`table.Copy`), edits it live as checkboxes are
+    toggled, and only sends it to the server -- as JSON over
+    `TPG_WeaponStateSet` -- when Save is clicked. Closing without saving
+    discards the copy; nothing is applied until Save fires.
+
+    @module tpg.menu.weapons
+    @realm client
 ]]
 
 -- Apply server-pushed enable/override state so loadout menus match the rules.

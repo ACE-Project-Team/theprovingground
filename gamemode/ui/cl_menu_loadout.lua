@@ -1,12 +1,31 @@
---[[
-    Loadout Selection Menu
+--[[--
+    Loadout selection menu: a paperdoll and a grid.
 
-    A paperdoll and a grid. One pane shows WHO YOU ARE: the actual player model
-    TPG will spawn you in (config/sh_armor.lua picks it from your armor tier),
-    with the four slots under it holding what you've got. The other pane shows
-    the one question you're currently asking -- the items for the slot you
-    clicked -- as icon boxes, because a rifle is easier to recognise by shape
-    than by which of six ACE naming conventions its name follows.
+    One pane shows WHO YOU ARE: the actual player model TPG will spawn you in
+    (`config/sh_armor.lua` picks it from your armor tier), with the four slots
+    under it holding what you've got. The other pane shows the one question
+    you're currently asking -- the items for the slot you clicked -- as icon
+    boxes, because a rifle is easier to recognise by shape than by which of six
+    ACE naming conventions its name follows.
+
+    Exports nothing; opened with `tpg_menu_loadout` (also bound to the F3 key
+    via `cl_binds.lua`). Client state comes from a single net message,
+    `TPG_GearState`: two parallel tables, `picks` (what the server has SAVED
+    for next spawn) and `live` (what you are ACTUALLY carrying right now), plus
+    a `cooldownEnds` table keyed by `TPG.Gear.Key(kind, id)`. The read order in
+    the `net.Receive` handler is fixed and must match whatever the server-side
+    gear system writes -- field names carry no self-description over the wire.
+    Clicking an item card sends `tpg_loadout <slotCmd> <itemId>` via
+    `RunConsoleCommand`; the server is the only thing that ever actually
+    equips or charges for anything, this file only ever writes to its own
+    local `picks` copy so the UI reflects the click immediately without
+    waiting on a round trip.
+
+    `picks` vs `live` matters because they diverge the instant you click
+    anything and stay diverged until your next respawn: clicking a rifle used
+    to paint "EQUIPPED" across the card while the old one was still in your
+    hands, which read as "done" when it meant "next time". Every row and card
+    in this menu shows both, distinctly, for exactly that reason.
 
     Two rules the drawing code follows, both learned the hard way:
 
@@ -32,6 +51,9 @@
       first being models and materials loading for the first time. Nothing in
       here depends on state that only changes between opens -- every Paint reads
       the picks and cooldowns live -- so there is nothing a rebuild would fix.
+
+    @module tpg.menu.loadout
+    @realm client
 ]]
 
 local SLOTS = {

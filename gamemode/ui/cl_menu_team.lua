@@ -1,9 +1,18 @@
---[[
-    Team Selection Menu
+--[[--
+    Team selection menu: the first screen a player sees.
 
-    This is the first screen a player sees, so besides picking a side it doubles
-    as a quick-start tutorial: it spells out the default control binds and the
-    basic flow (pick team -> pick loadout -> spawn/enter a vehicle).
+    Besides picking a side, it doubles as a quick-start tutorial: it spells
+    out the default control binds and the basic flow (pick team -> pick
+    loadout -> spawn/enter a vehicle). Exports nothing; opened with
+    `tpg_menu_team`. Every button (GREEN TERROR / SPECTATE / RED MENACE, and
+    the bottom row RTV / Scramble / Profile / Manual) is a thin wrapper around
+    `RunConsoleCommand` -- team choice runs `tpg_team <TEAM_ID or
+    TEAM_UNASSIGNED>`, which the server resolves and validates; nothing here
+    checks whether the switch is actually allowed (team locked, spectator only,
+    etc.), that is entirely server-side.
+
+    @module tpg.menu.team
+    @realm client
 ]]
 
 -- ── Palette ────────────────────────────────────────────────────────────────

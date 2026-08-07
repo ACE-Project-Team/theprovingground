@@ -1,12 +1,19 @@
---[[
-    Custom Map Points (server)
+--[[--
+    Custom map points: admin-placed objective, spawn and flag points.
 
-    Admin-placed objective / spawn / flag points, saved per map under
-    data/tpg/points/<map>.json and overlaid on the inline map config at load.
-    This is what the point tool (weapon_tpg_pointtool) writes to.
+    Saved per map under `data/tpg/points/<map>.json` and overlaid onto the
+    inline map config (@{tpg.maps}) every time it loads. This is what the point
+    tool (`weapon_tpg_pointtool`) writes to at runtime, so an admin can lay out
+    control points, a KOTH hill, the CTF flag home and team spawns without
+    touching `_loader.lua` and restarting the server -- `tpg_points_reload`
+    (below) rebuilds the round from whatever is on disk right now.
 
-    Point record: { type = "cp"|"koth"|"ctf"|"spawn", team = <id|nil>,
-                    pos = {x,y,z}, name = <string|nil> }
+    Point record shape: `{ type = "cp"|"koth"|"ctf"|"spawn", team = <id|nil>,
+    pos = {x,y,z}, name = <string|nil> }`. Positions are stored as plain
+    `{x,y,z}` tables (JSON has no Vector type) and converted back on read.
+
+    @module tpg.custompoints
+    @realm server
 ]]
 
 TPG.Maps = TPG.Maps or {}
@@ -21,6 +28,12 @@ end
 local function vToT(v) return { x = v.x, y = v.y, z = v.z } end
 local function tToV(t) return Vector(t.x, t.y, t.z) end
 
+--- Load a map's saved points from disk into `TPG.Maps.Custom`, replacing
+-- whatever was cached for it. A missing file is not an error: it just means no
+-- points have been placed yet, and yields an empty `{ points = {} }` record.
+-- @tparam[opt] string mapName Defaults to the running map.
+-- @treturn table The loaded (or freshly created) `{ points = {...} }` record.
+-- @realm server
 function TPG.Maps.LoadCustom(mapName)
     mapName = string.lower(mapName or game.GetMap())
 
@@ -36,13 +49,26 @@ function TPG.Maps.LoadCustom(mapName)
     return TPG.Maps.Custom[mapName]
 end
 
+-- The cached record for a map, loading it from disk on first use. Every
+-- mutator and resolver in this file goes through this so a cold cache never
+-- has to be special-cased at each call site.
 local function getData(mapName)
     mapName = string.lower(mapName or game.GetMap())
     if not TPG.Maps.Custom[mapName] then TPG.Maps.LoadCustom(mapName) end
     return TPG.Maps.Custom[mapName]
 end
+--- Alias for the internal cache-or-load lookup used throughout this file.
+-- @function TPG.Maps.GetCustomData
+-- @tparam[opt] string mapName Defaults to the running map.
+-- @treturn table The map's `{ points = {...} }` record.
+-- @realm server
 TPG.Maps.GetCustomData = getData
 
+--- Write a map's current in-memory points back to `data/tpg/points/<map>.json`.
+-- Called automatically by every mutator below; a caller only needs this
+-- directly if it edited `TPG.Maps.Custom[mapName]` by hand.
+-- @tparam[opt] string mapName Defaults to the running map.
+-- @realm server
 function TPG.Maps.SaveCustom(mapName)
     mapName = string.lower(mapName or game.GetMap())
     file.CreateDir(DIR)
@@ -50,12 +76,31 @@ function TPG.Maps.SaveCustom(mapName)
 end
 
 -- ── Mutators (used by the point tool) ───────────────────────────────────────
+
+--- Append a point to the running map's list and save immediately.
+-- No de-duplication: placing the same type/position twice yields two records,
+-- which for `"ctf"` matters because @{TPG.Maps.GetCustomFlagPoint} always
+-- returns the first one in list order (the first ever placed), silently
+-- ignoring any later ones.
+-- @tparam string ptype One of `"cp"`, `"koth"`, `"ctf"`, `"spawn"`.
+-- @tparam ?number teamId Only meaningful for `"spawn"`; nil otherwise.
+-- @tparam Vector pos World position.
+-- @tparam ?string name Optional label; falls back to a generated one when read.
+-- @realm server
 function TPG.Maps.AddPoint(ptype, teamId, pos, name)
     local data = getData()
     table.insert(data.points, { type = ptype, team = teamId, pos = vToT(pos), name = name })
     TPG.Maps.SaveCustom()
 end
 
+--- Remove whichever placed point is closest to `pos`, within `radius`.
+-- Used by the point tool's Reload (R) action to delete the point you're aiming
+-- near. Ties are not resolved by placement order -- `<` only replaces the best
+-- match on a strictly closer distance, so the first-seen point wins a tie.
+-- @tparam Vector pos Search origin (typically an eye-trace hit).
+-- @tparam[opt=250] number radius Search radius in units.
+-- @treturn ?table The removed point record, or nil if nothing was in range.
+-- @realm server
 function TPG.Maps.RemoveNearest(pos, radius)
     local data = getData()
     local bestIdx, bestDist
@@ -75,31 +120,62 @@ function TPG.Maps.RemoveNearest(pos, radius)
     return removed
 end
 
+--- Delete every placed point for the running map and save the empty list.
+-- @realm server
 function TPG.Maps.ClearPoints()
     getData().points = {}
     TPG.Maps.SaveCustom()
 end
 
+--- How many points are placed on the running map.
+-- @treturn number
+-- @realm server
 function TPG.Maps.CountPoints()
     return #getData().points
 end
 
 -- ── Resolvers ───────────────────────────────────────────────────────────────
--- The single neutral CTF flag point (first placed wins).
+
+--- The single neutral CTF flag point, if an admin placed one.
+-- First placed wins: if more than one `"ctf"` point was ever added (see the
+-- de-duplication note on @{TPG.Maps.AddPoint}), every one after the first is
+-- silently ignored. Consumed by `tpg.ctf`'s `GetFlagPoint`/`RollFlagPoint`,
+-- which treat a custom point as an override that always beats the roll.
+-- @treturn ?Vector nil if no CTF point has been placed.
+-- @realm server
 function TPG.Maps.GetCustomFlagPoint()
     for _, pt in ipairs(getData().points) do
         if pt.type == "ctf" then return tToV(pt.pos) end
     end
 end
 
+--- A team's custom spawn point, if an admin placed one for that team.
+-- @tparam number teamId TEAM_GREEN or TEAM_RED.
+-- @treturn ?Vector nil if no spawn was placed for that team.
+-- @realm server
 function TPG.Maps.GetCustomSpawn(teamId)
     for _, pt in ipairs(getData().points) do
         if pt.type == "spawn" and pt.team == teamId then return tToV(pt.pos) end
     end
 end
 
--- Overlay custom points onto a freshly-loaded map config. Anything placed wins
--- over the inline config; untouched categories keep their defaults.
+--[[--
+    Overlay a map's admin-placed points onto a freshly-loaded map config.
+
+    Called from `tpg.maps`' `Load` right after it merges the map's inline
+    config over the defaults, so placed points always win over what is
+    authored in `_loader.lua`. Mutates `config` in place; returns nothing.
+
+    Each category is independent and only touched if something was placed for
+    it: a map with only custom spawns leaves `config[GAMEMODE_CP]` and
+    `config[GAMEMODE_KOTH]` exactly as the inline config or defaults left them.
+    When there ARE placed `"cp"` or `"koth"` points, the whole objective list
+    for that mode is replaced wholesale (not merged) with the placed ones.
+
+    @tparam table config The merged map config to mutate (`TPG.Maps.Current`).
+    @tparam[opt] string mapName Defaults to the running map.
+    @realm server
+]]
 function TPG.Maps.ApplyCustomPoints(config, mapName)
     local data = getData(mapName)
     if not data or #data.points == 0 then return end
@@ -130,6 +206,11 @@ function TPG.Maps.ApplyCustomPoints(config, mapName)
 end
 
 -- ── Admin: apply placed points to a live round ──────────────────────────────
+
+-- Reload this map's points from disk and restart the round with them applied.
+-- Admin-gated when run by a player; a valid `ply` that fails IsAdmin is
+-- refused, but an invalid `ply` (server console) always passes, since there is
+-- no player to check.
 concommand.Add("tpg_points_reload", function(ply)
     if IsValid(ply) and not ply:IsAdmin() then
         ply:ChatPrint("[TPG] Admin only.")
@@ -145,6 +226,10 @@ concommand.Add("tpg_points_reload", function(ply)
     if IsValid(ply) then ply:ChatPrint(msg) else print(msg) end
 end)
 
+-- Wipe every placed point for the running map. Superadmin-gated the same way
+-- tpg_points_reload is admin-gated: only a valid non-superadmin player is
+-- refused, console is always allowed. Does NOT restart the round -- points
+-- already applied to TPG.Maps.Current stay in effect until the next reload.
 concommand.Add("tpg_points_clear", function(ply)
     if IsValid(ply) and not ply:IsSuperAdmin() then
         ply:ChatPrint("[TPG] Superadmin only.")
