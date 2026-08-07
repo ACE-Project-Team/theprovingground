@@ -315,3 +315,59 @@ function TPG.UI.Truncate(text, font, maxW)
     end
     return ellipsis
 end
+
+--[[
+    Break text into lines that each fit a width, splitting between words.
+
+    Truncate is the right answer for a NAME: one line, an ellipsis, the full
+    text a tooltip away. It is the wrong answer for a SENTENCE. The loadout
+    menu's slot descriptions explain what a cooldown actually costs you, and a
+    single line cut them at "until it runs out you spawn with the fre..." --
+    the setup with the answer missing, and nowhere else to read it.
+
+    A word wider than the whole box gets a clipped line of its own rather than
+    being dropped or looping forever; a weapon pack is free to ship one.
+
+    maxLines caps the block, because this text sits above a grid and a long
+    description must not be able to push the grid off the panel. Everything
+    past the cap is folded back onto the last line kept, so the ellipsis lands
+    where the text really stops rather than at the end of a line that happened
+    to fit.
+]]
+function TPG.UI.Wrap(text, font, maxW, maxLines)
+    surface.SetFont(font)
+
+    local lines, line = {}, ""
+
+    for word in string.gmatch(text or "", "%S+") do
+        local candidate = (line == "") and word or (line .. " " .. word)
+
+        if surface.GetTextSize(candidate) <= maxW then
+            line = candidate
+        elseif line == "" then
+            lines[#lines + 1] = TPG.UI.Truncate(word, font, maxW)
+        else
+            lines[#lines + 1] = line
+            line = word
+        end
+    end
+
+    if line ~= "" then lines[#lines + 1] = line end
+    if #lines == 0 then lines[1] = "" end
+
+    if maxLines and #lines > maxLines then
+        local tail = table.concat(lines, " ", maxLines, #lines)
+        for i = #lines, maxLines + 1, -1 do lines[i] = nil end
+        lines[maxLines] = TPG.UI.Truncate(tail, font, maxW)
+    end
+
+    return lines
+end
+
+-- Height of one line in a font, which is what surface.GetTextSize reports for
+-- any string in it. The sample has both an ascender and a descender so it can
+-- never come back short.
+function TPG.UI.LineHeight(font)
+    surface.SetFont(font)
+    return select(2, surface.GetTextSize("Ag"))
+end

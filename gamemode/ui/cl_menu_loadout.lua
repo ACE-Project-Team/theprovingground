@@ -21,6 +21,17 @@
       docked inside a DScrollPanel sizes itself to its children, which resizes
       the canvas, which re-runs the layout -- a loop that can run every frame.
       Column count comes from arithmetic on a known width instead.
+
+    And one rule about WHEN things are built.
+
+      The menu is constructed once per session and shown again afterwards, and
+      each slot's cards are built the first time that slot is opened and then
+      kept. Building it is 240 vgui.Create calls, a player model and forty spawn
+      icons: measured on a client that had just joined, the first open cost
+      ~330ms of hitch and every open after it ~70ms, with about 260ms of the
+      first being models and materials loading for the first time. Nothing in
+      here depends on state that only changes between opens -- every Paint reads
+      the picks and cooldowns live -- so there is nothing a rebuild would fix.
 ]]
 
 local SLOTS = {
@@ -29,6 +40,27 @@ local SLOTS = {
     { key = "Special",   label = "SPECIAL",   cmd = 3, hint = "Launchers and mines. This is your answer to a tank." },
     { key = "Armor",     label = "ARMOR",     cmd = 4, hint = "Sets your health, your armor and how fast you move." },
 }
+
+--[[
+    The plain-language answer to "what does this cost me and for how long".
+    A "cd" badge said none of it.
+
+    Both are kept because the round can flip from one currency to the other
+    while the menu is open, and the description below the slot title has to be
+    laid out for whichever is longer either way.
+]]
+local RULES = {
+    economy = "Marked items cost points, charged when you spawn with them. " ..
+              "Yours for that whole life.",
+    budget  = "Marked items are yours for that whole life. The timer starts when " ..
+              "you spawn with one, and until it runs out you spawn with the free " ..
+              "equivalent instead.",
+}
+
+-- How many lines of description the panel will give up to the block above the
+-- tab strip. Past this it is cut with an ellipsis, so no config text can push
+-- the grid off the bottom of the panel.
+local DESC_MAX_LINES = 3
 
 -- Each slot owns a colour, and it's the same colour on the paperdoll row, on
 -- the panel header and on the border of every box in the grid. That's what
@@ -159,7 +191,13 @@ end
     one (so it borrows the first), and a pack SWEP is free to ship a WorldModel
     path that isn't mounted -- which renders as the giant ERROR model and would
     be worse than no icon at all. Hence the file.Exists check.
+
+    That check searches every mounted content path and there is one per weapon,
+    so the answers are remembered. What is mounted cannot change while the game
+    is running, which makes the cache good for the whole session.
 ]]
+local modelExists = {}
+
 local function ItemModel(entry)
     if not entry then return nil end
 
@@ -170,7 +208,11 @@ local function ItemModel(entry)
     local swep = weapons.GetStored(class)
     local model = swep and swep.WorldModel
     if not model or model == "" then return nil end
-    if not file.Exists(model, "GAME") then return nil end
+
+    if modelExists[model] == nil then
+        modelExists[model] = file.Exists(model, "GAME")
+    end
+    if not modelExists[model] then return nil end
     return model
 end
 
@@ -227,6 +269,78 @@ local function BuildItems(slotKey)
     return items
 end
 
+--[[
+    BuildItems walks every SWEP in a slot and resolves a model for each, and
+    both the tab strip and the grid want the same answer.
+
+    Cached for the session rather than for the lifetime of one menu: the list
+    comes from the config and from what SWEPs are installed, and neither of
+    those changes after the client has loaded.
+]]
+local itemCache = {}
+
+local function SlotItems(key)
+    if not itemCache[key] then itemCache[key] = BuildItems(key) end
+    return itemCache[key]
+end
+
+--[[
+    Pull the models the menu is going to want into memory before anyone opens it.
+
+    Measured on a client that had just landed on the server, the first open of
+    this menu costs about 330ms and the second about 70ms. The difference is
+    everything the paperdoll and the spawn icons need being loaded for the first
+    time -- the part of the hitch that no amount of cheaper Lua can remove,
+    because it is disk.
+
+    Loading the lot in one pass is NOT the fix and was measured too: doing all
+    of them together stalled the client for half a second, which is the hitch
+    moved rather than removed. So it is one model per tick, started well after
+    the join storm has died down, and it stops the moment the menu is opened --
+    at that point the menu is loading them itself and a second copy of the work
+    would only compete with it.
+
+    The materials are asked for by name rather than left to the model: a
+    ClientsideModel that is never drawn never loads its VMTs, and the icons are
+    as much material as they are geometry.
+]]
+local function WarmModels()
+    if not (TPG.GetArmorList and TPG.GetWeaponList) then return end
+
+    local queue, seen = {}, {}
+
+    local function want(model)
+        if not model or model == "" or seen[model] then return end
+        seen[model] = true
+        queue[#queue + 1] = model
+    end
+
+    for _, armor in ipairs(TPG.GetArmorList()) do want(ArmorModel(armor.id)) end
+    for _, slot in ipairs(SLOTS) do
+        if slot.key ~= "Armor" then
+            for _, item in ipairs(SlotItems(slot.key)) do want(item.model) end
+        end
+    end
+
+    if #queue == 0 then return end
+
+    timer.Create("TPG_LoadoutWarm", 0.15, #queue, function()
+        local model = table.remove(queue)
+        if not model then return end
+
+        local ent = ClientsideModel(model, RENDERGROUP_OTHER)
+        if not IsValid(ent) then return end
+
+        ent:SetNoDraw(true)
+        for _, mat in ipairs(ent:GetMaterials() or {}) do Material(mat) end
+        ent:Remove()
+    end)
+end
+
+hook.Add("InitPostEntity", "TPG_LoadoutWarm", function()
+    timer.Simple(10, WarmModels)
+end)
+
 -- Name of whatever is currently in a slot, for the paperdoll rows.
 local function EquippedName(slotKey)
     if slotKey == "Armor" then
@@ -236,11 +350,7 @@ local function EquippedName(slotKey)
     return entry and entry.name or "None"
 end
 
-local function OpenLoadoutMenu()
-    -- Ask for fresh cooldowns and the picks the server currently has for us.
-    net.Start("TPG_GearRequest")
-    net.SendToServer()
-
+local function BuildLoadoutMenu()
     local S = TPG.UI.S
 
     -- Sized against the screen, not at 940x560: that was wider than a 1280x720
@@ -258,6 +368,14 @@ local function OpenLoadoutMenu()
     frame:ShowCloseButton(false)
     frame:SetDraggable(false)
     frame:MakePopup()
+
+    -- Closing hides it; see the note at the top of the file about why it is kept.
+    frame:SetDeleteOnClose(false)
+    frame.OnClose = function(self)
+        -- A Remove would have handed the mouse and keyboard back on its own.
+        self:SetKeyboardInputEnabled(false)
+        self:SetMouseInputEnabled(false)
+    end
 
     local headH  = S(58)
     local closeS = S(32)
@@ -372,15 +490,6 @@ local function OpenLoadoutMenu()
     -- Declared up here because the slot buttons below are built before it and
     -- have to be able to clear it when you change slot.
     local search
-
-    -- BuildItems walks every SWEP in the slot and stats a model file for each,
-    -- and both the tab strip and the grid want the same answer. Worked out once
-    -- per slot, for as long as this menu is open.
-    local itemCache = {}
-    local function SlotItems(key)
-        if not itemCache[key] then itemCache[key] = BuildItems(key) end
-        return itemCache[key]
-    end
 
     -- Widths are arithmetic, not measured: docking hasn't happened yet when the
     -- grid is first built, so asking a panel how wide it is would return zero.
@@ -552,6 +661,35 @@ local function OpenLoadoutMenu()
         row.DoClick = function() SelectSlot(slot) end
     end
 
+    --[[
+        The description under the slot title: what this slot is for, then what
+        the round's currency rule means for it.
+
+        Wrapped, not truncated. On one line it ended at "...until it runs out
+        you spawn with the fre-", which is the half of the sentence that doesn't
+        answer anything, and it was re-truncated sixty times a second besides.
+
+        All eight of them -- four slots, both currency modes -- are wrapped here
+        and kept, so Paint only picks one, and so the tab strip below can be
+        placed clear of the tallest and stay put when the round flips from a
+        team budget to a per-player economy mid-menu.
+    ]]
+    local descX, descY = S(14), S(44)
+    local descLH   = TPG.UI.LineHeight("TPG.Menu.Small")
+    local descRows = 1
+    local descLines = {}
+
+    for _, slot in ipairs(SLOTS) do
+        local wrapped = {}
+        for _, rule in ipairs({ RULES.economy, RULES.budget }) do
+            local lines = TPG.UI.Wrap(slot.hint .. "  " .. rule, "TPG.Menu.Small",
+                paneW - descX - S(14), DESC_MAX_LINES)
+            wrapped[#wrapped + 1] = lines
+            descRows = math.max(descRows, #lines)
+        end
+        descLines[slot.key] = wrapped
+    end
+
     -- ── Right: the grid for the active slot ────────────────────────────────
     local pane = vgui.Create("DPanel", body)
     pane:Dock(FILL)
@@ -561,19 +699,11 @@ local function OpenLoadoutMenu()
         draw.RoundedBox(0, S(10), 0, w - S(20), math.max(S(3), 1), col)
         draw.SimpleText(activeSlot.label, "TPG.Menu.Head", S(14), S(12), col)
 
-        --[[
-            The plain-language answer to "what does this cost me and for how
-            long". "cd" in a badge said none of it.
-        ]]
-        local rule
-        if TPG.Gear.EconomyActive() then
-            rule = "Marked items cost points, charged when you spawn with them. Yours for that whole life."
-        else
-            rule = "Marked items are yours for that whole life. The timer starts when you spawn with one, and until it runs out you spawn with the free equivalent instead."
+        local lines = descLines[activeSlot.key][TPG.Gear.EconomyActive() and 1 or 2]
+        for i = 1, #lines do
+            draw.SimpleText(lines[i], "TPG.Menu.Small", descX, descY + (i - 1) * descLH,
+                C.TextMuted)
         end
-        -- Stops short of the search box, which sits in this row.
-        draw.SimpleText(TPG.UI.Truncate(activeSlot.hint .. "  " .. rule, "TPG.Menu.Small", w - S(28)),
-            "TPG.Menu.Small", S(14), S(44), C.TextMuted)
     end
 
     --[[
@@ -612,7 +742,8 @@ local function OpenLoadoutMenu()
 
     local tabs = vgui.Create("DPanel", pane)
     tabs:Dock(TOP)
-    tabs:DockMargin(S(10), S(68), S(10), S(4))
+    -- Below the description, however many lines that turned out to be.
+    tabs:DockMargin(S(10), descY + descRows * descLH + S(6), S(10), S(4))
     tabs:SetTall(1)
     tabs.Paint = nil
 
@@ -628,21 +759,60 @@ local function OpenLoadoutMenu()
     canvas.Paint = nil
 
     local cardW, cardH = S(174), S(192)
+    local iconS = S(104)
     local gap = S(10)
     local cols = math.max(math.floor((gridW + gap) / (cardW + gap)), 1)
 
     --[[
-        One card. Everything static -- the truncated strings, the price, whether
-        it even HAS a badge -- is resolved here, once. Paint reads the results.
+        Icons arrive a frame at a time, not all together.
+
+        A SpawnIcon costs about 12ms the first time one is made for a model the
+        engine hasn't drawn yet -- it renders the thing to a texture. Nineteen of
+        those in the frame you click a slot is a 225ms stall, which is what the
+        first click on SECONDARY measured at. Making one per frame turns that
+        into the grid filling in over a fifth of a second, which reads as the
+        pictures loading rather than as the game stopping.
+
+        A card whose turn hasn't come yet draws exactly like an item that has no
+        model at all, and the name already sits where it will stay, so nothing
+        moves when the picture appears.
+    ]]
+    local iconQueue, iconNext = {}, 1
+
+    canvas.Think = function()
+        while iconNext <= #iconQueue do
+            local card = iconQueue[iconNext]
+            iconNext = iconNext + 1
+
+            if IsValid(card) and card.iconModel then
+                local icon = vgui.Create("SpawnIcon", card)
+                icon:SetModel(card.iconModel)
+                icon:SetSize(iconS, iconS)
+                icon:SetPos((cardW - iconS) / 2, S(26))
+                icon:SetMouseInputEnabled(false)
+                card.iconModel = nil
+                return
+            end
+        end
+    end
+
+    --[[
+        One card. Everything static -- the truncated strings, the price, the
+        badge text for both currencies -- is resolved here, once. Paint only
+        reads the results and asks which currency is in force.
 
         Position is NOT set here: cards are built once per slot and then moved
         around by LayoutGrid as the filter changes (see RefreshGrid).
+
+        The slot is passed in rather than read from activeSlot because a card
+        outlives the moment it was built -- every slot keeps its own, and they
+        last as long as the menu does.
     ]]
-    local function MakeCard(item)
-        local col     = SlotColor(activeSlot.key)
+    local function MakeCard(slot, item)
+        local col     = SlotColor(slot.key)
         local dim     = Color(col.r, col.g, col.b, 60)
-        local slotKey = activeSlot.key
-        local cmd     = activeSlot.cmd
+        local slotKey = slot.key
+        local cmd     = slot.cmd
         local price   = TPG.Gear.Price(item.kind, item.id)
 
         local card = vgui.Create("DButton", canvas)
@@ -653,14 +823,11 @@ local function OpenLoadoutMenu()
         -- SpawnIcon renders a cached material of the model, which is what makes
         -- a grid of forty weapons affordable -- a DModelPanel each would render
         -- forty models every frame. Items without a usable model just get their
-        -- name in the space the icon would have used.
-        local iconS = S(104)
+        -- name in the space the icon would have used. Queued rather than made
+        -- here; see the note on iconQueue.
         if item.model then
-            local icon = vgui.Create("SpawnIcon", card)
-            icon:SetModel(item.model)
-            icon:SetSize(iconS, iconS)
-            icon:SetPos((cardW - iconS) / 2, S(26))
-            icon:SetMouseInputEnabled(false)
+            card.iconModel = item.model
+            iconQueue[#iconQueue + 1] = card
         end
 
         local nameY  = item.model and (cardH - S(64)) or math.Round(cardH * 0.34)
@@ -668,14 +835,14 @@ local function OpenLoadoutMenu()
         local detail = item.detail and TPG.UI.Truncate(item.detail, "TPG.Menu.Tiny", cardW - S(14))
         local extra  = item.extra and TPG.UI.Truncate(item.extra, "TPG.Menu.Tiny", cardW - S(14))
 
-        -- The static half of the badge. The locked version is time-dependent and
-        -- is the only one built in Paint.
-        local badge, badgeCol
+        -- What this item costs, in both currencies, worked out now. Which of the
+        -- two applies is a question for Paint: the card outlives the round it
+        -- was built in, and a round can end in either mode.
+        local costBadge, cooldownBadge
         if price then
-            if TPG.Gear.EconomyActive() then
-                badge, badgeCol = price.cost .. " pts", C.Neutral
-            elseif (price.cooldown or 0) > 0 then
-                badge, badgeCol = FormatTime(price.cooldown) .. " cooldown", C.Neutral
+            costBadge = price.cost and (price.cost .. " pts") or nil
+            if (price.cooldown or 0) > 0 then
+                cooldownBadge = FormatTime(price.cooldown) .. " cooldown"
             end
         end
 
@@ -700,7 +867,7 @@ local function OpenLoadoutMenu()
             end
 
             -- Badge, top-left so it never lands on the icon's silhouette.
-            local text, textCol = badge, badgeCol
+            local text, textCol = TPG.Gear.EconomyActive() and costBadge or cooldownBadge, C.Neutral
             if left > 0 then
                 text, textCol = "Locked " .. FormatTime(left), C.Red
             end
@@ -753,7 +920,7 @@ local function OpenLoadoutMenu()
     end
 
     --[[
-        Cards for the active slot, built once and then hidden/moved.
+        Cards, built once and then hidden and moved -- never rebuilt.
 
         Rebuilding on every keystroke is what made typing in the search box lag:
         each pass destroyed forty panels and created forty more, and creating a
@@ -761,13 +928,18 @@ local function OpenLoadoutMenu()
         have cached yet. Filtering now only ever moves panels that already
         exist -- a SetVisible and a SetPos each -- so holding a key down costs
         nothing beyond a string compare per item.
+
+        The same argument applies one level up, which is why the cards are kept
+        PER SLOT rather than thrown away when you click a different one. Clicking
+        Primary, then Secondary, then Primary again used to pay the full build
+        cost three times; it now pays it twice and never again.
     ]]
-    local cards = {}
+    local slotCards = {}
 
     LayoutGrid = function()
         local shown = 0
 
-        for _, entry in ipairs(cards) do
+        for _, entry in ipairs(slotCards[activeSlot.key] or {}) do
             local item = entry.item
             local matchesGroup  = (not activeGroup) or item.group == activeGroup
             local matchesSearch = (searchText == "")
@@ -792,14 +964,22 @@ local function OpenLoadoutMenu()
         if IsValid(bar) then bar:SetScroll(0) end
     end
 
-    -- Full rebuild: only when the SLOT changes, which is the only time the set
-    -- of cards actually differs.
+    -- Bring a slot's cards on screen, building them if this is the first time
+    -- the slot has been looked at. Every other slot's cards go out of sight
+    -- where they are; they share one canvas.
     RefreshGrid = function()
-        canvas:Clear()
-        cards = {}
+        if not slotCards[activeSlot.key] then
+            local built = {}
+            for _, item in ipairs(SlotItems(activeSlot.key)) do
+                built[#built + 1] = { item = item, panel = MakeCard(activeSlot, item) }
+            end
+            slotCards[activeSlot.key] = built
+        end
 
-        for _, item in ipairs(SlotItems(activeSlot.key)) do
-            cards[#cards + 1] = { item = item, panel = MakeCard(item) }
+        for key, list in pairs(slotCards) do
+            if key ~= activeSlot.key then
+                for _, entry in ipairs(list) do entry.panel:SetVisible(false) end
+            end
         end
 
         LayoutGrid()
@@ -889,6 +1069,39 @@ local function OpenLoadoutMenu()
 
     RefreshTabs()
     RefreshGrid()
+
+    return frame
+end
+
+-- The one menu, and the UI scale it was built at.
+local menu, menuScale
+
+local function OpenLoadoutMenu()
+    -- Ask for fresh cooldowns and the picks the server currently has for us.
+    -- Every open, reused frame or not: this is the only thing that goes stale.
+    net.Start("TPG_GearRequest")
+    net.SendToServer()
+
+    -- Whatever the warmer hasn't got to yet, the menu is about to load itself.
+    timer.Remove("TPG_LoadoutWarm")
+
+    --[[
+        Shown again rather than rebuilt -- see the note at the top of the file.
+
+        The exception is a resolution change: every font and every S() dimension
+        underneath this menu is derived from the UI scale, so a menu built at the
+        old one is wrong in a way no refresh can fix, and gets replaced.
+    ]]
+    if IsValid(menu) and menuScale == TPG.UI.scale then
+        menu:SetVisible(true)
+        menu:MakePopup()
+        return
+    end
+
+    if IsValid(menu) then menu:Remove() end
+
+    menu      = BuildLoadoutMenu()
+    menuScale = TPG.UI.scale
 end
 
 concommand.Add("tpg_menu_loadout", OpenLoadoutMenu)
