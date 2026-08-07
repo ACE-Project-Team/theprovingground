@@ -1,5 +1,5 @@
---[[
-    Premium Gear (shared)
+--[[--
+    Prices and cooldowns for the handful of items strong enough to be gated.
 
     Most of the kit is free: everyone can field an AT-4, mines and medium armor
     every single life, forever. This file lists the handful of items that are
@@ -8,23 +8,27 @@
 
     There are two prices, and which one you pay depends on the round:
 
-      TEAM BUDGET (the normal round) -- you pay in TIME. Take the item and it
-      goes on a personal cooldown; until that runs out you spawn with the free
-      equivalent instead. There is no wallet in this mode, and charging the
-      shared team budget for a personal rifle would just let one player spend
-      the round's tickets, so a cooldown is the only price that lands on the
-      person who actually chose it.
+    TEAM BUDGET (the normal round), you pay in TIME. Take the item and it
+    goes on a personal cooldown; until that runs out you spawn with the free
+    equivalent instead. There is no wallet in this mode, and charging the
+    shared team budget for a personal rifle would just let one player spend
+    the round's tickets, so a cooldown is the only price that lands on the
+    person who actually chose it.
 
-      PER-PLAYER ECONOMY (the secondary mode) -- you pay in POINTS, out of the
-      same wallet you buy vehicles from. No cooldown: if you can afford it every
-      life, that's a legitimate way to spend a wallet that isn't buying a tank.
+    PER-PLAYER ECONOMY (the secondary mode), you pay in POINTS, out of the
+    same wallet you buy vehicles from. No cooldown: if you can afford it every
+    life, that's a legitimate way to spend a wallet that isn't buying a tank.
 
-    Costs are sized against ECON.Config: you start a round with 3,000 and a good
-    modern tank runs about 6,000. Nothing here should ever be the reason you
-    can't field a vehicle -- the most expensive item is a fifth of a tank.
+    Costs are sized against ECON.Config: you start a round with 3,000 and a
+    good modern tank runs about 6,000. Nothing here should ever be the reason
+    you can't field a vehicle; the most expensive item is a fifth of a tank.
 
     Cooldowns are in seconds of real time, not lives, so dying repeatedly never
-    speeds up the next Javelin.
+    speeds up the next Javelin. Which price is active right now is a single
+    shared answer (@{TPG.Gear.EconomyActive}), not a per-item choice.
+
+    @module tpg.gear
+    @realm shared
 ]]
 
 TPG.Gear = TPG.Gear or {}
@@ -96,7 +100,12 @@ TPG.Gear.Armor = {
     [4] = { cost = 1200, cooldown = 300 },   -- Juggernaut (and it can't use seats)
 }
 
--- Stable identifier for one item, used as the cooldown key on both realms.
+--- Stable identifier for one item, used as the cooldown key on both realms.
+-- @tparam string kind `"armor"` or `"weapon"` (anything else is treated as a
+--  weapon).
+-- @tparam string|number id Armor id or weapon class/virtual id.
+-- @treturn string `"armor:<id>"` for armor, `tostring(id)` otherwise.
+-- @realm shared
 function TPG.Gear.Key(kind, id)
     if kind == "armor" then return "armor:" .. tostring(id) end
     return tostring(id)
@@ -107,13 +116,37 @@ end
 -- cost typed into the weapon panel lands in the same ballpark as this file.
 local COST_PER_COOLDOWN_SEC = 3
 
--- Price table for an item, or nil if it's free. Weapon entries can be retuned
--- live by an admin (the cost override in the weapon panel), so the discovered
--- entry wins over the baseline in this file when it carries one.
---
--- An admin-set cost gets a matching cooldown for free. Without that, gating a
--- weapon through the panel would do nothing at all in a normal round -- the
--- cost only bites under the economy, which most rounds aren't.
+--[[--
+    Price table for an item, or nil if it is free.
+
+    For armor, this is a straight lookup into `TPG.Gear.Armor` (the price table
+    in this file, not `TPG.Armor` in `sh_armor.lua`); ids not listed there
+    (None/Light/Medium) come back nil, meaning free.
+
+    For a weapon, this first checks whether the id's DISCOVERED entry (in
+    `TPG.Weapons.Primary/Secondary/Special`) carries a positive `cost`. That
+    field is only ever non-zero when an admin has set a per-weapon cost
+    override in the weapon panel (`config/sh_weapons_config.lua`'s static
+    `Overrides` can also seed it) -- it is NOT populated from this file's
+    `Weapons` table, so the normal case is that discovered `cost` is 0 and
+    this falls through to `base`, the static entry below. When an admin
+    override IS present, it wins outright over the baseline in this file.
+
+    An admin-set cost gets a matching cooldown for free, computed as
+    `entry.cooldown or (base and base.cooldown) or cost/COST_PER_COOLDOWN_SEC`.
+    In practice `entry.cooldown` is never populated anywhere in
+    `config/sh_weapons.lua` (discovery never sets it and neither does
+    `TPG.Weapons.ApplyState`), so that first branch is currently always nil
+    and the real fallback is the static baseline's cooldown, or the derived
+    one if there is no baseline entry at all. Without a cooldown here, gating
+    a weapon through the panel would do nothing at all in a normal round; the
+    cost only bites under the economy, which most rounds aren't.
+
+    @tparam string kind `"armor"` or `"weapon"`.
+    @tparam string|number id Armor id or weapon class/virtual id.
+    @treturn ?table `{ cost, cooldown }`, or nil if the item is free.
+    @realm shared
+]]
 function TPG.Gear.Price(kind, id)
     if kind == "armor" then
         return TPG.Gear.Armor[tonumber(id) or -1]
@@ -136,7 +169,13 @@ function TPG.Gear.Price(kind, id)
     return base
 end
 
--- Display name for chat/menu messages, whichever kind it is.
+--- Display name for chat/menu messages, whichever kind it is.
+-- @tparam string kind `"armor"` or `"weapon"`.
+-- @tparam string|number id Armor id or weapon class/virtual id.
+-- @treturn string The armor tier's name, the weapon entry's name, or
+--  `tostring(id)` as a last resort if nothing matches (e.g. an id from a
+--  weapon pack that has since been removed).
+-- @realm shared
 function TPG.Gear.Name(kind, id)
     if kind == "armor" then
         local armor = TPG.GetArmor and TPG.GetArmor(tonumber(id))
@@ -150,8 +189,11 @@ function TPG.Gear.Name(kind, id)
     return tostring(id)
 end
 
--- Which price is in force right now. Kept in one place so the menu and the
--- spawn code can never disagree about what a player is about to be charged.
+--- Which price is in force right now: per-player economy, or the team-budget cooldown.
+-- Kept in one place so the menu and the spawn code can never disagree about
+-- what a player is about to be charged.
+-- @treturn boolean True when the per-player economy mode is running.
+-- @realm shared
 function TPG.Gear.EconomyActive()
     return GetGlobalBool("TPG_EconomyActive", false)
 end

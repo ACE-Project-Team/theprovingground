@@ -1,23 +1,31 @@
---[[
-    TPG Palette + HUD theme (shared)
+--[[--
+    One source of truth for the gamemode's colours, plus the client HUD theme.
 
-    One source of truth for the gamemode's colours, taken from the logo
-    (icon.svg / logo.svg, themselves sampled off the original icon24.png):
+    Colours are taken from the logo (icon.svg / logo.svg, themselves sampled
+    off the original icon24.png):
 
-        purple  #5818A7   the frame -- becomes the HUD's chrome
+        purple  #5818A7   the frame, becomes the HUD's chrome
         green   #00FF21   green team
         red     #FF0000   red team
-        cyan    #0094FF   the TPG lettering -- becomes the accent/info colour
+        cyan    #0094FF   the TPG lettering, becomes the accent/info colour
 
     Two of those are unusable as-is for large areas of HUD. Pure #00FF21 and
-    #FF0000 at panel size vibrate against a dark background and make white text
-    on top unreadable, which is exactly how the old team-stats box looked. So
-    the saturated pair stays reserved for the things that MEAN a team -- score
-    bars, point ownership, markers -- and everything structural is built from
-    the purple, darkened into near-black chrome with a violet cast.
+    #FF0000 at panel size vibrate against a dark background and make white
+    text on top unreadable, which is exactly how the old team-stats box
+    looked. So the saturated pair stays reserved for the things that MEAN a
+    team (score bars, point ownership, markers) and everything structural is
+    built from the purple, darkened into near-black chrome with a violet cast.
 
     That keeps the logo's identity (you can tell it's TPG by the colour of the
     frame) without painting the screen in neon.
+
+    `TPG.Colors` (the `C` table used throughout this file) and its three
+    lookup functions run on both realms. Everything from `TPG.UI` onward is
+    CLIENT ONLY: the file returns early on the server after defining the
+    colour table, so `TPG.UI` does not exist server-side at all.
+
+    @module tpg.palette
+    @realm shared
 ]]
 
 TPG.Colors = TPG.Colors or {}
@@ -57,19 +65,34 @@ C.Warn        = Color(255, 140, 50)
 C.Neutral     = Color(255, 214, 64)     -- uncaptured point
 C.Good        = Color(120, 230, 120)
 
+--- The saturated bar/marker colour for a team.
+-- @tparam number teamId TEAM_GREEN, TEAM_RED, or anything else.
+-- @treturn Color `C.Green`/`C.Red` for the two playing teams, else
+--  `C.TextMuted` (covers TEAM_UNASSIGNED and any unrecognised id).
+-- @realm shared
 function C.Team(teamId)
     if teamId == TEAM_GREEN then return C.Green end
     if teamId == TEAM_RED   then return C.Red end
     return C.TextMuted
 end
 
+--- The readable-as-text variant of a team's colour, lifted toward white.
+-- @tparam number teamId TEAM_GREEN, TEAM_RED, or anything else.
+-- @treturn Color `C.GreenText`/`C.RedText` for the two playing teams, else
+--  `C.TextMuted`.
+-- @realm shared
 function C.TeamText(teamId)
     if teamId == TEAM_GREEN then return C.GreenText end
     if teamId == TEAM_RED   then return C.RedText end
     return C.TextMuted
 end
 
--- Black or white, whichever survives on top of the given fill.
+--- Black or white, whichever survives on top of the given fill.
+-- Standard luminance-weighted formula; ignores `bg.a`, so a translucent panel
+-- fill is judged as if it were opaque against whatever it actually sits on.
+-- @tparam Color bg The fill colour text will be drawn over.
+-- @treturn Color `C.TextDark` on light backgrounds, `C.Text` on dark ones.
+-- @realm shared
 function C.Contrast(bg)
     local lum = (0.299 * bg.r + 0.587 * bg.g + 0.114 * bg.b) / 255
     return lum > 0.55 and C.TextDark or C.Text
@@ -194,6 +217,21 @@ local FONTS = {
 -- by the name it was handed without knowing which family is behind it.
 TPG.UI.CapMid = TPG.UI.CapMid or {}
 
+--[[--
+    (Re)create every named HUD/menu font at the current screen scale.
+
+    Recomputes `TPG.UI.scale` from the screen height first, then rebuilds
+    every entry in the local `FONTS` table via `surface.CreateFont`, and
+    records each one's cap-centring correction into `TPG.UI.CapMid` (see
+    @{TPG.UI.TextInBox}) keyed by the SAME font name, so a caller that only
+    has the font name string can still look up its correction.
+
+    Runs once at load and again on `OnScreenSizeChanged`, so a font name is
+    valid to use in `surface.SetFont` immediately after either of those, but
+    NOT before the first run has happened.
+
+    @realm client
+]]
 function TPG.UI.BuildFonts()
     TPG.UI.scale = math.Clamp(ScrH() / BASE_H, 0.72, 2.25)
 
@@ -212,27 +250,49 @@ end
 TPG.UI.BuildFonts()
 hook.Add("OnScreenSizeChanged", "TPG_UIRescale", TPG.UI.BuildFonts)
 
--- 1080p-authored pixels -> this screen's pixels. Rounded, because a half-pixel
--- panel edge draws as a blurry seam.
+--- Convert a 1080p-authored pixel value to this screen's pixels.
+-- Rounded, because a half-pixel panel edge draws as a blurry seam.
+-- @tparam number v A pixel value as authored at 1920x1080.
+-- @treturn number The scaled, rounded pixel value for the current screen.
+-- @realm client
 function TPG.UI.S(v)
     return math.Round(v * TPG.UI.scale)
 end
 
--- Standard panel: dark violet fill with a thin brand-purple top rule, which is
--- what visually ties every HUD box back to the logo's frame.
+--- Draw the standard HUD panel: dark violet fill with a thin brand-purple top rule.
+-- What visually ties every HUD box back to the logo's frame.
+-- @tparam number x
+-- @tparam number y
+-- @tparam number w
+-- @tparam number h
+-- @tparam[opt] Color accent Top-rule colour; defaults to `C.Purple`.
+-- @realm client
 function TPG.UI.Panel(x, y, w, h, accent)
     local inset = TPG.UI.S(6)
     draw.RoundedBox(TPG.UI.S(6), x, y, w, h, C.Panel)
     draw.RoundedBox(0, x + inset, y, w - inset * 2, math.max(TPG.UI.S(2), 1), accent or C.Purple)
 end
 
---[[
-    A panel sized to its own label, returning the width it used.
+--[[--
+    Draw a panel sized to its own label text, returning the width it used.
 
     Fixed-width pills don't survive contact with real strings: 132px fits
     "Control Points" and clips "King of the Hill", and the economy tag was
     wider than its box on the first render. Measuring means the box is right
     for whatever mode name or font the client actually ends up with.
+
+    @tparam string text
+    @tparam string font A font name already created by @{TPG.UI.BuildFonts}.
+    @tparam number x
+    @tparam number y
+    @tparam number h
+    @tparam[opt] Color accent Passed through to @{TPG.UI.Panel}.
+    @tparam[opt] Color color Text colour; defaults to `C.Text`.
+    @tparam[opt] number padX Horizontal padding on each side of the text;
+     defaults to `TPG.UI.S(14)`.
+    @treturn number The pill's total width, so the caller can lay out what
+     comes next.
+    @realm client
 ]]
 function TPG.UI.Pill(text, font, x, y, h, accent, color, padX)
     padX = padX or TPG.UI.S(14)
@@ -245,30 +305,43 @@ function TPG.UI.Pill(text, font, x, y, h, accent, color, padX)
     return w
 end
 
---[[
-    Draw text centred in a box.
+--[[--
+    Draw text centred in a box, correcting for capital-letter line-box bias.
 
     The old point pips passed TEXT_ALIGN_CENTER for both axes and looked
-    slightly high in their tiles. The math wasn't wrong: SimpleText centres the
-    font's LINE BOX, ascender to descender. A lone capital letter has no
+    slightly high in their tiles. The math wasn't wrong: SimpleText centres
+    the font's LINE BOX, ascender to descender. A lone capital letter has no
     descender, so the empty descender space all sits below it and pushes the
     visible glyph up by about half of it.
 
-    GMod can't measure a glyph's actual bounding box (surface.GetTextSize
+    GMod can't measure a glyph's actual bounding box (`surface.GetTextSize`
     returns the line height, not the ink), so the shift comes from the FACE's
-    published metrics instead -- see CapMid above. It's per-font because the two
-    families here disagree by a tenth of a line height, which at pip size is
-    around three pixels: a single number tuned until Roboto looked right left
-    Exo 2 sitting low, and vice versa.
+    published metrics instead, via `TPG.UI.CapMid` (built in
+    @{TPG.UI.BuildFonts}). It's per-font because the two families here
+    disagree by a tenth of a line height, which at pip size is around three
+    pixels: a single number tuned until Roboto looked right left Exo 2 sitting
+    low, and vice versa.
 
-    Text with real descenders (a "g", a "p") sits a hair low as a result, which
-    is why this is used for pips, badges and button captions -- short, capital,
-    centred things -- and not for body text.
+    Text with real descenders (a "g", a "p") sits a hair low as a result,
+    which is why this is used for pips, badges and button captions (short,
+    capital, centred things) and not for body text.
 
-    Both coordinates are ROUNDED. Centring produces a half-pixel offset whenever
-    the box and the glyph differ by an odd number of pixels, and a glyph
-    rasterised on a half-pixel is blurred asymmetrically -- it reads as being
-    nudged up and to the left, which is exactly what the point pips looked like.
+    Both coordinates are ROUNDED. Centring produces a half-pixel offset
+    whenever the box and the glyph differ by an odd number of pixels, and a
+    glyph rasterised on a half-pixel is blurred asymmetrically; it reads as
+    being nudged up and to the left, which is exactly what the point pips
+    looked like.
+
+    @tparam string text
+    @tparam string font A font name already created by @{TPG.UI.BuildFonts}
+     (its `CapMid` entry must exist; an unknown font name falls back to 0
+     correction, i.e. plain line-box centring).
+    @tparam number x
+    @tparam number y
+    @tparam number w
+    @tparam number h
+    @tparam Color color
+    @realm client
 ]]
 function TPG.UI.TextInBox(text, font, x, y, w, h, color)
     surface.SetFont(font)
@@ -279,19 +352,26 @@ function TPG.UI.TextInBox(text, font, x, y, w, h, color)
         color, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 end
 
---[[
-    Fit text to a width, ending in an ellipsis if it doesn't.
+--[[--
+    Fit text to a width, ending in an ellipsis if it does not fit.
 
-    Weapon names come from whatever packs are installed -- "Carl Gustaf M2
-    (HEDP 502)" is a real one -- so no box width is safe on its own. Clipping
-    with a render scissor would hide the overflow but leave a word cut mid-glyph
-    with no sign anything is missing; an ellipsis says "there is more name here"
-    and the full one is in the tooltip.
+    Weapon names come from whatever packs are installed ("Carl Gustaf M2
+    (HEDP 502)" is a real one) so no box width is safe on its own. Clipping
+    with a render scissor would hide the overflow but leave a word cut
+    mid-glyph with no sign anything is missing; an ellipsis says "there is
+    more name here" and the full one is in the tooltip.
 
     Trims from the end one character at a time. Names are short enough that a
     binary search would only save a few string compares per frame, and this
     stays correct for multi-byte names (it steps back over UTF-8 continuation
     bytes rather than splitting a codepoint in half).
+
+    @tparam string text
+    @tparam string font A font name already created by @{TPG.UI.BuildFonts}.
+    @tparam number maxW Maximum width in pixels.
+    @treturn string `text` unchanged if it already fits; otherwise a prefix of
+     it plus `"..."`; a bare `"..."` if even that does not fit `maxW`.
+    @realm client
 ]]
 function TPG.UI.Truncate(text, font, maxW)
     surface.SetFont(font)
@@ -316,23 +396,33 @@ function TPG.UI.Truncate(text, font, maxW)
     return ellipsis
 end
 
---[[
+--[[--
     Break text into lines that each fit a width, splitting between words.
 
-    Truncate is the right answer for a NAME: one line, an ellipsis, the full
-    text a tooltip away. It is the wrong answer for a SENTENCE. The loadout
-    menu's slot descriptions explain what a cooldown actually costs you, and a
-    single line cut them at "until it runs out you spawn with the fre..." --
-    the setup with the answer missing, and nowhere else to read it.
+    @{TPG.UI.Truncate} is the right answer for a NAME: one line, an ellipsis,
+    the full text a tooltip away. It is the wrong answer for a SENTENCE. The
+    loadout menu's slot descriptions explain what a cooldown actually costs
+    you, and a single line cut them at "until it runs out you spawn with the
+    fre...", the setup with the answer missing, and nowhere else to read it.
 
-    A word wider than the whole box gets a clipped line of its own rather than
-    being dropped or looping forever; a weapon pack is free to ship one.
+    A word wider than the whole box gets a clipped line of its own (via
+    Truncate) rather than being dropped or looping forever; a weapon pack is
+    free to ship one.
 
-    maxLines caps the block, because this text sits above a grid and a long
+    `maxLines` caps the block, because this text sits above a grid and a long
     description must not be able to push the grid off the panel. Everything
     past the cap is folded back onto the last line kept, so the ellipsis lands
     where the text really stops rather than at the end of a line that happened
     to fit.
+
+    @tparam string text
+    @tparam string font A font name already created by @{TPG.UI.BuildFonts}.
+    @tparam number maxW Maximum width per line, in pixels.
+    @tparam[opt] number maxLines If given, caps the number of lines returned;
+     the tail is folded onto the last line and truncated with an ellipsis.
+    @treturn {string,...} At least one line, even for an empty/nil `text`
+     (returns `{ "" }`).
+    @realm client
 ]]
 function TPG.UI.Wrap(text, font, maxW, maxLines)
     surface.SetFont(font)
@@ -364,9 +454,13 @@ function TPG.UI.Wrap(text, font, maxW, maxLines)
     return lines
 end
 
--- Height of one line in a font, which is what surface.GetTextSize reports for
--- any string in it. The sample has both an ascender and a descender so it can
--- never come back short.
+--- Height of one line in a font.
+-- Measures the sample string `"Ag"`, which has both an ascender and a
+-- descender, so the result can never come back short the way a string with
+-- neither (e.g. all-caps or all-lowercase-no-descender text) could.
+-- @tparam string font A font name already created by @{TPG.UI.BuildFonts}.
+-- @treturn number Line height in pixels.
+-- @realm client
 function TPG.UI.LineHeight(font)
     surface.SetFont(font)
     return select(2, surface.GetTextSize("Ag"))

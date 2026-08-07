@@ -1,5 +1,7 @@
---[[
-    Weapon System Configuration (defaults)
+--[[--
+    Baseline rules for the loadout menu's weapon list: which bases are
+    selectable, how discovered weapons are bucketed and tabbed, and the
+    per-weapon overrides discovery can't infer on its own.
 
     The loadout weapon list is DISCOVERED at runtime from any installed SWEP
     whose SWEP.Base is listed in Bases, then bucketed into Primary/Secondary/
@@ -9,6 +11,9 @@
     Admins can further toggle bases/weapons in-game; those choices are saved to
     data/tpg/weapons.json and layered on top of this file (see sv_weapons.lua).
     This file is only the baseline.
+
+    @module tpg.weaponsconfig
+    @realm shared
 ]]
 
 TPG.WeaponConfig = {

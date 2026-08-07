@@ -1,5 +1,25 @@
---[[
-    Core Configuration
+--[[--
+    Every balance knob in the gamemode, as one flat table.
+
+    `TPG.Config` is read from all over the codebase, on both realms, by
+    whatever system owns a given number: the round loop reads the ticket and
+    overtime fields, `player/sv_loadout.lua` reads the speed and limit fields,
+    `systems/sv_economy.lua` reads the economy fields, and so on. There is no
+    ownership enforcement, so a field is documentation of intent more than a
+    hard boundary; the comments inline with each group explain *why* the
+    number is what it is, not just what it does, because several of these were
+    hand-tuned against a specific bad outcome (a 57-minute stalemate, a
+    Juggernaut that out-ran everything else on the field) and the reasoning is
+    the part worth keeping.
+
+    Missing keys mostly fail soft: nearly every read site does
+    `TPG.Config.xyz or <fallback>`, so a field deleted from this table degrades
+    to that inline fallback rather than erroring. That is easy to rely on by
+    accident -- a typo'd key silently reads as the fallback everywhere, never
+    as `nil`, so a renamed field here needs every call site updated by hand.
+
+    @module tpg.config
+    @realm shared
 ]]
 
 TPG.Config = {
@@ -216,6 +236,26 @@ TPG.Config = {
     propUpdateInterval  = 100,
 }
 
+--[[--
+    Detect ACE/ACF and CFW, and force `useACEPoints` off if CFW is missing.
+
+    Sets the two globals `TPG.ACEAvailable` and `TPG.CFWAvailable`, which is
+    the actual product other systems read afterwards -- callers should not
+    keep the two booleans this returns, they should read those globals (or
+    `TPG.Config.useACEPoints`) once this has run.
+
+    The point-limit override is a one-way trip: if `useACEPoints` was true and
+    CFW is not loaded, this flips it to false and prints a warning, but it
+    never flips it back on a later call, and nothing here checks whether ACE
+    itself is present before doing so -- CFW missing is enough on its own.
+    When ACE is entirely absent this only prints a warning banner; it does not
+    disable the gamemode or fall back to some ACE-free mode, so most gameplay
+    code will still run and fail in less obvious ways downstream.
+
+    @treturn boolean hasACE
+    @treturn boolean hasCFW
+    @realm shared
+]]
 function TPG.Config.ValidateACE()
     local hasACE = ACE ~= nil and ACF ~= nil
     local hasCFW = CFW ~= nil
@@ -240,11 +280,26 @@ function TPG.Config.ValidateACE()
     return hasACE, hasCFW
 end
 
--- tpg_e2sf_sandbox (the E2/Starfall tpg* chip functions) has to exist as a REAL
--- addon under garrysmod/addons/ -- normally a junction/symlink to this repo's
--- addons/tpg_e2sf_sandbox folder, since git doesn't carry filesystem
--- links. Easy to forget on a fresh deploy, so check for it and say so loudly
--- rather than let it fail silently. See README.md for setup.
+--[[--
+    Check whether the tpg_e2sf_sandbox addon is mounted, and warn if not.
+
+    The E2/Starfall `tpg*` chip functions have to exist as a REAL addon under
+    `garrysmod/addons/`, normally a junction/symlink to this repo's
+    `addons/tpg_e2sf_sandbox` folder, since git does not carry filesystem
+    links. That is easy to forget on a fresh deploy, so this checks for one of
+    its files and prints a loud warning rather than letting the chip functions
+    silently not exist.
+
+    Detection is indirect: it does not check for the sandbox addon itself, it
+    checks for `autorun/server/tpg_e2sf_stub.lua` under the `LUA` search path
+    as a stand-in for "the junction is in place". Sets `TPG.E2SFSandboxMounted`
+    for anything else that needs to know. Even when mounted, the chip
+    functions only work while TPG is the active gamemode, not in plain
+    sandbox; see `addons/tpg_e2sf_sandbox` and README.md.
+
+    @treturn boolean Whether the stub file was found.
+    @realm shared
+]]
 function TPG.Config.ValidateE2SFSandbox()
     local mounted = file.Exists("autorun/server/tpg_e2sf_stub.lua", "LUA")
     TPG.E2SFSandboxMounted = mounted

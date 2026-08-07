@@ -1,12 +1,24 @@
---[[
-    Rank Ladder (shared)
+--[[--
+    The persistent skill-rating ladder.
 
-    Persistent skill-rating ranks, CS:GO-style ladder with names that fit a
-    server where everyone's tank is held together with duct tape. Rating is
-    earned across ALL maps and sessions (systems/sv_stats.lua); everyone starts
-    at 1000 and the ladder is centered there.
+    CS:GO-style ladder with names that fit a server where everyone's tank is
+    held together with duct tape. Rating is earned across ALL maps and
+    sessions (`systems/sv_stats.lua`); everyone starts at 1000 and the ladder
+    is centered there, which is why the lowest tiers sit below that and most
+    of the named tiers sit above it.
 
-    Keep this ordered by ascending min.
+    `TPG.Ranks` is an array (not keyed by anything), and it MUST stay ordered
+    by ascending `min` -- @{TPG.GetRank} and @{TPG.GetRankProgress} both walk
+    it front-to-back and rely on that order to find the right tier and its
+    neighbour. Each entry has:
+
+        min     the rating threshold this tier starts at
+        name    display name, shown on the scoreboard/HUD wherever a rank
+                shows
+        color   Color, used the same places
+
+    @module tpg.ranks
+    @realm shared
 ]]
 
 TPG.Ranks = {
@@ -24,7 +36,16 @@ TPG.Ranks = {
     { min = 2400, name = "Global Proving Elite",       color = Color(255, 215, 0)   },
 }
 
--- Rank entry + its index for a rating value.
+--- The rank entry for a rating value, and its index in `TPG.Ranks`.
+-- Rating defaults to 1000 (the ladder's centre, and every new player's
+-- starting rating) when not given. Walks the whole table keeping the LAST
+-- entry whose `min` the rating still clears, so it depends on `TPG.Ranks`
+-- staying sorted ascending by `min`; never returns nil since Ranks[1].min is 0
+-- and every rating is >= 0.
+-- @tparam[opt=1000] number rating
+-- @treturn table The matching rank entry.
+-- @treturn number Its index in `TPG.Ranks`.
+-- @realm shared
 function TPG.GetRank(rating)
     rating = rating or 1000
     local best, bestIdx = TPG.Ranks[1], 1
@@ -34,8 +55,13 @@ function TPG.GetRank(rating)
     return best, bestIdx
 end
 
--- Progress (0..1) through the current rank toward the next, for progress bars.
--- Returns progress, nextRank (nil at the top).
+--- Progress through the current rank toward the next, for progress bars.
+-- @tparam[opt=1000] number rating
+-- @treturn number Progress from 0 to 1. Always 1 at the top rank, since there
+--  is no next tier to measure progress toward.
+-- @treturn ?table The next rank entry, or nil when already at the top of the
+--  ladder.
+-- @realm shared
 function TPG.GetRankProgress(rating)
     local _, idx = TPG.GetRank(rating)
     local cur, nxt = TPG.Ranks[idx], TPG.Ranks[idx + 1]

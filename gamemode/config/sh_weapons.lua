@@ -1,13 +1,28 @@
---[[
-    Weapon Discovery Engine
+--[[--
+    Builds the weapon lists by scanning installed SWEPs, instead of a hardcoded table.
 
-    Builds TPG.Weapons.{Primary,Secondary,Special} at runtime from installed
-    SWEPs (see sh_weapons_config.lua for what gets included). Replaces the old
-    hardcoded list, so any ACE-based weapon pack is supported with no code edits.
+    `TPG.Weapons.Discover()` populates `TPG.Weapons.{Primary,Secondary,Special}`
+    at runtime from every currently-registered SWEP whose `Base` and category
+    pass the rules in `config/sh_weapons_config.lua` (`TPG.WeaponConfig`), so
+    any ACE-based weapon pack is supported with no code edits here -- installing
+    a pack is enough.
 
-    Entries are keyed by weapon CLASS (or a virtual sentinel), so saved loadouts
-    survive list changes. Public API (GetWeapon / GetWeaponList /
-    CalculateSpeedBonus) is unchanged, but ids are now strings instead of ints.
+    Entries are keyed by weapon CLASS (or a virtual sentinel like `"none"`),
+    not by an integer index, so a saved loadout referencing a class survives a
+    later re-discovery even if the list has reordered or grown. The public API
+    (@{TPG.GetWeapon}, @{TPG.GetWeaponList}, @{TPG.CalculateSpeedBonus}) is
+    unchanged from the old hardcoded-list version, but ids are strings now
+    rather than ints.
+
+    Discovery runs once at load, and again on `InitPostEntity` to pick up
+    content that mounts late; admins can also force it via the
+    `tpg_weapons_refresh` concommand (superadmin only). Every re-discovery
+    rebuilds the buckets from scratch and then re-applies any admin state
+    (`TPG.Weapons.ApplyState`) that was previously loaded, so enable flags and
+    per-weapon overrides survive a rebuild.
+
+    @module tpg.weapons
+    @realm shared
 ]]
 
 TPG.Weapons = TPG.Weapons or {}
@@ -107,6 +122,34 @@ local function passesExclude(cfg, swep, class)
     return true
 end
 
+--[[--
+    Rebuild `TPG.Weapons.Primary/Secondary/Special` from currently installed SWEPs.
+
+    Starts each category with a `"none"` entry (always enabled, zero cost),
+    then walks `weapons.GetList()` and keeps only SWEPs whose `Base` is
+    allowed (`cfg.Bases`) and that pass `passesExclude` (explicit class
+    exclusion, `SubCategory` exclusion, or a class-name pattern match). A kept
+    SWEP is filed under the category from an explicit override or from its
+    `Slot`; if neither maps to a known bucket, it is dropped silently rather
+    than filed under something wrong. Virtual entries from `cfg.Virtual` (for
+    multi-class or fallback weapons) are added on top of the discovered ones.
+
+    Ammo counts (`rounds`) are computed once here via the local `roundsFor`,
+    mirroring `TopUpAmmo` in `player/sv_loadout.lua`; `nil` means "does not
+    consume ammo" (ACE's `ClipSize -1` marker for tools/melee), not "zero
+    ammo" -- callers must not print "nil rounds" as "0 rounds".
+
+    After rebuilding, re-applies `TPG.Weapons._state` if a state was
+    previously loaded via @{TPG.Weapons.ApplyState}, so admin enable/override
+    choices survive a rediscovery. On the server only, also logs any raw
+    `SubCategory` strings seen that have no entry in `SubCategoryAlias`, as an
+    operator note (nothing a player can act on).
+
+    Called once at load and again on `InitPostEntity`; safe to call any time
+    after that (e.g. `tpg_weapons_refresh`).
+
+    @realm shared
+]]
 function TPG.Weapons.Discover()
     local cfg = TPG.WeaponConfig
     if not cfg then return end
@@ -202,8 +245,35 @@ function TPG.Weapons.Discover()
     unknownSubCategories = nil
 end
 
--- Apply admin enable/override state. Shape:
---   { bases = { [base]=bool }, weapons = { [id]=bool }, overrides = { [id]={...} } }
+--[[--
+    Apply admin enable/override state on top of the discovered weapon lists.
+
+    Shape of `state`:
+
+        { bases     = { [base] = bool },
+          weapons   = { [id]   = bool },
+          overrides = { [id]   = { speedBonus = n, cost = n, name = s } } }
+
+    Precedence per weapon: a base-level disable turns `enabled` off, then an
+    explicit per-weapon entry in `weapons` overrides that either way, so a
+    single weapon can be re-enabled even when its whole base is off. The
+    `"none"` entry in each category is never touched -- it is always enabled
+    and always free, regardless of state.
+
+    Mutates the entry tables in `TPG.Weapons.Primary/Secondary/Special` IN
+    PLACE rather than replacing them, so any table reference a caller already
+    holds from @{TPG.GetWeapon} changes under it when this runs; nothing here
+    hands back a snapshot.
+
+    Stores `state` on `TPG.Weapons._state` unconditionally (even before doing
+    anything else), which is what lets @{TPG.Weapons.Discover} re-apply it
+    after a rebuild -- but it also means a bad or partial state table is kept
+    as "current" the moment this is called, not only once applied
+    successfully.
+
+    @tparam ?table state Admin state, or nil/falsy to no-op.
+    @realm shared
+]]
 function TPG.Weapons.ApplyState(state)
     if not state then return end
     TPG.Weapons._state = state
@@ -233,7 +303,10 @@ function TPG.Weapons.ApplyState(state)
     end
 end
 
--- Set of SWEP bases actually present (for the admin panel's base toggles).
+--- Which SWEP bases are actually present, for the admin panel's base toggles.
+-- @treturn {[string]=boolean,...} A set (keys present = true) of base names;
+--  the virtual pseudo-base is excluded, since it has no real SWEP to toggle.
+-- @realm shared
 function TPG.Weapons.GetDiscoveredBases()
     local bases = {}
     for _, cat in ipairs(CATEGORIES) do
@@ -247,18 +320,38 @@ function TPG.Weapons.GetDiscoveredBases()
 end
 
 -- ── Public API (unchanged signatures; ids are now strings) ─────────────────
+
+--- Look up one discovered weapon entry.
+-- @tparam string category "Primary", "Secondary", or "Special".
+-- @tparam string id A weapon class, a virtual id, or `"none"`.
+-- @treturn ?table The entry, or nil for an unknown category or id -- unlike
+--  `TPG.GetArmor`, this has no fallback entry, so callers must handle nil.
+-- @realm shared
 function TPG.GetWeapon(category, id)
     local cat = TPG.Weapons[category]
     if not cat then return nil end
     return cat[id]
 end
 
+--- The SWEP class behind a discovered weapon id.
+-- @tparam string category "Primary", "Secondary", or "Special".
+-- @tparam string id
+-- @treturn ?string The class, or nil if the id is unknown, is `"none"`, or is
+--  a virtual entry with no single class (see `multipleClasses`/`fallbackClass`
+--  on the entry itself for those).
+-- @realm shared
 function TPG.GetWeaponClass(category, id)
     local weapon = TPG.GetWeapon(category, id)
     return weapon and weapon.class
 end
 
--- Returns only ENABLED entries, sorted by name ("None" first).
+--- List weapons in a category, sorted by name with "None" always first.
+-- @tparam string category "Primary", "Secondary", or "Special".
+-- @tparam[opt=false] boolean includeDisabled When false (the default), an
+--  entry that is currently disabled (base toggle or explicit per-weapon
+--  toggle from @{TPG.Weapons.ApplyState}) is left out entirely.
+-- @treturn {table,...} A list of `{ id, name, cost, enabled }`.
+-- @realm shared
 function TPG.GetWeaponList(category, includeDisabled)
     local cat = TPG.Weapons[category]
     if not cat then return {} end
@@ -278,6 +371,17 @@ function TPG.GetWeaponList(category, includeDisabled)
     return list
 end
 
+--- Sum the movement-speed bonus/penalty from a full loadout's three weapon slots.
+-- An id that does not resolve to a known weapon (unknown category, unknown
+-- id, a stale saved loadout referencing a removed weapon) contributes 0
+-- silently rather than erroring or warning, so a broken loadout reference
+-- shows up as a speed discrepancy, not as a visible failure.
+-- @tparam string primaryId
+-- @tparam string secondaryId
+-- @tparam string specialId
+-- @treturn number Combined speed bonus, added into the same sum as the armor
+--  tier's `speedBonus` (see `TPG.Config.minSpeedPercent`).
+-- @realm shared
 function TPG.CalculateSpeedBonus(primaryId, secondaryId, specialId)
     local bonus = 0
     local primary   = TPG.GetWeapon("Primary", primaryId)
