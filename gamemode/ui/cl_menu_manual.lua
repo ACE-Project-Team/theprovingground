@@ -82,6 +82,9 @@ local SECTIONS = {
             "Earn by playing - kills (bigger targets pay more), standing on",
             "objectives, passive trickle, flag deliveries. No duplicator cooldown,",
             "but stock vehicles (jeep/airboat/APC) cost points too. Team kills fine you.",
+            "You get a REPAIR TORCH inside your own spawn: drive a damaged vehicle",
+            "  home and weld it instead of buying a new one. It is taken off you",
+            "  the moment you leave the safezone, so there is no welding in a fight.",
         },
     },
     {

@@ -83,6 +83,7 @@ include("core/sv_ulx_compat.lua")
 include("player/sv_spawning.lua")
 include("player/sv_loadout.lua")
 include("player/sv_teams.lua")
+include("player/sv_repair.lua")
 include("player/sv_protection.lua")
 include("player/sv_afk.lua")
 

@@ -174,6 +174,13 @@ hook.Add("Think", "TPG_ProtectionThink", function()
         -- the whole point is that they leave the zone carrying it).
         NoclipBrake(ply, inSafezone)
 
+        -- Hand out / take back the repair torch. Lives here rather than in a
+        -- Think of its own because this loop has already worked out who is
+        -- alive, on a team, and inside their zone.
+        if TPG.Repair and TPG.Repair.Update then
+            TPG.Repair.Update(ply, inSafezone)
+        end
+
         -- Drowning check
         if not ply:InVehicle() and ply:WaterLevel() >= 2 then
             ply:Kill()
