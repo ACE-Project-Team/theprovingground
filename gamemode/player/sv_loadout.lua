@@ -28,24 +28,59 @@ TPG.Loadout = {}
     A denied pick silently becomes the free equivalent and says why in chat.
     Nobody spawns weaponless because they couldn't afford a Javelin.
 ]]
-local function DenialMessage(ply, kind, id, reason, amount)
+local function DenialMessage(ply, kind, id, reason, amount, category, fallback)
     local name = TPG.Gear.Name(kind, id)
+
+    -- Say what they got INSTEAD, not just what they didn't get. A player who
+    -- has set a fallback needs to know it fired; one who hasn't needs to know
+    -- the setting exists, and the only place they'd find that out is here.
+    local got = ""
+    if category and fallback then
+        if fallback ~= "none" then
+            got = " Falling back to " .. TPG.Gear.Name("weapon", fallback) ..
+                " (change it in the loadout menu's FALLBACK tab)."
+        elseif category == "Special" then
+            -- "none" in Special is not nothing: an empty Special is what earns
+            -- the bonus tube further down Apply.
+            got = " Falling back to the free AT tube."
+        else
+            got = " That slot will be empty - set a fallback in the loadout menu."
+        end
+    end
 
     if reason == "cooldown" then
         -- "You've used your run of these" rather than a bare number of seconds:
         -- the wait is the second half of the price, and a player who only ever
         -- sees the timer has no idea the lives were the first half.
         TPG.Util.ChatMessage(ply, "[TPG] " .. name .. ": you've used up your lives with it. " ..
-            math.ceil(amount) .. "s until you can take another.", Color(255, 200, 0))
+            math.ceil(amount) .. "s until you can take another." .. got, Color(255, 200, 0))
     elseif reason == "afford" then
         TPG.Util.ChatMessage(ply, "[TPG] " .. name .. " costs " .. amount ..
-            " pts and you have " .. (TPG.Economy and TPG.Economy.GetMoney(ply) or 0) .. ".",
+            " pts and you have " .. (TPG.Economy and TPG.Economy.GetMoney(ply) or 0) .. "." .. got,
             Color(255, 200, 0))
     end
 end
 
--- Returns the weapon id the player actually gets. `fallback` must be free.
-local function ResolveWeapon(ply, category, id, fallback)
+--[[
+    What this player wants a slot to resolve to when its pick is refused.
+
+    Chosen in the loadout menu's FALLBACK mode and saved as PData; falls back in
+    turn to `TPG.WeaponConfig.FallbackLoadout`. Re-validated here rather than
+    trusted from the save: the free/enabled set changes when an admin retunes a
+    weapon or a pack is uninstalled, and a save made when the choice was legal
+    would otherwise keep handing out something that no longer is.
+]]
+local function FallbackFor(ply, category)
+    local saved = TPG.Util.GetPData(ply, "Fallback" .. category, nil)
+    if isstring(saved) and TPG.Gear.FallbackAllowed(category, saved) then
+        return saved
+    end
+    return TPG.Gear.DefaultFallback(category)
+end
+
+-- Returns the weapon id the player actually gets. The fallback is always free,
+-- so a refusal resolves in one step and never cascades.
+local function ResolveWeapon(ply, category, id)
     if not TPG.Gear.Claim then return id end   -- gear system absent; nothing is priced
     if not id or id == "none" then return id end
 
@@ -57,7 +92,8 @@ local function ResolveWeapon(ply, category, id, fallback)
     local ok, reason, amount = TPG.Gear.Claim(ply, "weapon", id)
     if ok then return id end
 
-    DenialMessage(ply, "weapon", id, reason, amount)
+    local fallback = FallbackFor(ply, category)
+    DenialMessage(ply, "weapon", id, reason, amount, category, fallback)
     return fallback
 end
 
@@ -199,9 +235,9 @@ function TPG.Loadout.Apply(ply)
 
     -- Charge for the premium picks first: a denial swaps in a different item,
     -- and the swap changes the speed maths below.
-    primaryId   = ResolveWeapon(ply, "Primary",   primaryId,   dl.Primary)
-    secondaryId = ResolveWeapon(ply, "Secondary", secondaryId, dl.Secondary)
-    specialId   = ResolveWeapon(ply, "Special",   specialId,   "none")
+    primaryId   = ResolveWeapon(ply, "Primary",   primaryId)
+    secondaryId = ResolveWeapon(ply, "Secondary", secondaryId)
+    specialId   = ResolveWeapon(ply, "Special",   specialId)
     armorId     = ResolveArmor(ply, armorId)
 
     -- Apply armor stats

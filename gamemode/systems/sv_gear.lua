@@ -298,6 +298,15 @@ function TPG.Gear.Sync(ply)
         net.WriteString(carried.Secondary or "")
         net.WriteString(carried.Special   or "")
         net.WriteInt(carried.Armor and math.Clamp(carried.Armor, -1, 255) or -1, 9)
+
+        -- What each slot resolves to when its pick is refused. Sent resolved
+        -- rather than raw, so a saved fallback that has since stopped being
+        -- legal shows in the menu as the default that will actually be used.
+        for _, cat in ipairs({ "Primary", "Secondary", "Special" }) do
+            local saved = TPG.Util.GetPData(ply, "Fallback" .. cat, nil)
+            local ok = isstring(saved) and TPG.Gear.FallbackAllowed(cat, saved)
+            net.WriteString(ok and saved or TPG.Gear.DefaultFallback(cat))
+        end
     net.Send(ply)
 end
 

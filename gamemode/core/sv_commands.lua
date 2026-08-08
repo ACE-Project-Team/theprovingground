@@ -91,6 +91,34 @@ concommand.Add("tpg_loadout", function(ply, cmd, args)
 end)
 
 --[[
+    Fallback change: what a slot resolves to when its pick is refused.
+
+    Separate from tpg_loadout rather than a fifth category on it, because the
+    two are validated against different rules -- a pick may be priced, a
+    fallback may not (@{TPG.Gear.FallbackAllowed}) -- and folding them together
+    would mean one command whose second argument means different things
+    depending on the first.
+]]
+local FALLBACK_KEYS = { [1] = "Primary", [2] = "Secondary", [3] = "Special" }
+
+concommand.Add("tpg_fallback", function(ply, cmd, args)
+    local key = FALLBACK_KEYS[tonumber(args[1] or "")]
+    if not key then return end
+
+    local class = args[2]
+    if not class or class == "" then return end
+
+    local ok, why = TPG.Gear.FallbackAllowed(key, class)
+    if not ok then
+        TPG.Util.ChatMessage(ply, "[TPG] " .. (why or "That cannot be a fallback."),
+            Color(255, 0, 0))
+        return
+    end
+
+    TPG.Util.SetPData(ply, "Fallback" .. key, class)
+end)
+
+--[[
     Respawn to apply a loadout change.
 
     The menu used to run plain `kill` for this, which made a loadout tweak cost

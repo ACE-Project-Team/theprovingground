@@ -76,7 +76,11 @@ local RULES = {
               "Yours for that whole life.",
     budget  = "Marked items are yours for a run of lives -- the badge says how " ..
               "many. When the last one is spent, dying starts the timer, and " ..
-              "until it runs out you spawn with the free equivalent instead.",
+              "until it runs out you spawn with your fallback instead.",
+    -- Shown in FALLBACK mode instead of either currency rule: the question has
+    -- changed, so the answer about prices no longer applies.
+    fallback = "Pick what you get in this slot when your choice above is " ..
+               "refused. It has to be free, so it can never be refused in turn.",
 }
 
 -- How many lines of description the panel will give up to the block above the
@@ -141,6 +145,22 @@ local gearRuns = {}
 local picks = {}
 local live  = {}
 
+--[[
+    And a third: what each slot resolves to when its pick is REFUSED -- run of
+    lives spent with the timer still going, or the wallet short.
+
+    Kept apart from `picks` rather than folded in as a second field per slot,
+    because the grid shows one or the other and never both, and the mode
+    (`showFallback` below) is what decides which. Armor is absent on purpose:
+    its fallback is `TPG.Gear.FreeArmor`, the best free tier, and there is no
+    better answer for a player to choose.
+]]
+local fallbacks = {}
+
+-- Which question the grid is currently asking. False: "what do you want".
+-- True: "what do you want when you cannot have it".
+local showFallback = false
+
 net.Receive("TPG_GearState", function()
     gearRuns = {}
     for _ = 1, net.ReadUInt(8) do
@@ -162,6 +182,10 @@ net.Receive("TPG_GearState", function()
     live.Special   = net.ReadString()
     local armor    = net.ReadInt(9)
     live.Armor     = armor >= 0 and armor or nil
+
+    fallbacks.Primary   = net.ReadString()
+    fallbacks.Secondary = net.ReadString()
+    fallbacks.Special   = net.ReadString()
 end)
 
 -- Is this exact item the one the player is actually carrying, as opposed to the
@@ -530,7 +554,7 @@ local function BuildLoadoutMenu()
     local activeSlot = SLOTS[1]
     local activeGroup = nil      -- subcategory filter, nil = all
     local searchText  = ""
-    local RefreshGrid, RefreshTabs, LayoutGrid   -- forward declarations
+    local RefreshGrid, RefreshTabs, LayoutGrid, RefreshModeButtons  -- forward declarations
     -- Declared up here because the slot buttons below are built before it and
     -- have to be able to clear it when you change slot.
     local search
@@ -664,6 +688,7 @@ local function BuildLoadoutMenu()
         activeSlot = slot
         activeGroup, searchText = nil, ""
         if IsValid(search) then search:SetText("") end
+        RefreshModeButtons()
         RefreshTabs()
         RefreshGrid()
     end
@@ -725,7 +750,9 @@ local function BuildLoadoutMenu()
 
     for _, slot in ipairs(SLOTS) do
         local wrapped = {}
-        for _, rule in ipairs({ RULES.economy, RULES.budget }) do
+        -- Order matters: Paint indexes this 1/2/3 for economy / team budget /
+        -- fallback mode.
+        for _, rule in ipairs({ RULES.economy, RULES.budget, RULES.fallback }) do
             local lines = TPG.UI.Wrap(slot.hint .. "  " .. rule, "TPG.Menu.Small",
                 paneW - descX - S(14), DESC_MAX_LINES)
             wrapped[#wrapped + 1] = lines
@@ -741,9 +768,13 @@ local function BuildLoadoutMenu()
         draw.RoundedBox(S(5), 0, 0, w, h, MC.panel)
         local col = SlotColor(activeSlot.key)
         draw.RoundedBox(0, S(10), 0, w - S(20), math.max(S(3), 1), col)
-        draw.SimpleText(activeSlot.label, "TPG.Menu.Head", S(14), S(12), col)
+        local fbMode = showFallback and activeSlot.key ~= "Armor"
 
-        local lines = descLines[activeSlot.key][TPG.Gear.EconomyActive() and 1 or 2]
+        draw.SimpleText(activeSlot.label .. (fbMode and " - FALLBACK" or ""),
+            "TPG.Menu.Head", S(14), S(12), col)
+
+        local lines = descLines[activeSlot.key][fbMode and 3
+            or (TPG.Gear.EconomyActive() and 1 or 2)]
         for i = 1, #lines do
             draw.SimpleText(lines[i], "TPG.Menu.Small", descX, descY + (i - 1) * descLH,
                 C.TextMuted)
@@ -782,6 +813,60 @@ local function BuildLoadoutMenu()
     search.OnValueChange = function(_, value)
         searchText = string.lower(value or "")
         LayoutGrid()
+    end
+
+    --[[
+        PICK / FALLBACK.
+
+        Two questions about the same slot -- "what do you want" and "what do you
+        want when you can't have it" -- so they share one grid rather than
+        getting a second one built beside it. Flipping the mode only changes
+        what a card reads and what a click sends; nothing is rebuilt, which is
+        the whole reason this is a mode and not a fifth slot.
+
+        Hidden on Armor: its fallback is TPG.Gear.FreeArmor, the best free tier,
+        and there is nothing better for a player to choose.
+    ]]
+    local modeW, modeH = S(96), S(28)
+    local modeButtons = {}
+
+    for i, mode in ipairs({ { label = "PICK", fb = false }, { label = "FALLBACK", fb = true } }) do
+        local btn = vgui.Create("DButton", pane)
+        btn:SetSize(modeW, modeH)
+        btn:SetPos(paneW - searchW - S(14) - S(8) - (3 - i) * (modeW + S(4)), S(10))
+        btn:SetText("")
+        btn:SetTooltip(mode.fb
+            and "What this slot gives you when your pick is refused -- its lives spent, or you can't afford it."
+            or  "What you want in this slot.")
+
+        btn.Paint = function(self, w, h)
+            local active = (showFallback == mode.fb)
+            local c = SlotColor(activeSlot.key)
+            draw.RoundedBox(S(4), 0, 0, w, h,
+                (active or self:IsHovered()) and MC.hover or MC.sunken)
+            if active then
+                draw.RoundedBox(0, 0, h - math.max(S(2), 1), w, math.max(S(2), 1), c)
+            end
+            TPG.UI.TextInBox(mode.label, "TPG.Menu.Small", 0, 0, w, h,
+                active and C.Text or C.TextMuted)
+        end
+
+        btn.DoClick = function()
+            if showFallback == mode.fb then return end
+            surface.PlaySound("buttons/button14.wav")
+            showFallback = mode.fb
+        end
+
+        modeButtons[#modeButtons + 1] = btn
+    end
+
+    -- Armor has no fallback to choose, so the toggle goes away with it -- and
+    -- the mode goes back to PICK, or leaving Armor would land on a FALLBACK
+    -- grid nobody asked for.
+    RefreshModeButtons = function()
+        local show = activeSlot.key ~= "Armor"
+        if not show then showFallback = false end
+        for _, btn in ipairs(modeButtons) do btn:SetVisible(show) end
     end
 
     local tabs = vgui.Create("DPanel", pane)
@@ -895,11 +980,27 @@ local function BuildLoadoutMenu()
 
         local stripH = S(22)
 
+        -- Whether this card can be a fallback at all. Constant for the card's
+        -- life: it turns on the item being free, which is config, not state.
+        local fallbackOK = item.kind == "weapon" and TPG.Gear.FallbackAllowed(slotKey, item.id)
+
         card.Paint = function(self, w, h)
-            local selected = (picks[slotKey] == item.id)
+            local fbMode   = showFallback and slotKey ~= "Armor"
+            local selected = fbMode and (fallbacks[slotKey] == item.id)
+                or (not fbMode and picks[slotKey] == item.id)
             local left     = price and CooldownLeft(item.kind, item.id) or 0
 
-            draw.RoundedBox(S(5), 0, 0, w, h, self:IsHovered() and MC.hover or MC.row)
+            -- A card that cannot be chosen in the current mode stays on the
+            -- grid and says why: "the Javelin is not on this list" reads as a
+            -- bug, "the Javelin can't be a fallback" reads as the rule it is.
+            -- It is not dimmed with an overlay, because the SpawnIcon is a
+            -- child panel and draws AFTER Paint -- the picture would have
+            -- stayed bright over a greyed card, which looks broken rather than
+            -- disabled.
+            local inert = fbMode and not fallbackOK
+
+            draw.RoundedBox(S(5), 0, 0, w, h,
+                (self:IsHovered() and not inert) and MC.hover or MC.row)
             Outline(w, h, math.max(selected and S(2) or S(1), 1), selected and col or dim)
 
             draw.SimpleText(name, "TPG.Menu.Item", w / 2, nameY,
@@ -928,7 +1029,11 @@ local function BuildLoadoutMenu()
             local text, textCol = costBadge, C.Neutral
             local frac
 
-            if not TPG.Gear.EconomyActive() and price then
+            if fbMode then
+                -- In fallback mode the price is not the question -- whether it
+                -- can be a fallback at all is.
+                text, textCol = inert and "Not free" or nil, C.Red
+            elseif not TPG.Gear.EconomyActive() and price then
                 local lives, opened = LivesLeft(item.kind, item.id, price)
 
                 if left > 0 then
@@ -979,15 +1084,40 @@ local function BuildLoadoutMenu()
                 slot this is, so the strip is free to mean status instead.
             ]]
             if selected then
-                local held = IsLive(slotKey, item.id)
-                local bar  = held and C.Good or C.Neutral
-                draw.RoundedBox(0, 0, h - stripH, w, stripH, bar)
-                TPG.UI.TextInBox(held and "EQUIPPED" or "RESPAWN TO EQUIP",
-                    "TPG.Menu.Tiny", 0, h - stripH, w, stripH, C.Contrast(bar))
+                -- A fallback is never something you are holding, so the
+                -- equipped/pending distinction does not apply to it. It says
+                -- what it is instead.
+                if fbMode then
+                    draw.RoundedBox(0, 0, h - stripH, w, stripH, col)
+                    TPG.UI.TextInBox("FALLBACK", "TPG.Menu.Tiny", 0, h - stripH, w, stripH,
+                        C.Contrast(col))
+                else
+                    local held = IsLive(slotKey, item.id)
+                    local bar  = held and C.Good or C.Neutral
+                    draw.RoundedBox(0, 0, h - stripH, w, stripH, bar)
+                    TPG.UI.TextInBox(held and "EQUIPPED" or "RESPAWN TO EQUIP",
+                        "TPG.Menu.Tiny", 0, h - stripH, w, stripH, C.Contrast(bar))
+                end
             end
         end
 
         card.DoClick = function()
+            if showFallback and slotKey ~= "Armor" then
+                if not fallbackOK then
+                    -- The server would refuse this anyway; saying so here means
+                    -- the click explains itself instead of doing nothing.
+                    surface.PlaySound("buttons/button10.wav")
+                    chat.AddText(C.Red, "[TPG] A fallback has to be free -- it is what you " ..
+                        "get when you cannot have the paid one.")
+                    return
+                end
+
+                surface.PlaySound("buttons/button14.wav")
+                fallbacks[slotKey] = item.id
+                RunConsoleCommand("tpg_fallback", cmd, tostring(item.id))
+                return
+            end
+
             surface.PlaySound("buttons/button14.wav")
             picks[slotKey] = item.id
             RunConsoleCommand("tpg_loadout", cmd, tostring(item.id))
@@ -1148,6 +1278,7 @@ local function BuildLoadoutMenu()
         tabs:SetTall(y + tabH)
     end
 
+    RefreshModeButtons()
     RefreshTabs()
     RefreshGrid()
 

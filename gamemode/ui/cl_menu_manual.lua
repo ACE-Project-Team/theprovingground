@@ -50,6 +50,19 @@ local SECTIONS = {
         },
     },
     {
+        title = "PREMIUM GEAR",
+        lines = {
+            "A few strong items are gated; everything else is free every life.",
+            "In a normal round you pay in LIVES: taking one is good for a run of",
+            "  them, and when the last is spent, dying starts a timer. Until it",
+            "  runs out you spawn with your FALLBACK for that slot instead.",
+            "Set that fallback in the loadout menu (F3) - the FALLBACK button by",
+            "  the search box. It has to be free, so it can never be refused too.",
+            "In a per-player economy round you pay points instead, and there is no",
+            "  cooldown at all: afford it every life and it is yours every life.",
+        },
+    },
+    {
         title = "BUILDING & LIMITS",
         lines = {
             "You can only spawn/paste inside your safezone. Your team shares a",

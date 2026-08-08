@@ -338,6 +338,28 @@ TPG.WeaponConfig = {
         Special   = "none",
     },
 
+    --[[
+        What a slot falls back to when the pick in it is refused -- its run of
+        lives spent and the timer still going, or the wallet short under the
+        economy. Per-player overrides live in PData (`FallbackPrimary` and
+        friends, set from the loadout menu's FALLBACK mode); these are what a
+        player who has never touched that gets.
+
+        A fallback must itself be FREE, or a refusal could refuse again and the
+        slot would resolve to nothing. `TPG.Gear.FallbackAllowed` is what
+        actually enforces that, on both realms.
+
+        Special stays "none" on purpose. An empty Special is what triggers the
+        bonus disposable AT in player/sv_loadout.lua -- including its roll for a
+        real launcher -- so "none" here means "the free tube", not "nothing",
+        and naming a tube explicitly would quietly drop the upgrade roll.
+    ]]
+    FallbackLoadout = {
+        Primary   = "weapon_ace_m16",
+        Secondary = "weapon_ace_glock",
+        Special   = "none",
+    },
+
     -- Always given, regardless of loadout.
     AlwaysGive = {
         "weapon_physgun",

@@ -224,6 +224,133 @@ it("carries lives through an admin cost override", function()
     TPG.Weapons.Special[class] = saved
 end)
 
+describe("gear: fallbacks")
+
+local CATEGORIES = { "Primary", "Secondary", "Special" }
+
+it("ships a default fallback for every slot, and none of them cost anything", function()
+    --[[
+        Deliberately not asserted through FallbackAllowed. That also asks
+        whether the class is installed and enabled, which depends on what SWEPs
+        the server has -- unknowable out here, and it would make this test pass
+        or fail on the harness rather than on the config.
+
+        What IS a config invariant is that no default fallback carries a price:
+        a priced default would be refused for every player who had not set one
+        of their own, which is exactly the cascade the free rule exists to stop.
+    ]]
+    for _, cat in ipairs(CATEGORIES) do
+        local id = TPG.Gear.DefaultFallback(cat)
+        expect.eq(type(id), "string", cat .. " has no default fallback")
+
+        if id ~= "none" then
+            expect.nils(TPG.Gear.Price("weapon", id),
+                cat .. "'s default fallback (" .. id .. ") is priced, so it could be refused too")
+        end
+    end
+end)
+
+it("uses the same defaults the fresh-player loadout does", function()
+    -- Not required by anything, but a divergence here would mean a new player's
+    -- denied Primary hands them something other than the rifle they started
+    -- with, for no reason anyone chose. If that becomes deliberate, delete this.
+    local dl = TPG.WeaponConfig.DefaultLoadout
+    for _, cat in ipairs(CATEGORIES) do
+        expect.eq(TPG.Gear.DefaultFallback(cat), dl[cat],
+            cat .. "'s fallback and starting pick have drifted apart")
+    end
+end)
+
+it("allows none in every slot", function()
+    -- In Special this is not "nothing": an empty Special is what earns the
+    -- bonus disposable AT in sv_loadout, upgrade roll included.
+    for _, cat in ipairs(CATEGORIES) do
+        expect.truthy(TPG.Gear.FallbackAllowed(cat, "none"), cat .. " should allow none")
+    end
+end)
+
+it("refuses anything that costs something", function()
+    --[[
+        The whole point: a fallback that could itself be refused would need a
+        fallback of its own, and there is no end to that.
+
+        Every priced class is registered here as if it were installed, rather
+        than relying on discovery -- the stub has no real SWEPs, so a loop over
+        what happens to be discovered would silently check nothing. The
+        registration is what makes the assertion mean something.
+    ]]
+    local checked = 0
+    for class, entry in pairs(TPG.Gear.Weapons) do
+        TPG.Weapons.Special[class] = { id = class, name = class, enabled = true }
+
+        expect.falsy(TPG.Gear.FallbackAllowed("Special", class),
+            class .. " costs " .. entry.cost .. " but was allowed as a fallback")
+        checked = checked + 1
+
+        TPG.Weapons.Special[class] = nil
+    end
+
+    expect.truthy(checked > 0, "TPG.Gear.Weapons is empty, so this proved nothing")
+end)
+
+it("refuses a weapon an admin has priced through the panel", function()
+    -- An admin cost override makes a previously-free weapon priced, and a
+    -- fallback already saved against it has to stop being legal at that point.
+    local class = "weapon_test_free_then_priced"
+    TPG.Weapons.Special[class] = { id = class, name = "Test", enabled = true }
+    expect.truthy(TPG.Gear.FallbackAllowed("Special", class), "should start out legal")
+
+    TPG.Weapons.Special[class].cost = 500
+    expect.falsy(TPG.Gear.FallbackAllowed("Special", class),
+        "pricing it in the panel must take it off the fallback list too")
+
+    TPG.Weapons.Special[class] = nil
+end)
+
+it("refuses a weapon from a different slot", function()
+    TPG.Weapons.Discover()
+
+    local class = "weapon_test_primary_only"
+    TPG.Weapons.Primary[class] = { id = class, name = "Test Rifle", enabled = true }
+
+    expect.truthy(TPG.Gear.FallbackAllowed("Primary", class))
+    expect.falsy(TPG.Gear.FallbackAllowed("Special", class),
+        "a Primary must not be settable as the Special fallback")
+
+    TPG.Weapons.Primary[class] = nil
+end)
+
+it("refuses a weapon an admin has disabled", function()
+    local class = "weapon_test_disabled"
+    TPG.Weapons.Primary[class] = { id = class, name = "Test", enabled = false }
+
+    expect.falsy(TPG.Gear.FallbackAllowed("Primary", class))
+
+    TPG.Weapons.Primary[class] = nil
+end)
+
+it("refuses ids that are not weapons at all", function()
+    expect.falsy(TPG.Gear.FallbackAllowed("Primary", nil))
+    expect.falsy(TPG.Gear.FallbackAllowed("Primary", ""))
+    expect.falsy(TPG.Gear.FallbackAllowed("Primary", "weapon_from_a_removed_pack"))
+end)
+
+it("explains every refusal", function()
+    -- The menu and the chat line both print this; a refusal with no reason
+    -- would leave a click doing nothing with nothing said.
+    local _, why = TPG.Gear.FallbackAllowed("Primary", "weapon_from_a_removed_pack")
+    expect.eq(type(why), "string", "a refused fallback should say why")
+end)
+
+it("still allows the free anti-tank baseline", function()
+    -- The AT-4 being free is what makes it usable as a fallback, and being
+    -- usable as a fallback is most of why it stays free.
+    TPG.Weapons.Discover()
+    if TPG.Weapons.Special["weapon_ace_at4"] then
+        expect.truthy(TPG.Gear.FallbackAllowed("Special", "weapon_ace_at4"))
+    end
+end)
+
 describe("gear: Name")
 
 it("names an armor tier from the tier table", function()

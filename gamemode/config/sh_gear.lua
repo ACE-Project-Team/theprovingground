@@ -232,6 +232,52 @@ function TPG.Gear.Name(kind, id)
     return tostring(id)
 end
 
+--[[--
+    Whether an item is a legal FALLBACK for a slot -- what you get when the
+    pick in that slot is refused.
+
+    A fallback has to be free. If it were not, a refused Javelin could fall
+    back to a Carl Gustaf that is itself mid-timer, and the slot would have to
+    refuse again; the loadout code would then need a fallback for the fallback,
+    with no obvious end to it. Free means one refusal always resolves.
+
+    `"none"` is always legal, and in the Special slot it is not the same as
+    "nothing" -- see `FallbackLoadout` in `config/sh_weapons_config.lua`.
+
+    Shared so the menu greys out exactly what the server would reject, rather
+    than offering a choice that silently does not take.
+
+    @tparam string category `"Primary"`, `"Secondary"` or `"Special"`.
+    @tparam string id A weapon class, or `"none"`.
+    @treturn boolean
+    @treturn ?string Why not, when false, in words a player can read.
+    @realm shared
+]]
+function TPG.Gear.FallbackAllowed(category, id)
+    if id == "none" then return true end
+    if not id or id == "" then return false, "That is not a weapon." end
+
+    local entry = TPG.GetWeapon and TPG.GetWeapon(category, id)
+    if not entry then return false, "That is not in this slot." end
+    if entry.enabled == false then return false, "That has been disabled by an admin." end
+
+    if TPG.Gear.Price("weapon", id) then
+        return false, "A fallback has to be something free -- it is what you get " ..
+            "when you cannot have the paid one."
+    end
+
+    return true
+end
+
+--- The fallback a slot uses when nothing has been chosen for it.
+-- @tparam string category `"Primary"`, `"Secondary"` or `"Special"`.
+-- @treturn string A weapon class, or `"none"`.
+-- @realm shared
+function TPG.Gear.DefaultFallback(category)
+    local fl = TPG.WeaponConfig and TPG.WeaponConfig.FallbackLoadout or {}
+    return fl[category] or "none"
+end
+
 --- Which price is in force right now: per-player economy, or the team-budget cooldown.
 -- Kept in one place so the menu and the spawn code can never disagree about
 -- what a player is about to be charged.
