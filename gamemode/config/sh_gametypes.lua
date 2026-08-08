@@ -79,12 +79,16 @@ TPG.GameTypes = {
 }
 
 --[[
-    Slot split: CP 30% / CTF 25% / KOTH 20% / DM 15% / Rush 10%. CP is still the
-    most common mode; DM stays deliberately rare. CTF is its own mode -- it
-    borrows the map's KOTH capture point as the flag's home
-    (TPG.CTF.GetFlagPoint), it does NOT replace a KOTH round. On a map that
-    can't host a flag, CTF's slice falls through to KOTH. Rush took its 10% out
-    of CP, which had the most to spare.
+    Order of preference, most common first: CP, KOTH, CTF, Rush, DM. CP is the
+    mode the gamemode is built around and stays the most common; DM is now the
+    rarest of the five. CTF is its own mode -- it borrows the map's KOTH capture
+    point as the flag's home (TPG.CTF.GetFlagPoint), it does NOT replace a KOTH
+    round. Rush was funded out of DM and CTF rather than CP.
+
+    These are ratios, not percentages: eligible() normalises by their total, so
+    they do not have to add up to 1 and one can be changed without rebalancing
+    the others to compensate. They are written on a roughly-percent scale anyway
+    because that is how they are easiest to reason about.
 
     Rush needs no map support beyond a control point list, since it reveals the
     map's CP points one at a time (TPG.Rush.BuildStages), so unlike CTF it has
@@ -99,11 +103,13 @@ TPG.GameTypes = {
     whatever the next threshold happened to be.
 ]]
 local WEIGHTS = {
-    [GAMEMODE_CP]   = 0.30,
-    [GAMEMODE_CTF]  = 0.25,   -- TPG.Config.ctfChance overrides this one
-    [GAMEMODE_KOTH] = 0.20,
-    [GAMEMODE_DM]   = 0.15,
-    [GAMEMODE_RUSH] = 0.10,
+    [GAMEMODE_CP]   = 0.40,
+    -- KOTH sits above CTF deliberately. The two are close enough in shape that
+    -- the plain version should be the one you see more often.
+    [GAMEMODE_KOTH] = 0.22,
+    [GAMEMODE_CTF]  = 0.20,   -- TPG.Config.ctfChance overrides this one
+    [GAMEMODE_RUSH] = 0.15,
+    [GAMEMODE_DM]   = 0.10,
 }
 
 -- Whether a mode can run on this map at all. Anything absent can always run.

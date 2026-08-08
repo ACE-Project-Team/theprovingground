@@ -226,3 +226,49 @@ it("gives no mode more of the roll than its weight allows", function()
 
     supportNone()
 end)
+
+it("keeps the modes in their intended order of frequency", function()
+    -- CP > KOTH > CTF > Rush > DM. The weights are private to sh_gametypes, so
+    -- this reads them back off the roll itself -- which is the thing that has to
+    -- be right anyway.
+    supportAll()
+
+    math.randomseed(8080)
+    local counts = {}
+    for _ = 1, 20000 do
+        local picked = TPG.SelectRandomGameType()
+        counts[picked] = (counts[picked] or 0) + 1
+    end
+
+    local order = { GAMEMODE_CP, GAMEMODE_KOTH, GAMEMODE_CTF, GAMEMODE_RUSH, GAMEMODE_DM }
+    for i = 1, #order - 1 do
+        local a, b = order[i], order[i + 1]
+        expect.truthy((counts[a] or 0) > (counts[b] or 0),
+            TPG.GameTypes[b].name .. " rolled more often than " ..
+            TPG.GameTypes[a].name .. ", which should be the commoner mode")
+    end
+
+    supportNone()
+end)
+
+it("keeps deathmatch the rarest mode", function()
+    -- DM is the one mode with no objective, so it is the one you want least
+    -- often; it has drifted up before when another mode's share was cut.
+    supportAll()
+
+    math.randomseed(5150)
+    local counts = {}
+    for _ = 1, 20000 do
+        local picked = TPG.SelectRandomGameType()
+        counts[picked] = (counts[picked] or 0) + 1
+    end
+
+    for _, id in ipairs(ALL) do
+        if id ~= GAMEMODE_DM then
+            expect.truthy((counts[id] or 0) > (counts[GAMEMODE_DM] or 0),
+                TPG.GameTypes[id].name .. " is rarer than deathmatch")
+        end
+    end
+
+    supportNone()
+end)

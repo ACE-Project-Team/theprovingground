@@ -115,7 +115,12 @@ TPG.Config = {
     -- Capture the Flag (objectives/sv_ctf.lua). Its OWN game mode: one neutral
     -- flag that sits on the map's KOTH capture point; grab it and carry it to
     -- your own spawn to score. Only offered on maps that have a KOTH point.
-    ctfChance            = 0.25,   -- per-round chance CTF is the mode (see TPG.SelectRandomGameType)
+    -- CTF's WEIGHT in the game type roll, not a probability: it is normalised
+    -- against the other modes' weights (see WEIGHTS in config/sh_gametypes.lua),
+    -- so the actual per-round chance is lower than the number reads. Overrides
+    -- the weight in that table; keep the two in step, or CTF quietly outranks
+    -- KOTH the way it did when this was left at 0.25.
+    ctfChance            = 0.20,
     ctfDeliverRadius     = 500,    -- fallback delivery radius if the safezone can't be resolved
     ctfCaptureTicketLoss = 40,     -- enemy tickets lost per delivered flag (75 ended rounds in ~4 caps; ~8 now)
     ctfCaptureReward     = 1500,   -- per-player economy reward to the carrier on delivery
