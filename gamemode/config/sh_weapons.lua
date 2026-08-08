@@ -100,8 +100,42 @@ local function subCategoryFor(cfg, swep, override)
     return alias or nil
 end
 
+--[[
+    Hide every weapon that did not come with ACE itself.
+
+    Add-on packs are supported the whole rest of the time -- that is the point
+    of discovery -- but a pack whose weapons are broken (wrong ammo, no damage,
+    errors on fire) is worse than one that isn't installed: the loadout menu
+    still offers them, and a player who picks one spends their round finding out.
+    This is the switch for that case.
+
+    It currently DEFAULTS TO ON, which is a temporary state, not a policy: the
+    installed packs (ACE Weapons+ and the WW2 pack) are broken for reasons that
+    are not TPG's and not ACE's. When they are fixed, flip the default back to
+    "0" here -- packs working is meant to be the normal state of affairs, and
+    discovery exists precisely so they need no support code.
+
+    Replicated so the menu and the server agree on what is offered; a client
+    deciding this for itself would show picks the server then refuses. Archived
+    so it survives a restart -- an operator who turned a broken pack off does not
+    want it back at the next map change.
+
+    Weapons already picked are unaffected until the player next spawns, and
+    nothing is uninstalled: flipping it back and running tpg_weapons_refresh
+    (or changing map) returns the pack in full.
+]]
+local baseOnly = CreateConVar("tpg_weapons_base_only", "1",
+    { FCVAR_REPLICATED, FCVAR_ARCHIVE, FCVAR_NOTIFY },
+    "1 hides every weapon from add-on packs, leaving only the ones ACE ships.")
+
 local function passesExclude(cfg, swep, class)
     if cfg.Exclude[class] then return false end
+
+    -- Pack weapons look exactly like ACE's own at runtime -- same base, same
+    -- class prefix -- so this asks the config's list rather than the SWEP.
+    if baseOnly:GetBool() and cfg.BaseWeapons and not cfg.BaseWeapons[class] then
+        return false
+    end
 
     -- SubCategory is the reliable signal: ACE and its packs tag every SWEP with
     -- one, and it doesn't depend on the class name happening to contain a word.
@@ -401,3 +435,10 @@ concommand.Add("tpg_weapons_refresh", function(ply)
     if IsValid(ply) and not ply:IsSuperAdmin() then return end
     TPG.Weapons.Discover()
 end)
+
+-- Rebuild when the pack switch moves, on whichever realm saw it move. Without
+-- this the change only lands at the next map load, which for a switch whose
+-- whole point is "these weapons are broken RIGHT NOW" is too late to be useful.
+cvars.AddChangeCallback("tpg_weapons_base_only", function()
+    TPG.Weapons.Discover()
+end, "TPG_WeaponsBaseOnly")

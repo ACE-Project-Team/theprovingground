@@ -22,7 +22,21 @@ local function swep(class, fields)
     return s
 end
 
+--[[
+    Discover with the pack gate explicitly off.
+
+    tpg_weapons_base_only hides everything that is not a class ACE itself ships,
+    and every SWEP in this file is invented -- so with the gate on, discovery
+    correctly finds nothing and every test here reads as broken. Set rather than
+    assumed: the per-case reset drops the stub's convar table, and an unset
+    convar is not the same as one holding its default.
+]]
+local function setGate(on)
+    gmod.convars["tpg_weapons_base_only"] = on and "1" or "0"
+end
+
 local function discover()
+    setGate(false)
     TPG.Weapons._state = nil
     TPG.Weapons.Discover()
 end
@@ -538,5 +552,89 @@ it("prices no weapon it also excludes from the menu", function()
     for class in pairs(TPG.Gear.Weapons) do
         expect.nils(TPG.WeaponConfig.Exclude[class],
             class .. " has a gear price but is excluded from the loadout menu")
+    end
+end)
+
+describe("weapons: the pack gate")
+
+--[[
+    tpg_weapons_base_only exists to switch an add-on pack off when its weapons
+    are broken, without uninstalling it. Everything here uses one real ACE class
+    (weapon_ace_m16) and one invented "pack" one, since the gate's whole job is
+    telling those two apart -- which nothing at runtime can do, because a pack
+    declares the same base and the same weapon_ace_ prefix.
+]]
+local function gatedDiscover()
+    setGate(true)
+    TPG.Weapons._state = nil
+    TPG.Weapons.Discover()
+end
+
+it("hides pack weapons and keeps ACE's own", function()
+    swep("weapon_ace_m16", { Slot = 2 })
+    swep("weapon_ace_packrifle", { Slot = 2 })
+    gatedDiscover()
+
+    expect.truthy(TPG.GetWeapon("Primary", "weapon_ace_m16"),
+        "the gate dropped a weapon ACE itself ships")
+    expect.nils(TPG.GetWeapon("Primary", "weapon_ace_packrifle"),
+        "a pack weapon survived the gate")
+end)
+
+it("gives everything back when switched off", function()
+    -- Nothing is uninstalled, so flipping it back has to restore the pack in
+    -- full rather than leaving it out until the next map.
+    swep("weapon_ace_packrifle", { Slot = 2 })
+
+    gatedDiscover()
+    expect.nils(TPG.GetWeapon("Primary", "weapon_ace_packrifle"))
+
+    discover()
+    expect.truthy(TPG.GetWeapon("Primary", "weapon_ace_packrifle"),
+        "the pack stayed hidden after the gate was switched off")
+end)
+
+it("still offers a full loadout with every pack gone", function()
+    -- The worst case for the gate: a server whose only pack is switched off
+    -- must still be able to kit a player out of ACE's own weapons.
+    for class in pairs(TPG.WeaponConfig.BaseWeapons) do
+        swep(class, { Slot = 2 })
+    end
+    gatedDiscover()
+
+    for _, cat in ipairs(CATEGORIES) do
+        local count = 0
+        for id in pairs(TPG.Weapons[cat] or {}) do
+            if id ~= "none" then count = count + 1 end
+        end
+        expect.truthy(count > 0, cat .. " has nothing but None once packs are gated")
+    end
+end)
+
+it("never gates a weapon the default loadout or a fallback needs", function()
+    -- A default that the gate hides would spawn players with nothing, and a
+    -- fallback that it hides would leave a cooldown with no consolation weapon.
+    for _, cat in ipairs(CATEGORIES) do
+        for _, source in ipairs({ TPG.WeaponConfig.DefaultLoadout,
+                                  TPG.WeaponConfig.FallbackLoadout }) do
+            local id = source[cat]
+            if id and id ~= "none" then
+                expect.truthy(TPG.WeaponConfig.BaseWeapons[id],
+                    id .. " is a default/fallback but comes from a pack, so " ..
+                    "tpg_weapons_base_only would remove it")
+            end
+        end
+    end
+end)
+
+it("lists weapons, not the base SWEP they inherit from", function()
+    -- BaseWeapons answers "did ACE ship this", not "is this offered" -- the ACE
+    -- mines are in both it and Exclude, and that is correct. What must not be in
+    -- it is something that was never a weapon: the base class every ACE SWEP
+    -- inherits from is registered like any other and would otherwise sail
+    -- through the gate as a pickable weapon.
+    for class in pairs(TPG.WeaponConfig.Bases) do
+        expect.nils(TPG.WeaponConfig.BaseWeapons[class],
+            class .. " is a SWEP base, not a weapon ACE ships")
     end
 end)

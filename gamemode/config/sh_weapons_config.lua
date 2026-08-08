@@ -22,6 +22,68 @@ TPG.WeaponConfig = {
         ["weapon_ace_base"] = true,
     },
 
+    --[[
+        Every weapon class base ACE itself ships, and nothing else.
+
+        This is not a whitelist of what TPG offers -- discovery still keeps any
+        pack weapon on an allowed base. It is the answer to one question:
+        "did this come with ACE, or with a pack on top of it?", which nothing at
+        runtime can tell you. Pack weapons declare the same `weapon_ace_base`
+        and use the same `weapon_ace_` prefix (ACE Weapons+ classes its MANPADS
+        weapon_ace_9k32/9k38), so there is no naming rule to lean on and the
+        list has to be written out.
+
+        `tpg_weapons_base_only 1` uses it to hide everything NOT in here; see
+        the convar in sh_weapons.lua for why that switch exists. Keeping the
+        list here rather than next to the switch is deliberate: it is data about
+        which weapons exist, and it needs updating when ACE adds a weapon, not
+        when the switch is flipped.
+
+        Taken from the addon's own lua/weapons/ folder. weapon_ace_base is the
+        base SWEP rather than a weapon, and weapon_szcreator is ACE's safezone
+        tool (already in Exclude), so neither is listed.
+    ]]
+    BaseWeapons = {
+        ["weapon_ace_ak47"]            = true,
+        ["weapon_ace_amr"]             = true,
+        ["weapon_ace_antipersonmine"]  = true,
+        ["weapon_ace_antitankmine"]    = true,
+        ["weapon_ace_at4"]             = true,
+        ["weapon_ace_at4t"]            = true,
+        ["weapon_ace_aug"]             = true,
+        ["weapon_ace_awp"]             = true,
+        ["weapon_ace_boundingmine"]    = true,
+        ["weapon_ace_deagle"]          = true,
+        ["weapon_ace_elite"]           = true,
+        ["weapon_ace_famas"]           = true,
+        ["weapon_ace_fiveseven"]       = true,
+        ["weapon_ace_flaregun"]        = true,
+        ["weapon_ace_galil"]           = true,
+        ["weapon_ace_glock"]           = true,
+        ["weapon_ace_grenade"]         = true,
+        ["weapon_ace_javelin"]         = true,
+        ["weapon_ace_m16"]             = true,
+        ["weapon_ace_m249saw"]         = true,
+        ["weapon_ace_m3super90"]       = true,
+        ["weapon_ace_mac10"]           = true,
+        ["weapon_ace_minedetector"]    = true,
+        ["weapon_ace_mp5"]             = true,
+        ["weapon_ace_p228"]            = true,
+        ["weapon_ace_p90"]             = true,
+        ["weapon_ace_portablemortar"]  = true,
+        ["weapon_ace_scout"]           = true,
+        ["weapon_ace_sg552"]           = true,
+        ["weapon_ace_slam"]            = true,
+        ["weapon_ace_smokegrenade"]    = true,
+        ["weapon_ace_stinger"]         = true,
+        ["weapon_ace_tmp"]             = true,
+        ["weapon_ace_torch"]           = true,
+        ["weapon_ace_ump45"]           = true,
+        ["weapon_ace_usp"]             = true,
+        ["weapon_ace_xm1014"]          = true,
+        ["weapon_ace_xm25"]            = true,
+    },
+
     -- SWEP.Slot -> loadout category. ACE: 1=pistol, 2=rifle, 3=sniper, 4=launcher.
     -- A slot not listed here is ignored (unless an Override forces a category).
     SlotCategory = {
