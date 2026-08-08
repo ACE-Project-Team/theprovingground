@@ -38,15 +38,19 @@ end
 describe("rush: building the stage list")
 
 it("borrows the control point list when the map has no Rush block", function()
-    withObjectives({ [GAMEMODE_CP] = points(4) })
+    -- Deliberately fewer points than the derived stage cap, so this tests the
+    -- borrow and nothing else: with more, the cap would trim the list and a
+    -- missing point would look like a borrow that dropped one.
+    local n = math.min(3, TPG.Rush.MaxStages())
+    withObjectives({ [GAMEMODE_CP] = points(n) })
 
     local stages = TPG.Rush.BuildStages()
-    expect.eq(#stages, 4, "should have taken all four control points")
+    expect.eq(#stages, n, "should have taken every control point on offer")
 
     -- Same points, whatever the order: the borrow must not invent or drop any.
     local seen = {}
     for _, name in ipairs(names(stages)) do seen[name] = true end
-    for i = 1, 4 do expect.truthy(seen["P" .. i], "P" .. i .. " went missing") end
+    for i = 1, n do expect.truthy(seen["P" .. i], "P" .. i .. " went missing") end
 
     TPG.Maps.GetObjectives = savedGetObjectives
 end)
@@ -96,8 +100,9 @@ end)
 it("never runs more stages than the config allows", function()
     withObjectives({ [GAMEMODE_CP] = points(12) })
 
-    expect.eq(#TPG.Rush.BuildStages(), TPG.Config.rushStages,
-        "a 12-point map should still run rushStages stages")
+    local cap = math.min(TPG.Config.rushStages, TPG.Rush.MaxStages())
+    expect.eq(#TPG.Rush.BuildStages(), cap,
+        "a 12-point map ran a number of stages neither knob asked for")
 
     TPG.Maps.GetObjectives = savedGetObjectives
 end)
@@ -132,12 +137,30 @@ end)
 
 describe("rush: the ticket maths")
 
-it("can decide a round on stage wins alone", function()
-    -- A clean sweep has to be able to end it: if the stages cannot drain a full
-    -- pool, a team could win every stage and still lose on the kill bleed.
-    expect.truthy(TPG.Config.rushStageTicketLoss * TPG.Config.rushStages
-        >= TPG.Config.startingTickets,
-        "a team can win every stage without emptying the enemy pool")
+it("can decide a round on stage wins alone, at any stage count", function()
+    -- A clean sweep has to land the loser on exactly zero. Short of that the
+    -- stage count and the ticket pool disagree about when the round is over:
+    -- too little and a team wins every stage and still loses on the kill bleed,
+    -- too much and the round ends before the last stage is played.
+    local savedTotal = TPG.Rush.total
+
+    for _, n in ipairs({ 1, 2, 3, 6, 9 }) do
+        TPG.Rush.total = n
+        expect.eq(n * TPG.Rush.StageTicketLoss(), TPG.Config.startingTickets,
+            "a clean sweep of " .. n .. " stages does not empty the pool exactly")
+    end
+
+    TPG.Rush.total = savedTotal
+end)
+
+it("lets a server override the per-stage loss and own the invariant", function()
+    local savedLoss, savedTotal = TPG.Config.rushStageTicketLoss, TPG.Rush.total
+
+    TPG.Config.rushStageTicketLoss = 75
+    TPG.Rush.total = 4
+    expect.eq(TPG.Rush.StageTicketLoss(), 75, "a configured loss was still derived over")
+
+    TPG.Config.rushStageTicketLoss, TPG.Rush.total = savedLoss, savedTotal
 end)
 
 it("leaves the stage win worth more than the kill bleed", function()
@@ -151,6 +174,83 @@ it("gives a stage long enough to be a fight, inside its own time limit", functio
     expect.truthy(TPG.Config.rushHoldTime > 0)
     expect.truthy(TPG.Config.rushStageTimeLimit > TPG.Config.rushHoldTime,
         "the stage times out before an uncontested hold could ever complete")
+end)
+
+describe("rush: the round time budget")
+
+-- Worst case for the whole round, at whatever the config currently says. Kept
+-- as a helper because every test below is really one assertion about this
+-- number, and writing the arithmetic out five times is how the tests and the
+-- implementation drift apart.
+local function worstCase(stages)
+    local perStage = TPG.Config.rushStageTimeLimit + TPG.Config.rushHoldTime
+    return stages * perStage + (stages - 1) * TPG.Config.rushStageBreak
+end
+
+local function withTiming(limit, hold, brk, budget, fn)
+    local saved = {
+        TPG.Config.rushStageTimeLimit, TPG.Config.rushHoldTime,
+        TPG.Config.rushStageBreak, TPG.Config.rushRoundBudget,
+    }
+
+    TPG.Config.rushStageTimeLimit = limit
+    TPG.Config.rushHoldTime       = hold
+    TPG.Config.rushStageBreak     = brk
+    TPG.Config.rushRoundBudget    = budget
+
+    fn()
+
+    TPG.Config.rushStageTimeLimit, TPG.Config.rushHoldTime,
+        TPG.Config.rushStageBreak, TPG.Config.rushRoundBudget =
+        saved[1], saved[2], saved[3], saved[4]
+end
+
+it("keeps the shipped config inside its own budget", function()
+    -- The whole reason the stage count is derived. If this fails, a Rush round
+    -- runs longer than the budget says it may.
+    expect.truthy(worstCase(TPG.Rush.MaxStages()) <= TPG.Config.rushRoundBudget,
+        "the worst-case round is longer than rushRoundBudget allows")
+end)
+
+it("uses as much of the budget as it can", function()
+    -- Fitting is not enough on its own: always returning 1 would also fit. One
+    -- more stage has to genuinely not fit.
+    expect.truthy(worstCase(TPG.Rush.MaxStages() + 1) > TPG.Config.rushRoundBudget,
+        "another stage would have fit; the budget is being under-spent")
+end)
+
+it("drops stages when the break gets longer", function()
+    -- The property that keeps the two knobs from fighting: adding break time
+    -- shortens the round rather than extending it.
+    withTiming(300, 60, 60, 1800, function()
+        local short = TPG.Rush.MaxStages()
+
+        withTiming(300, 60, 600, 1800, function()
+            expect.truthy(TPG.Rush.MaxStages() < short,
+                "a ten-minute break bought the same number of stages as a one-minute one")
+        end)
+    end)
+end)
+
+it("never derives a round with no stages in it", function()
+    -- A budget too small for even one stage is a misconfiguration. Zero stages
+    -- is not a shorter round, it is an unplayable one.
+    withTiming(300, 60, 300, 1, function()
+        expect.eq(TPG.Rush.MaxStages(), 1)
+    end)
+end)
+
+it("stops raising stages once the ceiling is reached", function()
+    -- rushStages is still a ceiling: a budget big enough for twenty stages must
+    -- not produce twenty.
+    withObjectives({ [GAMEMODE_CP] = points(30) })
+
+    withTiming(300, 60, 300, 100000, function()
+        expect.eq(#TPG.Rush.BuildStages(), TPG.Config.rushStages,
+            "a huge budget overrode the rushStages ceiling")
+    end)
+
+    TPG.Maps.GetObjectives = savedGetObjectives
 end)
 
 TPG.Maps.GetObjectives = savedGetObjectives

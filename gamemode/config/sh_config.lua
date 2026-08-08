@@ -145,20 +145,39 @@ TPG.Config = {
 
     --[[
         Rush (objectives/sv_rush.lua). One point is revealed at a time and the
-        first team to hold it for rushHoldTime takes the stage.
+        first team to hold it for rushHoldTime takes the stage. Between stages
+        there is a break: no point exists, nobody knows where the next one is,
+        and the only way to move the ticket pool is to kill people.
 
-        rushStageTicketLoss * rushStages is exactly startingTickets on purpose:
-        a clean sweep of every stage lands the loser on precisely zero, so the
-        stage count and the ticket pool agree about when a round is over
-        instead of one of them quietly deciding first. Change one and the sweep
-        either ends the round early or fails to end it at all.
+        THE STAGE COUNT IS DERIVED, NOT SET. rushStages is a ceiling; the number
+        actually played comes out of rushRoundBudget via TPG.Rush.MaxStages, so
+        adding break time shortens the round instead of lengthening it. Six
+        stages at these timings would run over an hour, which is not a round
+        anybody finishes -- see that function for the arithmetic.
+
+        rushStageTicketLoss is derived for the same reason. The old constant 50
+        was 300/6, chosen so a clean sweep landed the loser on precisely zero;
+        with the stage count no longer fixed at six, a constant would either end
+        the round early or fail to end it at all. TPG.Rush.StageTicketLoss
+        divides the pool by however many stages this round actually has, which
+        keeps that property at any count. Set this to a number above zero to
+        override it and take the invariant into your own hands.
     ]]
-    rushStages           = 6,
+    rushStages           = 6,      -- CEILING on stages; the real count is derived
     rushHoldTime         = 60,     -- seconds of unbroken ownership to take a stage
-    rushStageTicketLoss  = 50,     -- tickets the losing side drops per stage lost
+    rushStageTicketLoss  = 0,      -- 0 derives it: startingTickets / stages played
     -- A stage nobody can take would stall the round forever, so it is abandoned
     -- after this long and the next one is revealed with no winner.
     rushStageTimeLimit   = 300,
+    -- The skirmish gap between one stage ending and the next point appearing.
+    -- Kills still bleed tickets through it, so it is fighting time rather than
+    -- waiting time, and the next point is not placed until it ends -- which is
+    -- the whole reason for it: a break you can spend walking to a point you can
+    -- already see is just a slower version of no break at all.
+    rushStageBreak       = 300,
+    -- How long a Rush round is allowed to run in the worst case, in seconds.
+    -- Read by TPG.Rush.MaxStages, which drops stages until the round fits.
+    rushRoundBudget      = 1800,
     -- Kills bleed tickets between captures, the way they do in CTF, so the
     -- fighting around the point counts for something before anyone holds it.
     rushKillTicketFrac   = 0.5,

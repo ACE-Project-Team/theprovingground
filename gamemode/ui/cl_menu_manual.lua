@@ -48,8 +48,11 @@ local SECTIONS = {
             "  own safezone to take a bite out of the enemy's tickets. Carrying it",
             "  too long returns it - no hoarding.",
             "RUSH - one point at a time. Take it and hold it for a minute to win",
-            "  the stage and take a bite out of the enemy's tickets, then the next",
-            "  point opens. Losing the point resets the clock. Kills bleed too.",
+            "  the stage and take a bite out of the enemy's tickets. Losing the",
+            "  point resets the clock, so it has to be a solid minute.",
+            "  Between stages there is a five-minute break with NO point on the",
+            "  map at all - nobody knows where the next one lands until it does,",
+            "  so spend it hunting. Kills bleed tickets the whole round.",
         },
     },
     {
