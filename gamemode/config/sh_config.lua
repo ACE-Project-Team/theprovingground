@@ -138,6 +138,26 @@ TPG.Config = {
     -- shouldn't cost you the whole timer.
     gearCooldownLives   = 6,
 
+    --[[
+        Rush (objectives/sv_rush.lua). One point is revealed at a time and the
+        first team to hold it for rushHoldTime takes the stage.
+
+        rushStageTicketLoss * rushStages is exactly startingTickets on purpose:
+        a clean sweep of every stage lands the loser on precisely zero, so the
+        stage count and the ticket pool agree about when a round is over
+        instead of one of them quietly deciding first. Change one and the sweep
+        either ends the round early or fails to end it at all.
+    ]]
+    rushStages           = 6,
+    rushHoldTime         = 60,     -- seconds of unbroken ownership to take a stage
+    rushStageTicketLoss  = 50,     -- tickets the losing side drops per stage lost
+    -- A stage nobody can take would stall the round forever, so it is abandoned
+    -- after this long and the next one is revealed with no winner.
+    rushStageTimeLimit   = 300,
+    -- Kills bleed tickets between captures, the way they do in CTF, so the
+    -- fighting around the point counts for something before anyone holds it.
+    rushKillTicketFrac   = 0.5,
+
     -- Bonus disposable AT (entities/weapons/disposableat): every teamed player
     -- gets a free single-use AT tube on top of their loadout, so everyone always
     -- has an answer to armour even after a chosen launcher runs dry. Set the

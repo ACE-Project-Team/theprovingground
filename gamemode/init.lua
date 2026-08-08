@@ -59,6 +59,7 @@ AddCSLuaFile("ui/cl_hud_economy.lua")
 AddCSLuaFile("ui/cl_hud_compass.lua")
 AddCSLuaFile("ui/cl_hud_objectives.lua")
 AddCSLuaFile("ui/cl_hud_ctf.lua")
+AddCSLuaFile("ui/cl_hud_rush.lua")
 AddCSLuaFile("ui/cl_hud_overtime.lua")
 AddCSLuaFile("ui/cl_menu_team.lua")
 AddCSLuaFile("ui/cl_menu_loadout.lua")
@@ -98,6 +99,7 @@ include("systems/sv_commendations.lua")
 
 include("objectives/sv_objectives.lua")
 include("objectives/sv_ctf.lua")
+include("objectives/sv_rush.lua")
 include("voting/sv_voting.lua")
 
 -- Ship the Exo 2 font (point tool HUD) to clients.

@@ -47,6 +47,9 @@ local SECTIONS = {
             "CAPTURE THE FLAG - a neutral flag sits on the hill. Carry it into your",
             "  own safezone to take a bite out of the enemy's tickets. Carrying it",
             "  too long returns it - no hoarding.",
+            "RUSH - one point at a time. Take it and hold it for a minute to win",
+            "  the stage and take a bite out of the enemy's tickets, then the next",
+            "  point opens. Losing the point resets the clock. Kills bleed too.",
         },
     },
     {

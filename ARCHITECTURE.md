@@ -86,7 +86,7 @@ Say you want a mode called Assault. Five places, in order:
 **1. A constant** — `gamemode/shared.lua`, next to the others:
 
 ```lua
-GAMEMODE_ASSAULT = 5
+GAMEMODE_ASSAULT = 6
 ```
 
 **2. A definition** — `gamemode/config/sh_gametypes.lua`, in `TPG.GameTypes`:
@@ -102,14 +102,21 @@ GAMEMODE_ASSAULT = 5
 },
 ```
 
-**3. A slice of the roll** — `RollGameType` in the same file. It is a plain
-chain of `math.random()` thresholds; give the new mode a band and take that
-band off another mode. If your mode can't run on every map, check for support
-and fall through to something that can — `GAMEMODE_CTF` does exactly this.
+**3. A slice of the roll** — the `WEIGHTS` table in the same file. Weights are
+independent and normalised at roll time, so adding one only dilutes the others
+in proportion; you do not have to take a band off anything, and changing one
+number cannot silently starve a mode the way the old cumulative thresholds did.
 
-**4. Objectives per map** — `gamemode/maps/_loader.lua`. Every map config is a
-table keyed by game type, so add a `[GAMEMODE_ASSAULT]` block to
-`TPG.Maps.Default` and to each map in `TPG.Maps.Configs` that should host it:
+If your mode can't run on every map, add an entry to `SUPPORTED` alongside it —
+a function returning whether this map can host it. A mode that answers no is
+dropped from the draw entirely and its weight is shared out among the rest;
+`GAMEMODE_CTF` (needs a flag point) and `GAMEMODE_RUSH` (needs control points)
+both do this.
+
+**4. Objectives per map, if your mode needs its own** — `gamemode/maps/_loader.lua`.
+Every map config is a table keyed by game type, so add a `[GAMEMODE_ASSAULT]`
+block to `TPG.Maps.Default` and to each map in `TPG.Maps.Configs` that should
+host it:
 
 ```lua
 [GAMEMODE_ASSAULT] = {
@@ -123,13 +130,20 @@ table keyed by game type, so add a `[GAMEMODE_ASSAULT]` block to
 A map with no block for your mode gets no objectives, which for most modes
 means a round that can never end — so either cover the maps or gate the roll.
 
+You can also skip this step by borrowing a list another mode already has, which
+is what `TPG.Rush.BuildStages` does with `[GAMEMODE_CP]`: it costs you the
+ability to place points for your mode specifically, and buys support on every
+map already configured with zero authoring.
+
 **5. Scoring, if the drain isn't enough.** If the mode is "hold these points
 and the other team bleeds", you are already finished: `ProcessScoring` reads
 control point ownership and `capMultiplier` and does the rest. If it needs its
 own rules, add a file under `objectives/`, `include` it from `init.lua`, and
 have `TPG.Rounds.Setup` call into it the way it calls `TPG.CTF.SpawnFlags` —
 that function returns immediately unless the round is CTF, which is the pattern
-to copy.
+to copy. If the mode also needs a clock, hang it off the fixed-step loop in the
+`TPG_RoundThink` hook next to `TPG.Rush.Think`, rather than a timer of its own:
+that step is what keeps the scoring tickrate-independent.
 
 Nothing else has to change. The HUD reads the mode's name and description
 straight off `TPG.GetGameType`, and the map vote screen reads budgets off the

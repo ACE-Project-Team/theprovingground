@@ -66,12 +66,16 @@ TEAM_RED        = 2002
      point ownership.
     @field GAMEMODE_CTF 4, capture the flag. Only rolls on maps that define
      flag positions.
+    @field GAMEMODE_RUSH 5, rush; one revealed point at a time, over several
+     stages. Borrows the map's control point list, so it needs no map config
+     of its own.
     @realm shared
 ]]
 GAMEMODE_CP     = 1
 GAMEMODE_KOTH   = 2
 GAMEMODE_DM     = 3
 GAMEMODE_CTF    = 4
+GAMEMODE_RUSH   = 5
 
 -- Shared includes
 include("config/sh_config.lua")

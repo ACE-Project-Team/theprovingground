@@ -131,6 +131,14 @@ function TPG.Rounds.Setup(skipCleanup)
     if TPG.CTF and TPG.CTF.SpawnFlags then
         TPG.CTF.SpawnFlags()
     end
+
+    -- Start the Rush stage run. Called unconditionally: on a non-Rush round it
+    -- clears its own state rather than leaving last round's stage list behind.
+    -- It runs AFTER SpawnAll because it replaces the points SpawnAll just put
+    -- down with a single revealed one.
+    if TPG.Rush and TPG.Rush.Begin then
+        TPG.Rush.Begin()
+    end
     
     -- Respawn everyone who's actually playing, so they start the round in their
     -- (possibly just-swapped) spawn. Spectators are skipped: they have no spawn
@@ -361,6 +369,12 @@ hook.Add("Think", "TPG_RoundThink", function()
         steps = steps + 1
         if TPG.Objectives and TPG.Objectives.ProcessScoring then
             TPG.Objectives.ProcessScoring()
+        end
+        -- Rush checks its hold clock here rather than on its own timer, so the
+        -- stage it completes is read from the same ownership the scoring step
+        -- just resolved. No-ops outside a Rush round.
+        if TPG.Rush and TPG.Rush.Think then
+            TPG.Rush.Think()
         end
         ran = true
     end

@@ -99,6 +99,14 @@ end
     @realm server
     @function TPG_TrackKills
 ]]
+-- Which objective modes bleed tickets on a kill, and the config key holding how
+-- much. A mode not listed here drains nothing per kill; deathmatch is not listed
+-- because `useDeathTickets` already means "the whole drain", not a fraction.
+local KILL_FRAC_CONFIG = {
+    [GAMEMODE_CTF]  = "ctfKillTicketFrac",
+    [GAMEMODE_RUSH] = "rushKillTicketFrac",
+}
+
 hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
     if victim == attacker then return end
     if not IsValid(attacker) or not attacker:IsPlayer() then return end
@@ -137,12 +145,18 @@ hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
         attacker:Kill()
     end
     
-    -- Per-kill ticket drain. DM lives entirely on this (frac 1). CTF adds a
-    -- SMALLER version on top of flag captures, so fighting matters between flag
-    -- runs while the flag stays the decisive scoring. Every other mode: none.
+    -- Per-kill ticket drain. DM lives entirely on this (frac 1). The objective
+    -- modes below add a SMALLER version on top of their own scoring, so fighting
+    -- matters between captures while the objective stays decisive. Every mode
+    -- absent from this table drains nothing on a kill.
     local gameType = TPG.GetGameType(TPG.State.gameType)
-    local killFrac = gameType.useDeathTickets and 1
-        or (TPG.State.gameType == GAMEMODE_CTF and (TPG.Config.ctfKillTicketFrac or 0)) or 0
+    local killFrac = 0
+    if gameType.useDeathTickets then
+        killFrac = 1
+    else
+        local key = KILL_FRAC_CONFIG[TPG.State.gameType]
+        if key then killFrac = TPG.Config[key] or 0 end
+    end
 
     if killFrac > 0 then
         local victimTeam = victim:Team()

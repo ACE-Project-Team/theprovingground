@@ -64,36 +64,95 @@ TPG.GameTypes = {
         -- passive control-point drain, so no cap multiplier here.
         defaultCapMul   = 0,
     },
+    [GAMEMODE_RUSH] = {
+        id              = GAMEMODE_RUSH,
+        name            = "Rush",
+        shortName       = "Rush",
+        description     = "One point at a time - take it and hold it",
+        useDeathTickets = false,
+        -- Scoring is per stage (objectives/sv_rush.lua), not the passive
+        -- ownership drain: holding the live point is worth nothing until the
+        -- hold completes, which is what makes a stage a race rather than a
+        -- slow bleed.
+        defaultCapMul   = 0,
+    },
 }
 
 --[[
-    Slot split: CP 40% / CTF 25% / KOTH 20% / DM 15%. CP is the most common mode
-    (bumped from 30% after the last event); DM stays deliberately rare. CTF is
-    its own mode -- it borrows the map's KOTH capture point as the flag's home
+    Slot split: CP 30% / CTF 25% / KOTH 20% / DM 15% / Rush 10%. CP is still the
+    most common mode; DM stays deliberately rare. CTF is its own mode -- it
+    borrows the map's KOTH capture point as the flag's home
     (TPG.CTF.GetFlagPoint), it does NOT replace a KOTH round. On a map that
-    can't host a flag, CTF's slice falls through to KOTH.
+    can't host a flag, CTF's slice falls through to KOTH. Rush took its 10% out
+    of CP, which had the most to spare.
 
-    The bands are cumulative thresholds on one math.random(), and only the first
-    one is configurable. Raising TPG.Config.ctfChance therefore takes its extra
-    share out of KOTH, not out of CP, because the next threshold is a hard 0.45:
-    at ctfChance = 0.45 KOTH stops rolling at all. Move the 0.45 with it if that
-    is not what you wanted.
+    Rush needs no map support beyond a control point list, since it reveals the
+    map's CP points one at a time (TPG.Rush.BuildStages), so unlike CTF it has
+    no fallthrough -- any map that can host CP can host Rush.
+
+    The bands were cumulative thresholds on one math.random(), which made every
+    threshold after the first depend on the ones before it: raising ctfChance
+    silently ate KOTH's share rather than CP's, and at ctfChance = 0.45 KOTH
+    stopped rolling entirely with nothing to show for it. They are weights now.
+    Changing one changes only its own share of the roll, and a mode that cannot
+    run this round is dropped from the draw rather than falling through to
+    whatever the next threshold happened to be.
 ]]
-local function RollGameType()
-    local roll = math.random()
+local WEIGHTS = {
+    [GAMEMODE_CP]   = 0.30,
+    [GAMEMODE_CTF]  = 0.25,   -- TPG.Config.ctfChance overrides this one
+    [GAMEMODE_KOTH] = 0.20,
+    [GAMEMODE_DM]   = 0.15,
+    [GAMEMODE_RUSH] = 0.10,
+}
 
-    if roll < (TPG.Config.ctfChance or 0.25) then
-        if TPG.CTF and TPG.CTF.IsSupported and TPG.CTF.IsSupported() then
-            return GAMEMODE_CTF
+-- Whether a mode can run on this map at all. Anything absent can always run.
+local SUPPORTED = {
+    [GAMEMODE_CTF] = function()
+        return TPG.CTF and TPG.CTF.IsSupported and TPG.CTF.IsSupported() or false
+    end,
+    [GAMEMODE_RUSH] = function()
+        return TPG.Rush and TPG.Rush.IsSupported and TPG.Rush.IsSupported() or false
+    end,
+}
+
+-- The modes that can run right now, lowest id first. Sorted rather than left in
+-- pairs() order, which Lua does not promise: the same weights would otherwise
+-- map to different modes on different servers, and differently between runs of
+-- the tests.
+local function eligible()
+    local ids = {}
+    for id in pairs(WEIGHTS) do ids[#ids + 1] = id end
+    table.sort(ids)
+
+    local pool, total = {}, 0
+    for _, id in ipairs(ids) do
+        local weight = (id == GAMEMODE_CTF) and (TPG.Config.ctfChance or WEIGHTS[id]) or WEIGHTS[id]
+        local supported = SUPPORTED[id]
+
+        if weight > 0 and (not supported or supported()) then
+            total = total + weight
+            pool[#pool + 1] = { id = id, upTo = total }
         end
-        return GAMEMODE_KOTH
-    elseif roll < 0.45 then
-        return GAMEMODE_KOTH
-    elseif roll < 0.60 then
-        return GAMEMODE_DM
-    else
-        return GAMEMODE_CP
     end
+
+    return pool, total
+end
+
+local function RollGameType()
+    local pool, total = eligible()
+
+    -- Nothing at all could run: control points is the mode every map supports,
+    -- and TPG.GetGameType already treats it as the safe answer.
+    if total <= 0 then return GAMEMODE_CP end
+
+    local roll = math.random() * total
+    for _, entry in ipairs(pool) do
+        if roll < entry.upTo then return entry.id end
+    end
+
+    -- Only reachable on a float landing exactly on the top of the range.
+    return pool[#pool].id
 end
 
 local lastGameType

@@ -30,6 +30,7 @@ local SUITES = {
     "test_ranks",
     "test_gametypes",
     "test_controlpoint",
+    "test_rush",
     "test_gear",
     "test_weapons",
     "test_maps",
