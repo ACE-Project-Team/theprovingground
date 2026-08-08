@@ -32,8 +32,11 @@ local function DenialMessage(ply, kind, id, reason, amount)
     local name = TPG.Gear.Name(kind, id)
 
     if reason == "cooldown" then
-        TPG.Util.ChatMessage(ply, "[TPG] " .. name .. " is on cooldown for another " ..
-            math.ceil(amount) .. "s.", Color(255, 200, 0))
+        -- "You've used your run of these" rather than a bare number of seconds:
+        -- the wait is the second half of the price, and a player who only ever
+        -- sees the timer has no idea the lives were the first half.
+        TPG.Util.ChatMessage(ply, "[TPG] " .. name .. ": you've used up your lives with it. " ..
+            math.ceil(amount) .. "s until you can take another.", Color(255, 200, 0))
     elseif reason == "afford" then
         TPG.Util.ChatMessage(ply, "[TPG] " .. name .. " costs " .. amount ..
             " pts and you have " .. (TPG.Economy and TPG.Economy.GetMoney(ply) or 0) .. ".",

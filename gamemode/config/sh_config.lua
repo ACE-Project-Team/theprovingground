@@ -131,6 +131,13 @@ TPG.Config = {
     -- drain only this fraction of the full DM per-kill loss. 0 disables it.
     ctfKillTicketFrac    = 0.4,
 
+    -- Premium gear (config/sh_gear.lua), team-budget rounds only: how many
+    -- lives one take of a priced item is good for before its cooldown timer
+    -- starts. Per-item `lives` overrides this. Six is deliberately generous --
+    -- the point of spending lives before spending time is that ONE bad life
+    -- shouldn't cost you the whole timer.
+    gearCooldownLives   = 6,
+
     -- Bonus disposable AT (entities/weapons/disposableat): every teamed player
     -- gets a free single-use AT tube on top of their loadout, so everyone always
     -- has an answer to armour even after a chosen launcher runs dry. Set the

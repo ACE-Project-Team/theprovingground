@@ -126,7 +126,10 @@ end
                          captures. Cleared by @{ResetRound}
         votes            rtv, scramble, map
         money            wallet, when the per-player economy is running
-        gearCooldowns    [gear key] = CurTime() it becomes available again
+        gearCooldowns    [gear key] = { charges, expires, cooldown } -- lives
+                         left in the item's current run, and the CurTime its
+                         timer runs out (0 while none is running). See
+                         @{tpg.gearsystem}.
 
     @tparam Player ply
     @treturn table The live state table.
@@ -202,7 +205,10 @@ end
 ]]
 local CARRYOVER_TTL = 900   -- seconds; a rejoin much later isn't dodging anything
 
-local carryover = {}        -- [sid64] = { at, round, dupeCooldown, money, lastSwitch }
+-- [sid64] = { at, round, dupeCooldown, money, gear, lastSwitch }, where gear is
+-- [gear key] = { charges, left, cooldown } -- `left` is seconds remaining, not
+-- an absolute deadline, so it survives the CurTime the player comes back to.
+local carryover = {}
 
 local function StashCarryover(ply)
     if not IsValid(ply) or ply:IsBot() then return end
@@ -212,13 +218,19 @@ local function StashCarryover(ply)
     local pState = TPG.State.players[ply]
     if not pState then return end
 
-    -- Premium gear cooldowns, stored as remaining seconds so they resume rather
-    -- than restart. Same reasoning as the duplicator cooldown: a reconnect can't
-    -- be the cheapest way to get another Javelin.
+    -- Premium gear: lives left in each run, and any timer stored as remaining
+    -- seconds so it resumes rather than restarts. Same reasoning as the
+    -- duplicator cooldown -- a reconnect can't be the cheapest way to get
+    -- another Javelin -- and it now has to cover the charges too, or dropping
+    -- out mid-run would hand the whole allowance back.
     local gear = {}
-    for key, ends in pairs(pState.gearCooldowns or {}) do
-        local left = ends - CurTime()
-        if left > 0 then gear[key] = left end
+    for key, st in pairs(pState.gearCooldowns or {}) do
+        local left = math.max((st.expires or 0) - CurTime(), 0)
+        -- A finished run is not worth carrying: it means the same as never
+        -- having taken the item.
+        if left > 0 or (st.charges or 0) > 0 then
+            gear[key] = { charges = st.charges or 0, left = left, cooldown = st.cooldown or 0 }
+        end
     end
 
     carryover[sid] = {
@@ -250,12 +262,17 @@ local function RestoreCarryover(ply)
     -- fresh startingMoney when it's set.
     if c.money then pState.carriedMoney = c.money end
 
-    -- Gear cooldowns outlive rounds by design, so unlike the duplicator these
-    -- come back regardless of which round the player left in.
+    -- Gear runs outlive rounds by design, so unlike the duplicator these come
+    -- back regardless of which round the player left in.
     if istable(c.gear) and next(c.gear) then
         pState.gearCooldowns = pState.gearCooldowns or {}
-        for key, left in pairs(c.gear) do
-            pState.gearCooldowns[key] = CurTime() + left
+        for key, saved in pairs(c.gear) do
+            pState.gearCooldowns[key] = {
+                charges  = saved.charges or 0,
+                -- Rebased onto this session's CurTime, not restored absolute.
+                expires  = (saved.left or 0) > 0 and (CurTime() + saved.left) or 0,
+                cooldown = saved.cooldown or 0,
+            }
         end
     end
 

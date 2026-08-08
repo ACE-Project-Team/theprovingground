@@ -74,9 +74,9 @@ local SLOTS = {
 local RULES = {
     economy = "Marked items cost points, charged when you spawn with them. " ..
               "Yours for that whole life.",
-    budget  = "Marked items are yours for that whole life. The timer starts when " ..
-              "you spawn with one, and until it runs out you spawn with the free " ..
-              "equivalent instead.",
+    budget  = "Marked items are yours for a run of lives -- the badge says how " ..
+              "many. When the last one is spent, dying starts the timer, and " ..
+              "until it runs out you spawn with the free equivalent instead.",
 }
 
 -- How many lines of description the panel will give up to the block above the
@@ -111,10 +111,19 @@ local MC = {
     sunken = Color(22, 15, 36, 255),
 }
 
--- Cooldown ends, keyed the same way the server keys them. Stored as SysTime
--- deadlines built from the relative seconds the server sent, so the two clocks
--- never have to agree.
-local cooldownEnds = {}
+--[[
+    Premium gear runs, keyed the same way the server keys them
+    (`TPG.Gear.Key`). One entry per item the player has an OPEN run on:
+
+        charges  lives left before the timer starts
+        ends     SysTime the timer runs out, or 0 while none is running
+
+    Built from the relative seconds the server sent rather than an absolute
+    deadline, so the two clocks never have to agree. No entry means the item is
+    untouched, which is not the same as `charges = 0` -- that one is a run with
+    nothing left in it, waiting on the next death to start its timer.
+]]
+local gearRuns = {}
 
 --[[
     Two different answers to "what have I got".
@@ -133,10 +142,12 @@ local picks = {}
 local live  = {}
 
 net.Receive("TPG_GearState", function()
-    cooldownEnds = {}
+    gearRuns = {}
     for _ = 1, net.ReadUInt(8) do
-        local key = net.ReadString()
-        cooldownEnds[key] = SysTime() + net.ReadFloat()
+        local key     = net.ReadString()
+        local charges = net.ReadUInt(8)
+        local left    = net.ReadFloat()
+        gearRuns[key] = { charges = charges, ends = left > 0 and (SysTime() + left) or 0 }
     end
 
     picks.Primary   = net.ReadString()
@@ -172,10 +183,21 @@ local function PendingCount()
     return n
 end
 
+-- Seconds left on an item's timer, or 0 -- which is also what an item mid-run
+-- reports, so it means "not waiting", not "ready in every sense".
 local function CooldownLeft(kind, id)
-    local ends = cooldownEnds[TPG.Gear.Key(kind, id)]
-    if not ends then return 0 end
-    return math.max(ends - SysTime(), 0)
+    local run = gearRuns[TPG.Gear.Key(kind, id)]
+    if not run or run.ends == 0 then return 0 end
+    return math.max(run.ends - SysTime(), 0)
+end
+
+-- Lives left in an item's run, and whether the run has been opened at all. An
+-- untouched item reports its full allowance so the menu can say "6 lives"
+-- without knowing the difference.
+local function LivesLeft(kind, id, price)
+    local run = gearRuns[TPG.Gear.Key(kind, id)]
+    if run then return run.charges, true end
+    return price and price.lives or 0, false
 end
 
 local function FormatTime(seconds)
@@ -860,11 +882,14 @@ local function BuildLoadoutMenu()
         -- What this item costs, in both currencies, worked out now. Which of the
         -- two applies is a question for Paint: the card outlives the round it
         -- was built in, and a round can end in either mode.
-        local costBadge, cooldownBadge
+        local costBadge, livesBadge
         if price then
             costBadge = price.cost and (price.cost .. " pts") or nil
             if (price.cooldown or 0) > 0 then
-                cooldownBadge = FormatTime(price.cooldown) .. " cooldown"
+                -- What an UNTOUCHED one is worth: the run you get, and the wait
+                -- that follows it. Both, because either alone is half a price.
+                livesBadge = price.lives .. (price.lives == 1 and " life, then " or " lives, then ") ..
+                    FormatTime(price.cooldown)
             end
         end
 
@@ -888,24 +913,58 @@ local function BuildLoadoutMenu()
                     TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
             end
 
-            -- Badge, top-left so it never lands on the icon's silhouette.
-            local text, textCol = TPG.Gear.EconomyActive() and costBadge or cooldownBadge, C.Neutral
-            if left > 0 then
-                text, textCol = "Locked " .. FormatTime(left), C.Red
+            --[[
+                Badge, top-left so it never lands on the icon's silhouette.
+
+                Under the team budget an item is in one of three states, and
+                they are genuinely three different answers to "can I take this":
+
+                  untouched   the full price -- "6 lives, then 4:00"
+                  mid-run     what's left of it -- "3 lives left"
+                  waiting     the timer -- "Locked 3:12", and you can't
+
+                Only the last is a refusal, so only the last is red.
+            ]]
+            local text, textCol = costBadge, C.Neutral
+            local frac
+
+            if not TPG.Gear.EconomyActive() and price then
+                local lives, opened = LivesLeft(item.kind, item.id, price)
+
+                if left > 0 then
+                    text, textCol = "Locked " .. FormatTime(left), C.Red
+                    -- How much of the wait is done, so "not yet" reads as
+                    -- "nearly". Against the item's own cooldown, which is the
+                    -- length this bar was filled from.
+                    if (price.cooldown or 0) > 0 then
+                        frac = 1 - math.Clamp(left / price.cooldown, 0, 1)
+                    end
+                elseif opened then
+                    -- 0 left is a run that is spent but not yet waiting: the
+                    -- next death starts the timer. Say so, rather than showing
+                    -- "0 lives left" and letting it read as locked.
+                    if lives <= 0 then
+                        text, textCol = "Last life - dying starts the wait", C.Neutral
+                    else
+                        text = lives .. (lives == 1 and " life left" or " lives left")
+                        frac = 1 - math.Clamp(lives / math.max(price.lives, 1), 0, 1)
+                    end
+                else
+                    text = livesBadge
+                end
             end
+
             if text then
                 surface.SetFont("TPG.Menu.Tiny")
                 local bw, bh = surface.GetTextSize(text)
                 draw.RoundedBox(S(3), S(6), S(6), bw + S(10), bh + S(4), Color(0, 0, 0, 170))
                 draw.SimpleText(text, "TPG.Menu.Tiny", S(11), S(8), textCol)
 
-                -- A locked item also gets a bar showing how much of the wait is
-                -- done, so "not yet" turns into "nearly".
-                if left > 0 and (price.cooldown or 0) > 0 then
-                    local frac = 1 - math.Clamp(left / price.cooldown, 0, 1)
+                if frac then
                     local bx, by, barW = S(6), S(6) + bh + S(6), bw + S(10)
                     draw.RoundedBox(0, bx, by, barW, math.max(S(3), 1), MC.sunken)
-                    draw.RoundedBox(0, bx, by, barW * frac, math.max(S(3), 1), col)
+                    draw.RoundedBox(0, bx, by, barW * frac, math.max(S(3), 1),
+                        left > 0 and col or C.Neutral)
                 end
             end
 

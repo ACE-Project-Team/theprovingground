@@ -81,15 +81,35 @@ it("returns nil for anything unlisted", function()
     expect.nils(TPG.Gear.Price("armor", 99))
 end)
 
+-- Price returns a COPY, not the config entry, so that defaulting `lives` on the
+-- way out cannot write the default into the shared table. Every test below
+-- compares fields for that reason; an identity check would be testing the thing
+-- the copy exists to prevent.
+local function samePrice(got, want, msg)
+    expect.truthy(got, (msg or "price") .. ": nothing returned")
+    expect.eq(got.cost, want.cost, (msg or "price") .. " cost")
+    expect.eq(got.cooldown, want.cooldown, (msg or "price") .. " cooldown")
+end
+
 it("looks armor up in the gear table, not the tier table", function()
     -- TPG.Gear.Armor (prices) and TPG.Armor (stats) are different tables keyed
     -- the same way, and confusing them is easy.
-    expect.eq(TPG.Gear.Price("armor", 3), TPG.Gear.Armor[3])
-    expect.eq(TPG.Gear.Price("armor", "3"), TPG.Gear.Armor[3], "string ids must work too")
+    samePrice(TPG.Gear.Price("armor", 3), TPG.Gear.Armor[3])
+    samePrice(TPG.Gear.Price("armor", "3"), TPG.Gear.Armor[3], "string ids must work too")
 end)
 
 it("returns the static baseline when no admin override is set", function()
-    expect.eq(TPG.Gear.Price("weapon", "weapon_ace_javelin"), TPG.Gear.Weapons["weapon_ace_javelin"])
+    samePrice(TPG.Gear.Price("weapon", "weapon_ace_javelin"), TPG.Gear.Weapons["weapon_ace_javelin"])
+end)
+
+it("never hands out the config table itself", function()
+    -- Writing to the returned table must not retune the item for everyone.
+    local before = TPG.Gear.Weapons["weapon_ace_javelin"].cost
+    local price = TPG.Gear.Price("weapon", "weapon_ace_javelin")
+    price.cost = 1
+
+    expect.eq(TPG.Gear.Weapons["weapon_ace_javelin"].cost, before,
+        "Price handed back the live config entry")
 end)
 
 it("lets an admin cost override beat the baseline", function()
@@ -134,8 +154,72 @@ it("ignores a zero cost override", function()
     local saved = TPG.Weapons.Special[class]
     TPG.Weapons.Special[class] = { id = class, cost = 0, enabled = true }
 
-    expect.eq(TPG.Gear.Price("weapon", class), TPG.Gear.Weapons[class],
+    samePrice(TPG.Gear.Price("weapon", class), TPG.Gear.Weapons[class],
         "cost 0 means 'no override set', not 'free'")
+
+    TPG.Weapons.Special[class] = saved
+end)
+
+describe("gear: lives before the timer")
+
+it("fills in the configured default for every priced item", function()
+    -- Nothing ships an explicit `lives`, so every item should be reporting the
+    -- global. A test that read the entry instead would pass even if the
+    -- defaulting in Price stopped happening.
+    local want = TPG.Config.gearCooldownLives
+    expect.truthy(want and want > 0, "gearCooldownLives is what every item leans on")
+
+    for class in pairs(TPG.Gear.Weapons) do
+        expect.eq(TPG.Gear.Price("weapon", class).lives, want, class .. " lives")
+    end
+    for id in pairs(TPG.Gear.Armor) do
+        expect.eq(TPG.Gear.Price("armor", id).lives, want, "armor " .. id .. " lives")
+    end
+end)
+
+it("lets an item override the default", function()
+    local class = "weapon_ace_javelin"
+    local saved = TPG.Gear.Weapons[class].lives
+    TPG.Gear.Weapons[class].lives = 2
+
+    expect.eq(TPG.Gear.Price("weapon", class).lives, 2)
+
+    TPG.Gear.Weapons[class].lives = saved
+end)
+
+it("moves every unopinionated item when the global changes", function()
+    -- The reason lives is defaulted in Price rather than written into each
+    -- entry: one knob has to be able to retune the whole file.
+    local saved = TPG.Config.gearCooldownLives
+    TPG.Config.gearCooldownLives = 3
+
+    expect.eq(TPG.Gear.Price("weapon", "weapon_ace_javelin").lives, 3)
+    expect.eq(TPG.Gear.Price("armor", 4).lives, 3)
+
+    TPG.Config.gearCooldownLives = saved
+end)
+
+it("never reports a run shorter than one life", function()
+    -- 0 lives would mean the timer starts before the player ever gets the item,
+    -- which is a gate with no upside rather than a price.
+    local saved = TPG.Config.gearCooldownLives
+
+    for _, bad in ipairs({ 0, -5, 0.4 }) do
+        TPG.Config.gearCooldownLives = bad
+        expect.truthy(TPG.Gear.Price("weapon", "weapon_ace_javelin").lives >= 1,
+            "a gearCooldownLives of " .. bad .. " produced a run nobody could use")
+    end
+
+    TPG.Config.gearCooldownLives = saved
+end)
+
+it("carries lives through an admin cost override", function()
+    local class = "weapon_ace_javelin"
+    local saved = TPG.Weapons.Special[class]
+    TPG.Weapons.Special[class] = { id = class, cost = 42, enabled = true }
+
+    expect.eq(TPG.Gear.Price("weapon", class).lives, TPG.Config.gearCooldownLives,
+        "an overridden cost must not lose the run length")
 
     TPG.Weapons.Special[class] = saved
 end)

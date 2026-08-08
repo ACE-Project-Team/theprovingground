@@ -8,12 +8,23 @@
 
     There are two prices, and which one you pay depends on the round:
 
-    TEAM BUDGET (the normal round), you pay in TIME. Take the item and it
-    goes on a personal cooldown; until that runs out you spawn with the free
-    equivalent instead. There is no wallet in this mode, and charging the
-    shared team budget for a personal rifle would just let one player spend
-    the round's tickets, so a cooldown is the only price that lands on the
-    person who actually chose it.
+    TEAM BUDGET (the normal round), you pay in LIVES, and then in TIME. Take
+    the item and you keep it for a run of lives -- `lives`, or
+    `TPG.Config.gearCooldownLives` when the entry does not say -- one spent per
+    life you actually spawn with it. When the last one is gone the `cooldown`
+    timer starts, and until it runs out you spawn with the free equivalent
+    instead. There is no wallet in this mode, and charging the shared team
+    budget for a personal rifle would just let one player spend the round's
+    tickets, so a personal price is the only one that lands on the person who
+    actually chose it.
+
+    It was a bare timer at first, deliberately: seconds of real time meant
+    dying repeatedly could never shorten the wait. What that missed is that
+    one death then cost you the whole timer, so a single bad life took your
+    launcher away for minutes of a round you were still playing. Spending
+    lives first fixes that from the other end and keeps the same property --
+    a suicide burns one of your own charges, so killing yourself is a way to
+    reach the wait sooner, never to skip it.
 
     PER-PLAYER ECONOMY (the secondary mode), you pay in POINTS, out of the
     same wallet you buy vehicles from. No cooldown: if you can afford it every
@@ -23,9 +34,10 @@
     good modern tank runs about 6,000. Nothing here should ever be the reason
     you can't field a vehicle; the most expensive item is a fifth of a tank.
 
-    Cooldowns are in seconds of real time, not lives, so dying repeatedly never
-    speeds up the next Javelin. Which price is active right now is a single
-    shared answer (@{TPG.Gear.EconomyActive}), not a per-item choice.
+    Cooldowns are in seconds of real time once they start, so waiting one out
+    does not depend on how the round is going. Which price is active right now
+    is a single shared answer (@{TPG.Gear.EconomyActive}), not a per-item
+    choice.
 
     @module tpg.gear
     @realm shared
@@ -37,7 +49,15 @@ TPG.Gear = TPG.Gear or {}
 -- tier, so a denied Heavy still leaves you with a fightable loadout.
 TPG.Gear.FreeArmor = 2   -- Medium
 
--- [weapon class] = { cost = economy points, cooldown = seconds }
+-- [weapon class] = { cost = economy points, cooldown = seconds, lives = n }
+--
+-- `lives` is optional and defaults to `TPG.Config.gearCooldownLives` (6): how
+-- many lives you get out of one take before the `cooldown` timer starts. Set it
+-- per weapon where six is the wrong number -- `lives = 3` on something that
+-- should come round twice as often, `lives = 10` on something that should be
+-- close to a once-a-round decision. The timer is what it costs AFTER that run,
+-- so the two knobs are independent: `lives` sets how long you keep it, and
+-- `cooldown` sets how long you go without.
 --
 -- Anything not listed here is free and always available. The AT-4 is the
 -- deliberate free baseline for anti-tank: every player can answer a tank every
@@ -144,29 +164,52 @@ local COST_PER_COOLDOWN_SEC = 3
 
     @tparam string kind `"armor"` or `"weapon"`.
     @tparam string|number id Armor id or weapon class/virtual id.
-    @treturn ?table `{ cost, cooldown }`, or nil if the item is free.
+    @treturn ?table `{ cost, cooldown, lives }`, or nil if the item is free.
+     `lives` is always filled in, from the entry or from
+     `TPG.Config.gearCooldownLives`, so callers never have to default it.
     @realm shared
 ]]
 function TPG.Gear.Price(kind, id)
+    local price
     if kind == "armor" then
-        return TPG.Gear.Armor[tonumber(id) or -1]
-    end
+        price = TPG.Gear.Armor[tonumber(id) or -1]
+    else
+        local base = TPG.Gear.Weapons[id]
+        price = base
 
-    local base = TPG.Gear.Weapons[id]
-
-    for _, cat in ipairs({ "Primary", "Secondary", "Special" }) do
-        local entry = TPG.Weapons and TPG.Weapons[cat] and TPG.Weapons[cat][id]
-        if entry and (entry.cost or 0) > 0 then
-            return {
-                cost     = entry.cost,
-                cooldown = entry.cooldown
-                    or (base and base.cooldown)
-                    or math.Round(entry.cost / COST_PER_COOLDOWN_SEC),
-            }
+        for _, cat in ipairs({ "Primary", "Secondary", "Special" }) do
+            local entry = TPG.Weapons and TPG.Weapons[cat] and TPG.Weapons[cat][id]
+            if entry and (entry.cost or 0) > 0 then
+                price = {
+                    cost     = entry.cost,
+                    cooldown = entry.cooldown
+                        or (base and base.cooldown)
+                        or math.Round(entry.cost / COST_PER_COOLDOWN_SEC),
+                    lives    = entry.lives or (base and base.lives),
+                }
+                break
+            end
         end
     end
 
-    return base
+    if not price then return nil end
+
+    --[[
+        `lives` is defaulted on the way out rather than written into every
+        entry, so the config only ever says the number when it disagrees with
+        the global one -- and so raising TPG.Config.gearCooldownLives moves
+        every item that never had an opinion.
+
+        A copy, because the entry itself is the shared config table: filling
+        the field in place would write the default INTO the config, and the
+        next read could no longer tell "the admin set 6" from "6 is just the
+        default", which is exactly the distinction the line above depends on.
+    ]]
+    return {
+        cost     = price.cost,
+        cooldown = price.cooldown,
+        lives    = math.max(math.floor(price.lives or TPG.Config.gearCooldownLives or 6), 1),
+    }
 end
 
 --- Display name for chat/menu messages, whichever kind it is.
