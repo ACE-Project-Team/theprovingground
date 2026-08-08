@@ -2,8 +2,15 @@
     Rush status HUD: which stage this is, and how the hold is going.
 
     Only draws during a Rush round (`TPG.UI.State.gameType == GAMEMODE_RUSH`).
-    One top-centre banner carrying the stage counter, the stage tally, and a
+    One small top-LEFT panel carrying the stage counter, the stage tally, and a
     progress bar for the live hold.
+
+    It sat top-centre at first, under the compass, and was wrong twice over: it
+    was far bigger than three numbers need, and the centre column is the busiest
+    part of the screen -- ticket bars, point pips, compass, objective markers --
+    so a banner there covered the map through the part of a stage where looking
+    at the map is the whole job. Top-left is the quiet corner: it already holds
+    the mode pills, this stacks under them, and nothing there is world-space.
 
     Reads the globals `objectives/sv_rush.lua` publishes (`TPG_RushStage`,
     `TPG_RushStages`, `TPG_RushGreen`, `TPG_RushRed`, `TPG_RushHoldTeam`,
@@ -13,7 +20,7 @@
 
     The bar is drawn in the HOLDING team's colour, not the local player's, so a
     bar filling up is unambiguously good or bad at a glance without reading the
-    label. Stacks under `TPG.UI.BelowOvertime` the same way the CTF banner does.
+    label -- which is what lets the label be as short as it is.
 
     Between stages the hold bar is replaced by a countdown, and the header
     counts the stage that is COMING rather than the one just finished. There is
@@ -36,44 +43,53 @@ hook.Add("HUDPaint", "TPG_RushHUD", function()
     local stages = GetGlobalInt("TPG_RushStages", 0)
     if stage <= 0 or stages <= 0 then return end
 
-    local S  = TPG.UI.S
-    local sw = ScrW()
-    local w, h = math.min(S(360), sw * 0.9), S(66)
-    local x = sw / 2 - w / 2
-    local y = (TPG.UI.BelowOvertime and TPG.UI.BelowOvertime() or TPG.UI.BelowObjectives()) + S(10)
+    local S = TPG.UI.S
+    local L = TPG.UI.ComputeLayout()
+
+    -- Stack under the mode pills that cl_hud.lua draws in this corner. The
+    -- economy pill is conditional, so the anchor is read off whether it is
+    -- there rather than assumed -- otherwise this floats in a gap on every
+    -- team-budget round.
+    local pillsBottom = GetGlobalBool("TPG_EconomyActive", false) and S(78) or S(48)
+
+    local w, h = S(180), S(50)
+    local x, y = L.margin, pillsBottom + S(8)
 
     -- Seconds until the next point appears; 0 whenever a stage is actually live.
     local brk = GetGlobalFloat("TPG_RushBreak", 0)
 
-    draw.RoundedBox(S(6), x, y, w, h, Color(0, 0, 0, 160))
+    draw.RoundedBox(S(4), x, y, w, h, Color(0, 0, 0, 150))
 
     -- On a break the stage counter reads forward, to the one about to start.
     -- Leaving it on the finished stage would put a countdown under a heading
     -- for something that is already over.
     local shown = (brk > 0) and math.min(stage + 1, stages) or stage
-    draw.SimpleText(string.format("STAGE %d OF %d", shown, stages), "TPG.HUD.Label",
-        x + w / 2, y + S(14), Color(245, 245, 245), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    draw.SimpleText(string.format("STAGE %d/%d", shown, stages), "TPG.HUD.Small",
+        x + S(10), y + S(12), Color(245, 245, 245), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 
-    -- Stage tally, each side in its own colour and on its own side of the dash,
-    -- so which number belongs to you never needs working out.
+    -- Stage tally, hard right, each side in its own colour and on its own side
+    -- of the dash, so which number belongs to you never needs working out.
     local green = TPG.GetTeamData(TEAM_GREEN)
     local red   = TPG.GetTeamData(TEAM_RED)
-    draw.SimpleText(GetGlobalInt("TPG_RushGreen", 0), "TPG.HUD.Small",
-        x + w / 2 - S(14), y + S(34), (green and green.color) or Color(120, 220, 120),
-        TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
-    draw.SimpleText("-", "TPG.HUD.Small", x + w / 2, y + S(34),
-        Color(180, 180, 180), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
     draw.SimpleText(GetGlobalInt("TPG_RushRed", 0), "TPG.HUD.Small",
-        x + w / 2 + S(14), y + S(34), (red and red.color) or Color(230, 110, 100),
-        TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        x + w - S(10), y + S(12), (red and red.color) or Color(230, 110, 100),
+        TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    draw.SimpleText("-", "TPG.HUD.Small", x + w - S(20), y + S(12),
+        Color(150, 150, 150), TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+    draw.SimpleText(GetGlobalInt("TPG_RushGreen", 0), "TPG.HUD.Small",
+        x + w - S(28), y + S(12), (green and green.color) or Color(120, 220, 120),
+        TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+
+    local barW, barH = w - S(20), S(6)
+    local barX, barY = x + S(10), y + S(26)
 
     -- Between stages the bar has nothing to show -- there is no point to hold --
-    -- so the countdown takes its place in the same strip, and the banner keeps
-    -- its size rather than collapsing and shoving the rest of the HUD about.
+    -- so the countdown takes the whole lower half, and the panel keeps its size
+    -- rather than collapsing and shoving the mode pills about.
     if brk > 0 then
-        draw.SimpleText(string.format("NEXT POINT IN %d:%02d",
+        draw.SimpleText(string.format("NEXT POINT %d:%02d",
             math.floor(brk / 60), math.floor(brk % 60)), "TPG.HUD.Small",
-            x + w / 2, y + S(52), Color(255, 205, 40), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+            x + S(10), y + S(34), Color(255, 205, 40), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
         return
     end
 
@@ -85,20 +101,17 @@ hook.Add("HUDPaint", "TPG_RushHUD", function()
     local frac     = math.Clamp(GetGlobalFloat("TPG_RushHoldFrac", 0), 0, 1)
     local td       = (holdTeam ~= 0) and TPG.GetTeamData(holdTeam) or nil
 
-    local barW, barH = w - S(40), S(8)
-    local barX, barY = x + S(20), y + S(48)
-    draw.RoundedBox(S(3), barX - 1, barY - 1, barW + 2, barH + 2, Color(0, 0, 0, 200))
-    draw.RoundedBox(S(3), barX, barY, barW, barH, Color(45, 45, 45, 220))
-
+    draw.RoundedBox(S(2), barX, barY, barW, barH, Color(45, 45, 45, 220))
     if frac > 0 then
-        draw.RoundedBox(S(3), barX, barY, barW * frac, barH,
+        draw.RoundedBox(S(2), barX, barY, barW * frac, barH,
             (td and td.color) or Color(255, 205, 40))
     end
 
-    local hold   = math.max(TPG.Config.rushHoldTime or 60, 1)
-    local label  = td and string.format("%s HOLDING - %ds LEFT",
-        string.upper(td.name), math.ceil(hold * (1 - frac)))
-        or "POINT CONTESTED"
-    draw.SimpleText(label, "TPG.HUD.Small", x + w / 2, barY + barH + S(8),
-        (td and td.color) or Color(230, 230, 230), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    -- The bar's colour already says who is holding, so the label only has to
+    -- carry the number the bar cannot: how long is left.
+    local hold  = math.max(TPG.Config.rushHoldTime or 60, 1)
+    local label = td and string.format("HOLDING - %ds", math.ceil(hold * (1 - frac)))
+        or "CONTESTED"
+    draw.SimpleText(label, "TPG.HUD.Small", x + S(10), y + S(41),
+        (td and td.color) or Color(190, 190, 190), TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
 end)
