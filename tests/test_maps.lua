@@ -201,11 +201,23 @@ it("judges 'small' on the authored weight, before any multiplier", function()
         "this test is only meaningful while the global weight multiplier is above 1")
 end)
 
-it("leaves small maps where they were before the global weight bump", function()
-    -- The small-map multiplier is chosen to cancel the global one, not to be a
-    -- round number: their product is the 1.2x small maps had all along.
-    expect.near(TPG.Maps.LimitMult.weight * TPG.Maps.SmallMapWeightMult, 1.2, 0.01,
-        "if LimitMult.weight is retuned, retune SmallMapWeightMult so the product holds")
+it("still gives a small map less tonnage than an open one of the same size", function()
+    -- This used to assert the product was exactly 1.2x -- the small-map cut was
+    -- chosen to cancel the global bump. Weight is being retired as a metric and
+    -- the global multiplier is now far past that, so what is left to hold is the
+    -- relationship: the cut is proportional, so it survives any retune of the
+    -- global number without either cancelling it or inverting it.
+    expect.truthy(TPG.Maps.SmallMapWeightMult > 0,
+        "a zero or negative cut would scale small maps to nothing")
+    expect.truthy(TPG.Maps.SmallMapWeightMult < 1,
+        "the small-map carve-out is a cut; at 1 or above it is not doing anything")
+end)
+
+it("did not drag the points budget along with the weight raise", function()
+    -- The whole point of raising tonnage is that POINTS become the only real
+    -- budget. A weight retune that moved points too would defeat it.
+    expect.near(TPG.Maps.LimitMult.points, 0.828, 0.001,
+        "the points multiplier moved; weight and points are separate knobs")
 end)
 
 it("does not scale a budget to zero", function()

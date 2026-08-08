@@ -201,7 +201,10 @@ TPG.Config = {
     
     -- Limits (fallback if ACE unavailable)
     fallbackPropLimit   = 300,
-    fallbackWeightLimit = 100,
+    -- Raised 20x with TPG.Maps.LimitMult.weight (see maps/_loader.lua): weight is
+    -- being retired as a balance metric, and a map with no authored tonnage
+    -- should not be the one place it still bites.
+    fallbackWeightLimit = 2000,
     
     -- ACE Integration
     useACEPoints        = true,

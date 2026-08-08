@@ -940,13 +940,21 @@ TPG.Maps.Current = nil
 --   points x0.828 -> x1.656 halved (x5.5k/11k): budgets buy the same NUMBER of
 --                    tanks as before the repricing, valuing each slot at 5.5k
 --                    (history: x2.0 -> x1.84 -> x1.656 -> x0.828)
---   weight x1.8   -> weight cap raised so those extra tanks physically fit
---                    (x1.5 -> x1.8: a further +20% on the open maps, which were
---                    hitting tonnage before they hit points -- the weight cap,
---                    not the budget, was deciding what you could field)
+--   weight x36    -> tonnage effectively stops being a limit. See below.
 --   props  x1.5   -> prop cap raised so it doesn't become the new bottleneck
 -- Tune these three numbers to rebalance all maps at once.
-TPG.Maps.LimitMult = { points = 0.828, weight = 1.8, props = 1.5 }
+--
+-- WEIGHT IS BEING RETIRED as a balance metric, and this is the first step: a
+-- 20x raise on what was already x1.8. It is not a balance change so much as the
+-- removal of one, deliberately -- points are what a build should cost, and the
+-- tonnage cap was a second, cruder budget layered on top that decided the answer
+-- first on the open maps. Points are UNCHANGED and stay the real limit.
+--
+-- The multiplier was raised rather than the 28 per-map values, so the authored
+-- tonnages still say what each map was judged to hold. That judgement is what
+-- SmallMapWeightTons below reads, and it still reads the authored value, so the
+-- small-map carve-out keeps working while it lasts.
+TPG.Maps.LimitMult = { points = 0.828, weight = 36, props = 1.5 }
 
 -- Small/tight maps take an EXTRA weight cut on top of the global multiplier.
 -- On a cramped map a full budget of heavy armour just plugs the lanes: nothing
@@ -958,12 +966,17 @@ TPG.Maps.LimitMult = { points = 0.828, weight = 1.8, props = 1.5 }
 -- size judgement the map authors made (40-80t = the urban/close maps; 100t+ =
 -- the open ones). Retunes every tight map at once.
 --
--- This multiplier is chosen to CANCEL the global weight bump rather than to be
--- a round number: 1.8 * 0.667 = 1.2, which is exactly what small maps got under
--- the old 1.5 * 0.8. The +20% is for the open maps only -- tight maps were
--- already at the tonnage they can physically hold, and giving them more is how
--- you get the plugged-lane grind this carve-out exists to prevent. If you
--- retune LimitMult.weight, retune this so the product stays where you want it.
+-- The multiplier was chosen to CANCEL the global weight bump rather than to be
+-- a round number: it was 1.8 * 0.667 = 1.2, exactly what small maps got under
+-- the old 1.5 * 0.8. That is no longer what it does. With LimitMult.weight at
+-- 36 a small map now lands at 24x its authored tonnage, which is still far above
+-- anything a team can field -- the cut is proportional, so it survives the raise
+-- without becoming a real limit again.
+--
+-- Kept rather than deleted because it is the only place the map-size judgement
+-- is written down, and points-based crowding control on tight maps will want it
+-- back. If tonnage ever matters again, retune this alongside LimitMult.weight so
+-- the product lands where you want it.
 TPG.Maps.SmallMapWeightTons = 80     -- authored limit at or below this = small
 TPG.Maps.SmallMapWeightMult = 0.667  -- net 1.2x on small maps (unchanged)
 
