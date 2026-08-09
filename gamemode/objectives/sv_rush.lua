@@ -328,7 +328,7 @@ function TPG.Rush.BeginBreak()
     publish()
 
     TPG.Util.ChatBroadcast(string.format(
-        "[TPG] Next point in %d seconds. Location unknown until then -- kills " ..
+        "[TPG] Next point in %d seconds. Location unknown until then - kills " ..
         "still bleed tickets.", math.Round(brk)), Color(255, 190, 60))
 end
 

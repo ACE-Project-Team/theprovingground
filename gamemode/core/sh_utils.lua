@@ -30,6 +30,48 @@ if SERVER then
         net.Send(ply)
     end
 
+    -- Last time each player was told about a given thing. Weak-keyed on the
+    -- player so a disconnect drops the entry without a cleanup hook.
+    local lastTold = setmetatable({}, { __mode = "k" })
+
+    --[[--
+        Send a chat line, at most once every `interval` seconds per player.
+
+        For messages driven by an event the player can fire dozens of times in
+        a tick: a spawn-menu click held down, a paste of thirty props refused
+        one prop at a time. Without this the refusal is technically correct and
+        completely unreadable, and the useful line above it is gone from the
+        chat box.
+
+        `key` is what gets rate limited, not the text, so a message whose body
+        carries a changing count still collapses to one line per interval.
+        Different keys never suppress each other, so an unrelated warning
+        arriving in the same second still gets through.
+
+        @tparam Player ply Recipient.
+        @tparam string key Groups messages that should suppress one another.
+        @tparam string message Text to send.
+        @tparam[opt=white] Color color Colour to print it in.
+        @tparam[opt=2] number interval Seconds of silence after a send.
+        @treturn boolean Whether the line was actually sent.
+        @realm server
+    ]]
+    function TPG.Util.ChatMessageThrottled(ply, key, message, color, interval)
+        if not IsValid(ply) then return false end
+
+        local told = lastTold[ply]
+        if not told then
+            told = {}
+            lastTold[ply] = told
+        end
+
+        if (told[key] or 0) > CurTime() then return false end
+        told[key] = CurTime() + (interval or 2)
+
+        TPG.Util.ChatMessage(ply, message, color)
+        return true
+    end
+
     --- Send a chat line to everyone on the server.
     -- @tparam string message Text to send.
     -- @tparam[opt=white] Color color Colour to print it in.
@@ -72,6 +114,37 @@ if SERVER then
             TPG.Util.PlaySound(ply, soundPath)
         end
     end
+end
+
+-- ── Ownership ───────────────────────────────────────────────────────────────
+
+--[[--
+    Who owns this entity, according to the prop-protection addon.
+
+    Ownership comes from CPPI, which is an INTERFACE, not an addon: whichever
+    prop protection is installed (NADMOD, FPP, SPP) provides it, and a server
+    running none of them has no `CPPIGetOwner` at all. Calling it unguarded is
+    an error on exactly the servers least able to debug it, so every read of
+    an owner in this gamemode goes through here.
+
+    A missing provider is reported as "nobody owns anything" rather than as a
+    failure, because that is what it means: with nothing tracking ownership
+    there is no answer to give. Callers already handle the no-owner case, and
+    the systems that care loudly about a missing provider say so once at
+    startup (see `systems/sv_ace_permission.lua`) instead of at every call.
+
+    @tparam Entity ent
+    @treturn ?Player The owner, or nil for an invalid entity, no provider, or
+     genuinely unowned. World-owned entities come back nil too.
+    @realm shared
+]]
+function TPG.Util.GetOwner(ent)
+    if not IsValid(ent) or not ent.CPPIGetOwner then return nil end
+
+    local owner = ent:CPPIGetOwner()
+    if not IsValid(owner) or not owner:IsPlayer() then return nil end
+
+    return owner
 end
 
 -- ── Math ────────────────────────────────────────────────────────────────────

@@ -233,7 +233,13 @@ TPG.Config = {
     -- ACE Integration
     useACEPoints        = true,
     teamPointLimit      = 5000,
-    playerPointLimit    = 2500,
+    -- Per-player share of the point budget, enforced on paste. 0 = off, which
+    -- is the default: the real budget is the per-map TEAM figure in
+    -- maps/_loader.lua (roughly 5000-24800 after LimitMult), so one flat
+    -- number is over half the budget on a small map and a tenth of it on a
+    -- large one. Was 2500 and read by nothing; an operator who wants a
+    -- per-player cap picks it against their own map budget.
+    playerPointLimit    = 0,
 
     -- Per-player economy as a secondary mode (see systems/sv_economy.lua).
     -- Per-round chance it activates, unless an admin forces it via the
@@ -241,12 +247,36 @@ TPG.Config = {
     economyChance       = 0.45,
 
     -- Duplication
-    dupeCooldownPerTon  = 2.5,
-    dupeCooldownPer1kPoints = 3.75,    -- +seconds of cooldown per 1000 ACE points of the build (item: pricier builds = longer cooldown)
-    dupeGracePeriod     = 60,
-    lightVehicleWeight  = 5000,
+    -- The duplicator cooldown is priced in POINTS only. Tonnage used to drive
+    -- it as well (whichever came out longer won), which charged a player for
+    -- armour rather than for firepower; dupeCooldownPerTon is gone with it.
+    dupeCooldownPer1kPoints = 30,      -- +seconds of cooldown per 1000 ACE points of the build (pricier builds = longer cooldown)
+    -- Seconds after a paste in which losing the build costs you nothing: the
+    -- points come back and the duplicator cooldown clears, however you lost
+    -- it. Sized against spawn camping -- long enough to get clear of the
+    -- spawn, short enough that it is not a way to park points between
+    -- engagements. Was 60 and read by nothing at all; a map may override it
+    -- (see TPG.Duplication.GetGracePeriod). 0 disables the whole mechanic.
+    dupeGracePeriod     = 30,
+    -- "Light vehicle": too cheap to be worth pacing, so it pastes with no
+    -- cooldown at all. Points and props, both must hold.
+    -- Under 2000 is a scout car or a light armoured thing, not a gun platform:
+    -- a fair slice of the smallest team budget (teamPointLimit is the 5000
+    -- fallback, authored maps run higher), and everything above it now buys a
+    -- cooldown at 30 s per 1000 points -- so this is the line between "get
+    -- back out there" and "you committed to that build".
+    lightVehiclePoints  = 2000,
     lightVehicleProps   = 140,
-    maxDupeWeight       = 250000,   -- 250t hard cap on a single dupe (weight in kg)
+    -- Below this a build is not "substantial" and does not count toward the
+    -- team totals at all (sv_proptracking). Nothing to do with the cooldown
+    -- any more -- that moved to lightVehiclePoints above.
+    lightVehicleWeight  = 5000,
+    -- Hard cap on the mass of ONE paste, in kg, as opposed to the team total.
+    -- 0 = off, which is the default: it was 250000 and read by nothing, and
+    -- weight is being retired as a balance metric (see fallbackWeightLimit),
+    -- so switching a real cap on by surprise would change how maps play.
+    -- Enforced in sv_duplication.lua when set.
+    maxDupeWeight       = 0,
     
     -- Vehicles
     maxSpeedUnits       = 3500,
@@ -275,6 +305,11 @@ TPG.Config = {
     autoScrambleChance  = 0.15,
     -- Map-vote ballot size by category (6 candidates total).
     mapVoteSlots        = { open = 3, urban = 2, bonus = 1 },
+
+    -- External links. Opened through the Steam overlay from the field manual,
+    -- which silently does nothing when the overlay is off -- so the URL is
+    -- always printed to chat and console as well. Set to "" to hide the button.
+    rulesURL            = "https://acegmod.com/wiki/ace-official-rules",
 
     -- Capture Points
     capDistanceMeters   = 5,

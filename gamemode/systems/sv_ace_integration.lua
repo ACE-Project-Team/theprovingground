@@ -10,14 +10,15 @@
     data to answer "what does this player have, and what is it worth."
 
     Every accessor here goes through @{TPG.ACE.GetPlayerContraptions}, which
-    is backed by a whole-server owner-to-contraptions map rebuilt at most
-    once per engine tick (`engine.TickCount()`). That is what keeps N callers
-    per update cycle (props, mass, points, for every player) from turning
-    into a full `ents.GetAll()` sweep each -- see the comment above
-    `ContraptionMap` for the before/after. Because the cache is keyed to the
-    tick, it can never observe a stale ownership state within that tick, but
-    it also means calling this twice in one tick with a contraption change in
-    between (there is no such caller today) would not see the change.
+    is backed by an owner-to-contraptions map rebuilt at most once per engine
+    tick (`engine.TickCount()`) by walking CFW's own `CFW.Contraptions` /
+    `con.ents` membership. That is what keeps N callers per update cycle
+    (props, mass, points, for every player) from turning into a full
+    `ents.GetAll()` sweep each -- see the comment above `ContraptionMap` for
+    the before/after. Because the cache is keyed to the tick, it can never
+    observe a stale ownership state within that tick, but it also means
+    calling this twice in one tick with a contraption change in between (there
+    is no such caller today) would not see the change.
 
     ACE's point system is deliberately LAZY: a split, merge, armor edit or
     linked component only marks a contraption dirty and bumps a generation
@@ -33,13 +34,26 @@
 
 TPG.ACE = TPG.ACE or {}
 
--- Owner -> contraptions, built in ONE pass over the entity list.
+-- Owner -> contraptions, built in ONE pass over CFW's own membership.
 --
 -- This used to be a full ents.GetAll() sweep per player, per reader. A single
 -- PropTracking update asks for props + mass + points on every player, so with
 -- N players that was 3N complete entity scans (each with a CPPIGetOwner and a
 -- GetContraption on every entity) every 2 seconds. Sweep once and let all the
 -- readers share it instead.
+--
+-- Then the sweep itself went: `CFW.Contraptions` and `con.ents` ARE the index,
+-- maintained incrementally by CFW as constraints form and break, so there is
+-- nothing here to rebuild. Walking them visits only entities that are in a
+-- contraption -- on a busy round that is the vehicles, not the map's props,
+-- ragdolls, weapons and gibs as well.
+--
+-- Owners are still resolved per rebuild rather than cached alongside
+-- membership. Ownership is CPPI's and changes without CFW hearing about it:
+-- a paste is attributed a moment after the entities exist, and a disconnect
+-- can hand a build to nobody. An index that recorded the owner at
+-- `entityAdded` time would be wrong for exactly the freshly pasted builds the
+-- budget checks care most about.
 --
 -- The cache is scoped to a single tick, so it can never go stale: a purchase
 -- check that runs on the same tick as a spawn still sees the truth. Ownership
@@ -49,30 +63,28 @@ local mapTick, mapCache = -1, {}
 
 local function ContraptionMap()
     if mapTick == engine.TickCount() then return mapCache end
+    if not CFW or not CFW.Contraptions then return {} end
 
     local byOwner = {}
     local seen = {}
 
-    for _, ent in ipairs(ents.GetAll()) do
-        if not IsValid(ent) then continue end
-        if not ent.GetContraption then continue end
+    for contraption in pairs(CFW.Contraptions) do
+        for ent in pairs(contraption.ents or {}) do
+            local owner = TPG.Util.GetOwner(ent)
 
-        local owner = ent:CPPIGetOwner()
-        if not IsValid(owner) then continue end
+            if owner then
+                local seenForOwner = seen[owner]
+                if not seenForOwner then
+                    seenForOwner = {}
+                    seen[owner] = seenForOwner
+                    byOwner[owner] = {}
+                end
 
-        local contraption = ent:GetContraption()
-        if not contraption then continue end
-
-        local seenForOwner = seen[owner]
-        if not seenForOwner then
-            seenForOwner = {}
-            seen[owner] = seenForOwner
-            byOwner[owner] = {}
-        end
-
-        if not seenForOwner[contraption] then
-            seenForOwner[contraption] = true
-            table.insert(byOwner[owner], contraption)
+                if not seenForOwner[contraption] then
+                    seenForOwner[contraption] = true
+                    table.insert(byOwner[owner], contraption)
+                end
+            end
         end
     end
 

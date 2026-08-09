@@ -5,6 +5,12 @@
     controls. Opened with `tpg_menu_manual`, or the MANUAL buttons in the F2
     team menu and the profile screen. Exports nothing.
 
+    The button along the bottom opens `TPG.Config.rulesURL` in the Steam
+    overlay. `gui.OpenURL` fails SILENTLY when the overlay is disabled and
+    there is no way to ask whether it worked, so the URL is printed to chat and
+    console on every click regardless -- a player without the overlay gets
+    something they can read and type in rather than a button that does nothing.
+
     Content lives entirely in the `SECTIONS` table below as plain arrays of
     pre-wrapped line strings -- there is no text-wrapping at render time, so an
     edited line that runs long simply overflows its panel rather than
@@ -145,9 +151,12 @@ local function OpenManual()
         surface.DrawRect(0, 64, w, 1)
     end
 
+    local rulesURL = (TPG.Config and TPG.Config.rulesURL) or ""
+    local footer   = rulesURL ~= "" and 52 or 0
+
     local scroll = vgui.Create("DScrollPanel", frame)
     scroll:SetPos(16, 76)
-    scroll:SetSize(W - 32, H - 92)
+    scroll:SetSize(W - 32, H - 92 - footer)
 
     local sbar = scroll:GetVBar()
     sbar:SetWide(6)
@@ -170,6 +179,28 @@ local function OpenManual()
                     COL.text, TEXT_ALIGN_LEFT)
             end
         end
+    end
+
+    if footer == 0 then return end
+
+    local rules = vgui.Create("DButton", frame)
+    rules:SetText("")
+    rules:SetPos(16, H - 52)
+    rules:SetSize(W - 32, 40)
+    rules.Paint = function(self, w, h)
+        draw.RoundedBox(6, 0, 0, w, h, self:IsHovered() and COL.line or COL.panelHi)
+        draw.SimpleText("SERVER RULES - opens in your browser", "DermaDefaultBold",
+            w / 2, h / 2 - 7, COL.accent, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+        draw.SimpleText(rulesURL, "DermaDefault",
+            w / 2, h / 2 + 9, COL.textDim, TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
+    rules.DoClick = function()
+        -- Both, always: gui.OpenURL is a no-op with the overlay off and says so
+        -- to nobody, so the printed copy is the only thing that reaches a
+        -- player in that state.
+        gui.OpenURL(rulesURL)
+        chat.AddText(COL.accent, "[TPG] Server rules: ", COL.text, rulesURL)
+        print("[TPG] Server rules: " .. rulesURL)
     end
 end
 

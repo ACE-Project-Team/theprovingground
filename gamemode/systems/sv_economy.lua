@@ -285,8 +285,8 @@ end
 function ECON.GetContraptionCost(entList)
     local seen, cost = {}, 0
     for _, ent in pairs(entList) do
-        if not IsValid(ent) or not ent.GetContraption then continue end
-        local con = ent:GetContraption()
+        if not IsValid(ent) or not ent.CFW_GetContraption then continue end
+        local con = ent:CFW_GetContraption()
         if not con or seen[con] then continue end
         seen[con] = true
 
@@ -404,8 +404,8 @@ hook.Add("PlayerSpawnedVehicle", "TPG_EconomyStockVehicle", function(ply, ent)
 
         -- Part of an actual ACE contraption? Then it's billed through the build,
         -- not as a stock vehicle -- leave it alone.
-        if ent.GetContraption then
-            local con = ent:GetContraption()
+        if ent.CFW_GetContraption then
+            local con = ent:CFW_GetContraption()
             if con and (con.ACEPoints or 0) > 0 then return end
         end
 
@@ -499,8 +499,8 @@ end
 function ECON.MarkContraptionsBilled(entList)
     local seen = {}
     for _, ent in pairs(entList) do
-        if IsValid(ent) and ent.GetContraption then
-            local con = ent:GetContraption()
+        if IsValid(ent) and ent.CFW_GetContraption then
+            local con = ent:CFW_GetContraption()
             if con and not seen[con] then
                 seen[con] = true
                 if _G.ACE_EnsureContraptionPoints then

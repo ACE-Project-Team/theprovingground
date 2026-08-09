@@ -1107,7 +1107,7 @@ local function BuildLoadoutMenu()
                     -- The server would refuse this anyway; saying so here means
                     -- the click explains itself instead of doing nothing.
                     surface.PlaySound("buttons/button10.wav")
-                    chat.AddText(C.Red, "[TPG] A fallback has to be free -- it is what you " ..
+                    chat.AddText(C.Red, "[TPG] A fallback has to be free - it is what you " ..
                         "get when you cannot have the paid one.")
                     return
                 end

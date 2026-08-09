@@ -15,6 +15,14 @@
     the shared `profile` table every frame, so a reply that lands after the
     menu is already open just makes the numbers update in place.
 
+    The right-hand column carries the server top-10 above the full rank ladder,
+    which is built from `TPG.Ranks` (`config/sh_ranks.lua`) and so always shows
+    this server's tiers and thresholds rather than a copy of them. It is a
+    scroll panel because the ladder is longer than the space and gets longer
+    when an operator adds tiers; the rows are created once at open and read
+    `profile` live in their `Paint`, so the "you are here" highlight appears on
+    its own when the reply lands.
+
     @module tpg.menu.profile
     @realm client
 ]]
@@ -56,7 +64,7 @@ local function OpenProfile()
     net.Start("TPG_ProfileData")
     net.SendToServer()
 
-    local W, H = 780, 540
+    local W, H = 780, 620
     local frame = vgui.Create("DFrame")
     frame:SetSize(W, H)
     frame:Center()
@@ -139,10 +147,16 @@ local function OpenProfile()
             "DermaDefault", 20, h - 28, COL.textDim, TEXT_ALIGN_LEFT)
     end
 
-    -- ── Right: leaderboard ───────────────────────────────────────────────
+    -- ── Right: leaderboard over the rank ladder ──────────────────────────
+    local rightX = pad + 430 + 16
+    local rightW = W - pad * 2 - 430 - 16
+    local topH   = 260                          -- leaderboard height
+    local ladderY = 84 + topH + 12
+    local ladderH = (84 + (H - 84 - 76)) - ladderY
+
     local right = vgui.Create("DPanel", frame)
-    right:SetPos(pad + 430 + 16, 84)
-    right:SetSize(W - pad * 2 - 430 - 16, H - 84 - 76)
+    right:SetPos(rightX, 84)
+    right:SetSize(rightW, topH)
     right.Paint = function(_, w, h)
         draw.RoundedBox(8, 0, 0, w, h, COL.panel)
         draw.SimpleText("SERVER TOP 10", "DermaDefaultBold", 16, 14, COL.accent, TEXT_ALIGN_LEFT)
@@ -159,6 +173,67 @@ local function OpenProfile()
             y = y + 26
             if y > h - 20 then break end
         end
+    end
+
+    -- ── Right, lower: this server's rank ladder ──────────────────────────
+    local ladder = vgui.Create("DPanel", frame)
+    ladder:SetPos(rightX, ladderY)
+    ladder:SetSize(rightW, ladderH)
+    ladder.Paint = function(_, w, h)
+        draw.RoundedBox(8, 0, 0, w, h, COL.panel)
+        draw.SimpleText("RANK LADDER", "DermaDefaultBold", 16, 12, COL.accent, TEXT_ALIGN_LEFT)
+    end
+
+    local scroll = vgui.Create("DScrollPanel", ladder)
+    scroll:SetPos(10, 34)
+    scroll:SetSize(rightW - 20, ladderH - 44)
+
+    local sbar = scroll:GetVBar()
+    sbar:SetWide(6)
+    function sbar:Paint(w, h) draw.RoundedBox(3, 0, 0, w, h, COL.bg) end
+    function sbar.btnGrip:Paint(w, h) draw.RoundedBox(3, 0, 0, w, h, COL.line) end
+    sbar.btnUp.Paint, sbar.btnDown.Paint = function() end, function() end
+
+    -- Highest tier at the top, so the ladder reads as something above you.
+    -- Each row resolves "is this mine?" in its own Paint instead of being told
+    -- at build time: the profile reply can land after this panel exists.
+    local rows = {}
+    for i = #TPG.Ranks, 1, -1 do
+        local entry = TPG.Ranks[i]
+
+        local row = vgui.Create("DPanel", scroll)
+        row:Dock(TOP)
+        row:DockMargin(0, 0, 6, 4)
+        row:SetTall(24)
+        row.Paint = function(_, w, h)
+            local mine = profile ~= nil and select(2, TPG.GetRank(profile.rating)) == i
+            draw.RoundedBox(4, 0, 0, w, h, mine and COL.panelHi or COL.bg)
+            if mine then
+                surface.SetDrawColor(entry.color)
+                surface.DrawRect(0, 0, 3, h)
+            end
+            draw.SimpleText(entry.name, "DermaDefault", 10, h / 2, entry.color,
+                TEXT_ALIGN_LEFT, TEXT_ALIGN_CENTER)
+            draw.SimpleText(entry.min, "DermaDefault", w - 8, h / 2,
+                mine and COL.text or COL.textDim, TEXT_ALIGN_RIGHT, TEXT_ALIGN_CENTER)
+        end
+
+        rows[i] = row
+    end
+
+    -- Scroll to the player's own tier the first frame there is a rating to
+    -- place them by, which may be this frame (cached) or several later.
+    local placed = false
+    frame.Think = function()
+        if placed or not profile then return end
+        placed = true
+
+        local _, idx = TPG.GetRank(profile.rating)
+        local row = rows[idx]
+        if not IsValid(row) then return end
+
+        scroll:InvalidateLayout(true)
+        scroll:ScrollToChild(row)
     end
 
     -- ── Bottom: manual shortcut ──────────────────────────────────────────

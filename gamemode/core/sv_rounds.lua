@@ -23,6 +23,101 @@
 -- Initialize namespace FIRST
 TPG.Rounds = TPG.Rounds or {}
 
+-- ── Map cleanup ────────────────────────────────────────────────────────────
+
+-- Entities a sweep must never touch: the engine's own bookkeeping and the
+-- things a player is made of. `game.CleanUpMap` knows to leave these alone;
+-- the sweep below has to be told.
+local CLEANUP_KEEP = {
+    ["player"]              = true,
+    ["worldspawn"]          = true,
+    ["predicted_viewmodel"] = true,
+    ["gmod_hands"]          = true,
+    ["player_manager"]      = true,
+    ["gmod_gamerules"]      = true,
+    ["soundent"]            = true,
+    ["network"]             = true,
+    ["bodyque"]             = true,
+}
+
+--- Everything a spectator owns, plus the constraints holding it together.
+local function SpectatorBuilds()
+    local owned, any = {}, false
+
+    for _, ent in ipairs(ents.GetAll()) do
+        if IsValid(ent) then
+            local owner = TPG.Util.GetOwner(ent)
+            if owner and not TPG.Util.IsOnTeam(owner) then
+                owned[ent] = true
+                any = true
+            end
+        end
+    end
+
+    if not any then return nil end
+
+    -- Welds and other constraint entities carry no CPPI owner of their own, so
+    -- they have to be found through what they hold: keeping the props but not
+    -- the welds would hand the spectator a pile of loose parts, which is not a
+    -- build surviving the round.
+    for _, ent in ipairs(ents.GetAll()) do
+        if IsValid(ent) and not owned[ent] then
+            for i = 1, 4 do
+                local held = ent["Ent" .. i]
+                if IsValid(held) and owned[held] then
+                    owned[ent] = true
+                    break
+                end
+            end
+        end
+    end
+
+    return owned
+end
+
+--[[--
+    Clear the map between rounds, leaving spectators' builds standing.
+
+    `game.CleanUpMap` has no per-entity opt-out -- its only filter is by class,
+    and a spectator's props are the same `prop_physics` as everyone else's --
+    so exempting an owner means not calling it. That is a real cost: it also
+    restores map entities to their starting state, and a hand-rolled sweep does
+    not. So it is still the path taken whenever no spectator owns anything,
+    which is nearly every round; the sweep is the exception, not the rule.
+
+    The sweep fires `PreCleanupMap`/`PostCleanupMap` itself, because addons
+    (ACE and CFW among them) drop cached state on those and would otherwise be
+    left holding references to entities that have gone.
+
+    @realm server
+]]
+function TPG.Rounds.CleanupMap()
+    local keep = SpectatorBuilds()
+
+    if not keep then
+        game.CleanUpMap(true)
+        return
+    end
+
+    hook.Run("PreCleanupMap")
+
+    for _, ent in ipairs(ents.GetAll()) do
+        if IsValid(ent) and not keep[ent]
+            and not CLEANUP_KEEP[ent:GetClass()]
+            and not ent:CreatedByMap() then
+
+            -- A held weapon belongs to the player carrying it, not to the
+            -- round; removing it here disarms everyone on respawn.
+            local owner = ent:GetOwner()
+            if not (ent:IsWeapon() and IsValid(owner) and owner:IsPlayer()) then
+                ent:Remove()
+            end
+        end
+    end
+
+    hook.Run("PostCleanupMap")
+end
+
 --[[--
     Start a round: pick the mode, reset the map and state, spawn objectives,
     and open the prep window.
@@ -49,9 +144,9 @@ TPG.Rounds = TPG.Rounds or {}
     through here too, which is why it force-clears the wait window rather than
     assuming it is already closed.
 
-    @tparam[opt=false] boolean skipCleanup Skip `game.CleanUpMap`. Used when the
-     caller has already cleaned, or is reloading config mid-round and wants
-     players' builds left standing.
+    @tparam[opt=false] boolean skipCleanup Skip the map cleanup entirely (see
+     @{TPG.Rounds.CleanupMap}). Used when the caller has already cleaned, or is
+     reloading config mid-round and wants players' builds left standing.
     @realm server
 ]]
 function TPG.Rounds.Setup(skipCleanup)
@@ -108,9 +203,11 @@ function TPG.Rounds.Setup(skipCleanup)
     TPG.State.maxLimits.weight = (mapConfig.limits.weight or TPG.Config.fallbackWeightLimit) * 1000
     TPG.State.maxLimits.points = mapConfig.limits.points or TPG.Config.teamPointLimit
     
-    -- Clean map
+    -- Clean map. Spectators' builds are exempt (see TPG.Rounds.CleanupMap):
+    -- their whole reason to be here is testing a vehicle between matches, and
+    -- losing it every round switch made that impossible.
     if not skipCleanup then
-        game.CleanUpMap(true)
+        TPG.Rounds.CleanupMap()
     end
     
     -- Reset state

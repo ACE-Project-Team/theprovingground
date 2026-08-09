@@ -14,7 +14,17 @@
         limits          weight (tons), props, points -- the team build budget
         safezoneRadius  spawn protection radius
         winsToMapVote   rounds before the map vote opens
+        dupeGracePeriod optional; grace seconds after a paste (see TPG.Duplication.GetGracePeriod)
         [GAMEMODE_X]    capMultiplier, and a list of objective positions
+
+    Not every key here is live. `safezoneRadius` is authored in every map block
+    below and read by nothing: all three consumers go to
+    `TPG.Config.safezoneRadius`, so setting it per map silently does nothing.
+    `dupeGracePeriod` is deliberately absent from `TPG.Maps.Default` -- it
+    falls through to `TPG.Config` unless a map states it, which is what makes
+    the override real (see `TPG.Duplication.GetGracePeriod`). A key added to
+    the Default table can never fall through to the config, so anything that
+    wants a config fallback must be omitted there.
 
     Budgets are authored per map and then scaled by `TPG.Maps.LimitMult` at load
     time, so the numbers written below are not the numbers in play. The

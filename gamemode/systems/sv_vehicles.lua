@@ -57,9 +57,11 @@ end)
 ]]
 function TPG.Vehicles.EasyEntry(ply)
     local tr = ply:GetEyeTrace()
-    local owner = tr.Entity:CPPIGetOwner()
-    
-    if owner ~= ply then
+
+    -- An eye trace that hits nothing still returns a result, with the world
+    -- (or NULL) as its entity. Aiming at the skybox used to reach straight
+    -- into CPPIGetOwner on that.
+    if TPG.Util.GetOwner(tr.Entity) ~= ply then
         TPG.Util.ChatMessage(ply, "[TPG] You don't own that vehicle.", Color(255, 0, 0))
         return
     end
@@ -70,7 +72,7 @@ function TPG.Vehicles.EasyEntry(ply)
     
     for seat, data in pairs(TPG.Vehicles.Seats) do
         if not IsValid(seat) then continue end
-        if seat:CPPIGetOwner() ~= ply then continue end
+        if TPG.Util.GetOwner(seat) ~= ply then continue end
         
         local dist = ply:GetPos():Distance(seat:GetPos())
         if dist < bestDist then

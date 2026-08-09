@@ -164,7 +164,7 @@ local function Load()
     if ReadInto(BAK) then
         print("[TPG] Recovered the leaderboard from stats.bak.json.")
     else
-        print("[TPG] No usable backup either -- starting from an empty leaderboard.")
+        print("[TPG] No usable backup either - starting from an empty leaderboard.")
     end
     dirty = true
 end
@@ -200,7 +200,7 @@ function TPG.Stats.Save()
     file.Write(TMP, body)
 
     if not file.Exists(TMP, "DATA") then
-        print("[TPG] WARNING: could not write data/" .. TMP .. " -- leaderboard NOT saved.")
+        print("[TPG] WARNING: could not write data/" .. TMP .. " - leaderboard NOT saved.")
         return   -- stay dirty; the next autosave tries again
     end
 
@@ -233,7 +233,7 @@ function TPG.Stats.Save()
     -- Only now is the work actually on disk. Staying dirty on failure is what
     -- makes the next autosave try again rather than assume it succeeded.
     if not file.Exists(FILE, "DATA") then
-        print("[TPG] WARNING: could not put data/" .. FILE .. " in place -- leaderboard NOT saved.")
+        print("[TPG] WARNING: could not put data/" .. FILE .. " in place - leaderboard NOT saved.")
         return
     end
 

@@ -17,9 +17,12 @@
     server resolves via `TPG.Voting.CastMapVote` -- the click sends only the
     card's position in the candidate list, not the map name, so a stale or
     reordered `TPG.UI.State.mapVote` would vote for the wrong map without any
-    error. The menu closes itself 3 seconds after `TPG.UI.State.voteEnd`
-    passes, via a `Think` check rather than a scheduled close, so it disappears
-    even if the server's own end-of-vote broadcast is lost.
+    error. Voting marks the chosen card and closes the menu a moment later, so
+    the player sees their pick land and then gets the game back; the close
+    button is there for anyone who would rather not vote at all. The menu also
+    closes itself 3 seconds after `TPG.UI.State.voteEnd` passes, via a `Think`
+    check rather than a scheduled close, so it disappears even if the server's
+    own end-of-vote broadcast is lost.
 
     @module tpg.menu.voting
     @realm client
@@ -41,8 +44,15 @@ local function OpenMapVoteMenu()
     frame:SetPos((ScrW() - frameW) / 2, ScrH() / 2 - frameH / 2)
     frame:SetTitle("Vote for Next Map")
     frame:SetDraggable(false)
-    frame:ShowCloseButton(false)
+    -- Voting used to be a mouse trap: no close button, and the only exit was
+    -- the auto-close three seconds after the vote ended. A player who had
+    -- already voted sat behind a popup for the rest of the countdown.
+    frame:ShowCloseButton(true)
     frame:MakePopup()
+
+    -- Which card this player picked, so the click has visible feedback in the
+    -- moment before the menu goes away.
+    local voted = nil
 
     -- Countdown bar (bottom)
     local bar = vgui.Create("DPanel", frame)
@@ -74,7 +84,11 @@ local function OpenMapVoteMenu()
         card:SetPos((i - 1) * (cardW + pad), 0)
 
         card.Paint = function(_, w, h)
-            draw.RoundedBox(6, 0, 0, w, h, Color(25, 25, 30, 255))
+            draw.RoundedBox(6, 0, 0, w, h, voted == i and Color(30, 45, 32) or Color(25, 25, 30, 255))
+            if voted == i then
+                surface.SetDrawColor(120, 230, 120)
+                surface.DrawOutlinedRect(0, 0, w, h, 2)
+            end
 
             -- Preview image
             if hasImg then
@@ -104,14 +118,25 @@ local function OpenMapVoteMenu()
 
             -- Live votes
             local votes = (TPG.UI.State.voteTally or {})[i] or 0
-            draw.RoundedBox(4, 6, h - 36, w - 12, 28, Color(40, 40, 50))
-            draw.SimpleText("Votes: " .. votes, "DermaDefaultBold", w / 2, h - 22,
+            draw.RoundedBox(4, 6, h - 36, w - 12, 28, voted == i and Color(50, 80, 50) or Color(40, 40, 50))
+            draw.SimpleText(voted == i and ("Your vote - " .. votes) or ("Votes: " .. votes),
+                "DermaDefaultBold", w / 2, h - 22,
                 Color(120, 230, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
         end
 
         card.DoClick = function()
+            if voted then return end
+            voted = i
+
             LocalPlayer():EmitSound("common/weapon_select.wav")
             RunConsoleCommand("tpg_votemap", i)
+
+            -- Long enough for the marked card to register as feedback, short
+            -- enough that nobody feels held there. The tally is broadcast to
+            -- everyone anyway, so there is nothing left to watch here.
+            timer.Simple(0.4, function()
+                if IsValid(frame) then frame:Close() end
+            end)
         end
     end
 

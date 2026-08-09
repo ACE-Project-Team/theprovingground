@@ -111,8 +111,7 @@ function TPG.PropTracking.ManualCount(ply)
     for _, ent in ipairs(ents.GetAll()) do
         if not IsValid(ent) then continue end
         
-        local owner = ent:CPPIGetOwner()
-        if owner ~= ply then continue end
+        if TPG.Util.GetOwner(ent) ~= ply then continue end
         
         if ent:GetClass() == "prop_physics" then
             props = props + 1

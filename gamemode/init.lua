@@ -89,6 +89,7 @@ include("player/sv_afk.lua")
 
 include("systems/sv_entrestrictions.lua")
 include("systems/sv_ace_integration.lua")
+include("systems/sv_ace_permission.lua")
 include("systems/sv_proptracking.lua")
 include("systems/sv_economy.lua")
 include("systems/sv_gear.lua")

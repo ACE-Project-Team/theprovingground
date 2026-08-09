@@ -62,6 +62,30 @@ function TPG.Protection.IsInEnemySafezone(ply)
     return TPG.Util.IsWithinDistance(ply, enemySpawn, TPG.Config.safezoneRadius)
 end
 
+local function posInTeamZone(pos, teamId)
+    local spawn = TPG.State.GetSpawn(teamId)
+    if not spawn then return false end
+    local r = TPG.Config.safezoneRadius
+    return pos:DistToSqr(spawn) < r * r
+end
+
+--- Which team's safezone contains this position, if any?
+-- The position-based counterpart to @{IsInSafezone}: that one asks about a
+-- player, this one about an arbitrary point, which is what the ACE damage
+-- permission mode needs when it is handed a prop rather than a person.
+--
+-- Returns nil while no round has published spawns, which is the same "there is
+-- no outside yet" state @{IsInSafezone} treats as safe -- callers that protect
+-- on a hit should read nil as "no safezone applies", not "unprotected".
+-- @tparam Vector pos
+-- @treturn ?number TEAM_GREEN, TEAM_RED, or nil.
+-- @realm server
+function TPG.Protection.GetSafezoneTeam(pos)
+    if posInTeamZone(pos, TEAM_GREEN) then return TEAM_GREEN end
+    if posInTeamZone(pos, TEAM_RED)   then return TEAM_RED   end
+    return nil
+end
+
 --[[
     Spawn-zone noclip momentum brake.
 
@@ -205,11 +229,14 @@ hook.Add("PlayerNoClip", "TPG_NoclipRestriction", function(ply)
     return TPG.Protection.IsInSafezone(ply)
 end)
 
--- Restrict spawning outside safezone
+-- Restrict spawning outside safezone. Shared by the three hooks below, so the
+-- throttle key is shared too: a player who fires all three in a second is
+-- being told one thing and should hear it once.
 local function RestrictSpawning(ply, ent)
     if not TPG.Protection.IsInSafezone(ply) then
         if IsValid(ent) then ent:Remove() end
-        TPG.Util.ChatMessage(ply, "[TPG] Cannot spawn outside safezone.", Color(255, 0, 0))
+        TPG.Util.ChatMessageThrottled(ply, "spawnzone",
+            "[TPG] Cannot spawn outside safezone.", Color(255, 0, 0))
         return false
     end
 end
