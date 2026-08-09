@@ -140,12 +140,6 @@ local function OpenMapVoteMenu()
         end
     end
 
-    -- Auto-close shortly after the vote ends.
-    frame.Think = function(self)
-        if (TPG.UI.State.voteEnd or 0) > 0 and CurTime() > TPG.UI.State.voteEnd + 3 then
-            self:Close()
-        end
-    end
 end
 
 concommand.Add("tpg_menu_mapvote", OpenMapVoteMenu)
