@@ -65,13 +65,29 @@ TPG.Armor = {
     [4] = {
         id          = 4,
         name        = "Juggernaut",
-        health      = 500,
-        -- 15k, not the old 999999. Six-figure armour wasn't a tank-grade tier,
-        -- it was effective immunity to small arms: nothing an infantry weapon
-        -- does could chew through it inside a round, so the only counter was a
-        -- vehicle. 15,000 is still enormous (100x Medium) but it is a pool that
-        -- sustained fire actually empties.
-        armor       = 15000,
+        health      = 750,
+        -- 800, not 15000, and the reason is that ACE does not treat this as a
+        -- pool at all. sv_acfbase.lua's SquishyDamage converts it to a
+        -- THICKNESS in mm RHA -- `3 * (1 + Armor/100)` -- and refuses ALL
+        -- damage from a round that does not out-penetrate it. The pool is never
+        -- reached, so "enormous but sustained fire empties it" was not what
+        -- 15000 bought. It bought 453mm of RHA, needing 454.9mm of penetration
+        -- to do a single point of damage, and every infantry weapon on the
+        -- server is below that -- measured, at the muzzle:
+        --
+        --   pistols / SMGs   23-27mm      AK/M16/FAMAS/SAW  26-30mm
+        --   AWP 32mm         Scout 48mm   AT-4 244mm        AMR 356mm
+        --
+        -- So the Juggernaut was immune to the anti-materiel rifle and to the
+        -- AT-4, not merely tough. 800 puts the wall at 27mm (threshold 28.9mm),
+        -- which is a real armour profile instead of an accident: pistols and
+        -- SMGs cannot hurt him at all, rifles chip him, and marksman rifles and
+        -- anything anti-tank go through. The pool then does the rest of the
+        -- work, and unlike before it is a pool that gets reached.
+        --
+        -- Health is up to compensate for the pool dropping ~19x. Together that
+        -- is roughly 1500 damage to chew through, versus about 400 for Heavy.
+        armor       = 800,
         speedBonus  = -40,
         model       = "models/player/combine_super_soldier.mdl",
         canUseSeat  = false,
