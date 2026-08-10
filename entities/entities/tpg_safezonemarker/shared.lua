@@ -7,15 +7,12 @@
     in the enemy's) lives in `gamemode/player/sv_protection.lua`, which is a
     separate system this entity does not call into or read from.
 
-    Accuracy trap: the sphere is scaled from the GLOBAL `TPG.Config.safezoneRadius`
-    (`config/sh_config.lua`, currently 750), not from the running map's own
-    `safezoneRadius` field in its `tpg.maps` config entry. `sv_protection.lua`
-    reads the same global, so the two stay consistent with each other today --
-    but the per-map `safezoneRadius` field that every map config in
-    `_loader.lua` authors is not read by ANYTHING in the codebase. If a map
-    were ever given a non-default per-map radius, this marker (and the actual
-    protection check) would silently keep using the global value instead,
-    with no error and no visible mismatch until someone measured it.
+    The sphere is scaled from @{TPG.Maps.GetSafezoneRadius}, which is the map's
+    own `safezoneRadius` falling back to the global `TPG.Config.safezoneRadius`.
+    `sv_protection.lua` reads it through the same function, so the drawn
+    boundary and the enforced one cannot drift. Older comments in this repo
+    describe the per-map field as dead -- it was, for a long while, when every
+    consumer went straight to the global; it is not any more.
 
     @module tpg.ent.safezonemarker
     @realm shared

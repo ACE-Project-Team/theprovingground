@@ -40,7 +40,7 @@ function TPG.Protection.IsInSafezone(ply)
     local spawn = TPG.State.GetSpawn(teamId)
     if not spawn then return true end
 
-    return TPG.Util.IsWithinDistance(ply, spawn, TPG.Config.safezoneRadius)
+    return TPG.Util.IsWithinDistance(ply, spawn, TPG.Maps.GetSafezoneRadius())
 end
 
 --- Is `ply` inside the ENEMY team's safezone?
@@ -59,13 +59,13 @@ function TPG.Protection.IsInEnemySafezone(ply)
     local enemySpawn = TPG.State.GetSpawn(enemyTeam)
     if not enemySpawn then return false end
 
-    return TPG.Util.IsWithinDistance(ply, enemySpawn, TPG.Config.safezoneRadius)
+    return TPG.Util.IsWithinDistance(ply, enemySpawn, TPG.Maps.GetSafezoneRadius())
 end
 
 local function posInTeamZone(pos, teamId)
     local spawn = TPG.State.GetSpawn(teamId)
     if not spawn then return false end
-    local r = TPG.Config.safezoneRadius
+    local r = TPG.Maps.GetSafezoneRadius()
     return pos:DistToSqr(spawn) < r * r
 end
 

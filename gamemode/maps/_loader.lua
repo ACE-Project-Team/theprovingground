@@ -17,9 +17,10 @@
         dupeGracePeriod optional; grace seconds after a paste (see TPG.Duplication.GetGracePeriod)
         [GAMEMODE_X]    capMultiplier, and a list of objective positions
 
-    Not every key here is live. `safezoneRadius` is authored in every map block
-    below and read by nothing: all three consumers go to
-    `TPG.Config.safezoneRadius`, so setting it per map silently does nothing.
+    `safezoneRadius` is read through @{TPG.Maps.GetSafezoneRadius}, which falls
+    back to `TPG.Config.safezoneRadius`. It was authored in every map block
+    below and read by nothing for a long while, which is worth knowing if you
+    are reading old comments about it.
     `dupeGracePeriod` is deliberately absent from `TPG.Maps.Default` -- it
     falls through to `TPG.Config` unless a map states it, which is what makes
     the override real (see `TPG.Duplication.GetGracePeriod`). A key added to
@@ -1101,6 +1102,20 @@ end
 function TPG.Maps.GetLimits()
     local config = TPG.Maps.Get()
     return config.limits
+end
+
+--- The current map's spawn-protection radius.
+-- Every map block below authors `safezoneRadius`, and until this existed
+-- nothing read it -- all four consumers went straight to
+-- `TPG.Config.safezoneRadius`, so the per-map value was a knob that turned
+-- nothing. Every authored value happens to equal the global default, so wiring
+-- it up changes no map's behaviour today; it just means editing one starts
+-- working.
+-- @treturn number Units.
+-- @realm shared
+function TPG.Maps.GetSafezoneRadius()
+    local config = TPG.Maps.Get()
+    return (config and config.safezoneRadius) or TPG.Config.safezoneRadius
 end
 
 -- Merge default + per-map config (without disturbing the loaded Current) and
