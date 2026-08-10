@@ -161,8 +161,8 @@ end
 --- Reset per-round state and mark the round live.
 -- Refills both ticket pools to `TPG.Config.startingTickets`, zeroes both teams'
 -- spent limits, stamps the start time, clears every player's duplicator
--- cooldown and per-round stats, and resets economy wallets if that mode is
--- running this round. Called from @{tpg.rounds.Setup}, after the map cleanup
+-- cooldown, paste grace and per-round stats, and resets economy wallets if
+-- that mode is running this round. Called from @{tpg.rounds.Setup}, after the map cleanup
 -- and before objectives spawn.
 -- @realm server
 function TPG.State.ResetRound()
@@ -179,6 +179,10 @@ function TPG.State.ResetRound()
     for ply, data in pairs(TPG.State.players) do
         if IsValid(ply) then
             data.dupeCooldown = 0
+            -- Per-life, and a new round is a new life even for someone who was
+            -- alive when the last one ended. See the grace comment in
+            -- `systems/sv_duplication.lua`.
+            data.graceUsed = nil
             data.stats = { kills = 0, killsPerTon = 0, objectiveKills = 0, captures = 0 }
         end
     end

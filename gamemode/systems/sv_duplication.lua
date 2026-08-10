@@ -49,6 +49,17 @@ TPG.Duplication = TPG.Duplication or {}
     already keeps, which is what makes "give back what was paid for THIS
     build" answerable without a second ledger. The owner is stamped with it
     because by the time the refund fires there are no entities left to ask.
+
+    ONE refund per life, though, and that limit is not optional. Refunding
+    every graced loss under the per-player economy is a free vehicle forever:
+    paste (charged), delete it at 29 seconds (refunded), paste again, and the
+    wallet never moves. The window cannot tell that cycle from the spawn-camp
+    case it exists for -- deliberately, see above -- so the cycle has to be cut
+    somewhere else, and "you get one" is the smallest cut that leaves the
+    camped player whole. Tracked as `pState.graceUsed`, cleared on respawn and
+    on round reset, so dying gives it back. A player who has spent it is told
+    at paste time that this one carries no grace, rather than finding out when
+    the refund does not arrive.
 ]]
 
 --[[--
@@ -57,11 +68,12 @@ TPG.Duplication = TPG.Duplication or {}
     Reads the map config first so a map can override it, then
     `TPG.Config.dupeGracePeriod`. 0 (from either) disables the mechanic.
 
-    Note the override actually takes effect, which is not true of every key a
-    map block can carry: `safezoneRadius` is authored in every map in
-    `maps/_loader.lua` and read by nobody -- all three consumers go to
-    `TPG.Config.safezoneRadius` -- so setting it per map silently does
-    nothing. Copying that pattern here would have produced the same dead knob.
+    Note the override actually takes effect, which was not true of every key a
+    map block can carry: `safezoneRadius` was authored in every map in
+    `maps/_loader.lua` and read by nobody for a long while, because every
+    consumer went straight to `TPG.Config.safezoneRadius`. It reads through
+    @{TPG.Maps.GetSafezoneRadius} now, but the shape of that bug is the one to
+    avoid when adding a per-map key: author the reader, not just the value.
 
     @treturn number Seconds; 0 if disabled.
     @realm server
@@ -140,15 +152,30 @@ hook.Add("cfw.contraption.removed", "TPG_DupeGraceRefund", function(con)
         refund = 0
     end
 
-    local hadCooldown = CurTime() < (TPG.State.GetPlayer(ply).dupeCooldown or 0)
-    TPG.State.GetPlayer(ply).dupeCooldown = 0
+    local pState = TPG.State.GetPlayer(ply)
+    local hadCooldown = CurTime() < (pState.dupeCooldown or 0)
+    pState.dupeCooldown = 0
+
+    -- Spent. The cooldown clear is banked with the refund rather than left
+    -- unlimited: handing that back on every graced loss is its own paste-spam
+    -- loop, just without the money in it.
+    pState.graceUsed = true
 
     local msg = "[TPG] Build lost inside the grace period."
     if refund > 0 then msg = msg .. " Refunded " .. math.ceil(refund) .. " pts." end
     if hadCooldown then msg = msg .. " Duplicator cooldown cleared." end
+    msg = msg .. " That was your grace for this life."
     TPG.Util.ChatMessage(ply, msg, Color(0, 255, 255))
 
     timer.Simple(0.1, function() TPG.PropTracking.UpdateTeamTotals() end)
+end)
+
+--- Give the grace back on respawn, which is what makes it "per life".
+-- @realm server
+-- @function TPG_DupeGraceReset
+hook.Add("PlayerSpawn", "TPG_DupeGraceReset", function(ply)
+    local pState = TPG.State.GetPlayer(ply)
+    if pState then pState.graceUsed = nil end
 end)
 
 -- ── Concurrent pastes ──────────────────────────────────────────────────────
@@ -486,7 +513,13 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         -- TPG_BilledPoints figure the refund hands back, and even outside the
         -- economy, where the refund is zero and the cooldown clear is the point.
         local window = TPG.Duplication.GetGracePeriod()
-        if window > 0 then
+        if window > 0 and pState.graceUsed then
+            -- Say so here rather than let them plan around a refund that is not
+            -- coming. Not stamping the contraption at all is what makes the
+            -- refund handler a no-op for it.
+            TPG.Util.ChatMessage(ply, "[TPG] No grace period on this one - you " ..
+                "already used it this life.", Color(200, 200, 150))
+        elseif window > 0 then
             forEachContraption(ents, function(con)
                 con.TPG_PasteTime  = CurTime()
                 con.TPG_GraceOwner = ply
