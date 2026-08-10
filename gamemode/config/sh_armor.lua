@@ -65,8 +65,8 @@ TPG.Armor = {
     [4] = {
         id          = 4,
         name        = "Juggernaut",
-        health      = 750,
-        -- 800, not 15000, and the reason is that ACE does not treat this as a
+        health      = 2000,
+        -- 400, not 15000, and the reason is that ACE does not treat this as a
         -- pool at all. sv_acfbase.lua's SquishyDamage converts it to a
         -- THICKNESS in mm RHA -- `3 * (1 + Armor/100)` -- and refuses ALL
         -- damage from a round that does not out-penetrate it. The pool is never
@@ -79,15 +79,17 @@ TPG.Armor = {
         --   AWP 32mm         Scout 48mm   AT-4 244mm        AMR 356mm
         --
         -- So the Juggernaut was immune to the anti-materiel rifle and to the
-        -- AT-4, not merely tough. 800 puts the wall at 27mm (threshold 28.9mm),
-        -- which is a real armour profile instead of an accident: pistols and
-        -- SMGs cannot hurt him at all, rifles chip him, and marksman rifles and
-        -- anything anti-tank go through. The pool then does the rest of the
-        -- work, and unlike before it is a pool that gets reached.
+        -- AT-4, not merely tough. 400 puts the wall at 15mm (threshold 16.9mm),
+        -- under everything on that list: every weapon in the game can hurt him,
+        -- and how much it hurts is decided by the round rather than by a
+        -- yes/no gate a whole class of weapons could not pass.
         --
-        -- Health is up to compensate for the pool dropping ~19x. Together that
-        -- is roughly 1500 damage to chew through, versus about 400 for Heavy.
-        armor       = 800,
+        -- The bulk moves into health instead, which is the half of the tier
+        -- ACE reads the way the old comment assumed: 2000 HP behind 400 armour
+        -- is a sponge that sustained fire actually empties, versus ~400 for
+        -- Heavy. Slower to kill than the old tier was for anyone carrying AT,
+        -- and no longer unkillable for anyone who is not.
+        armor       = 400,
         speedBonus  = -40,
         model       = "models/player/combine_super_soldier.mdl",
         canUseSeat  = false,
