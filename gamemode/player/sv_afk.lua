@@ -26,10 +26,27 @@
     input or aim check anyway, so occupancy adds no protection a real player
     needs.
 
-    Players not on a playing team are exempt and get their deadline pushed
-    forward every tick: they hold no team slot, so there is nothing to reclaim
-    by kicking them. `TPG.AFK` is declared for namespace consistency and is
-    otherwise empty; everything here is hooks.
+    **Benching, not kicking.** When the deadline passes the player is moved to
+    spectators rather than dropped, and only kicked if the server is at least
+    `TPG.Config.afkKickAtLoad` full. Everything the kick was for is achieved by
+    the move: the team slot is released, the roster rebalances, nobody is
+    waiting on a seat this player is not using. The kick only adds the costs --
+    a lost round, a lost build, a player who has to reconnect and re-paste to
+    come back -- and those buy nothing on a server with room in it. Above the
+    load threshold the seat is genuinely contended and the kick returns.
+
+    Benched players are the one kind of spectator this file keeps watching.
+    Ordinary spectators are exempt outright (they hold no team slot), but a
+    benched one is still idle, still holding a *server* slot, and has to be
+    reachable if the server fills up later -- so they keep being sampled, and
+    the first sign of life puts them back on their team.
+
+    A benched player's build stays on the map, so `sv_proptracking.lua` keeps
+    charging it to `_tpgAFKTeam`. Without that, going AFK would hand your team
+    its budget back while your tank sat there.
+
+    `TPG.AFK` is declared for namespace consistency and is otherwise empty;
+    everything here is hooks.
 
     @module tpg.afk
     @realm server
@@ -50,6 +67,10 @@ local HELD_KEYS = {
     IN_ATTACK, IN_ATTACK2, IN_USE, IN_JUMP, IN_DUCK, IN_SPEED, IN_RELOAD,
 }
 
+-- Forward declaration: Refresh() ends a bench, and Unbench() is written below
+-- it because it is the longer half of the pair.
+local Unbench
+
 --- Push the kick deadline out and, if they had been warned, say they are back.
 local function Refresh(ply)
     ply._tpgLastActivity = CurTime() + TPG.Config.afkKickTime
@@ -58,6 +79,89 @@ local function Refresh(ply)
         ply._tpgWarned = false
         TPG.Util.ChatMessage(ply, "[TPG] You are no longer AFK.", Color(0, 255, 0))
     end
+
+    if ply._tpgAFKBenched then Unbench(ply) end
+end
+
+--- How full the server is, 0-1. The AFK kick is priced against this.
+local function ServerLoad()
+    local max = game.MaxPlayers()
+    if max <= 0 then return 1 end
+    return player.GetCount() / max
+end
+
+--- Is the server full enough that an idle player's slot is worth taking?
+local function SlotIsContended()
+    local at = TPG.Config.afkKickAtLoad or 0.75
+    if at <= 0 then return true end
+    if at >= 1 then return false end
+    return ServerLoad() >= at
+end
+
+--[[
+    Move an expired player to spectators instead of kicking them.
+
+    `_tpgAFKTeam` is what makes the move reversible and keeps it from being an
+    exploit: it is what @{Unbench} sends them back to, and what
+    `sv_proptracking.lua` charges their abandoned build to in the meantime.
+
+    The deadline is deliberately NOT pushed out here. A benched player stays
+    expired, so the sweep can kick them the moment the server does fill up
+    without waiting out another `afkKickTime`.
+]]
+local function Bench(ply)
+    ply._tpgAFKTeam = ply:Team()
+    ply._tpgAFKBenched = true
+    ply._tpgWarned = false
+
+    ply:SetTeam(TEAM_UNASSIGNED)
+    ply:Spawn()
+
+    -- The respawn snaps their view somewhere else, and the aim check cannot
+    -- tell that from a player turning their head. Left alone, every bench
+    -- un-benched itself on the very next sweep half a second later. Drop the
+    -- baseline so the next sample re-takes it instead of measuring the jump.
+    ply._tpgLastAim = nil
+
+    TPG.Util.ChatMessage(ply, "[TPG] Moved to spectators for being AFK - move to rejoin.", Color(255, 200, 0))
+    print("[TPG] " .. ply:Nick() .. " benched to spectators (AFK).")
+end
+
+--[[
+    Put a benched player back where they were, if the roster still allows it.
+
+    Declared as a forward local above @{Refresh} because the two call each
+    other: any activity refreshes, and a refresh from a benched player is what
+    ends the bench.
+
+    Deliberately not @{TPG.PlayerTeams.AssignPlayer}: that applies the
+    voluntary switch cooldown, which is the wrong guard here. The cooldown
+    exists to stop players flipping sides to chase the winning team, and this
+    player did not choose to leave -- TPG moved them. Routing the return
+    through it means anyone who happened to switch teams in the half minute
+    before going idle comes back to a refusal, for a move they never made. The
+    balance check is kept, because that one is about the roster rather than
+    about intent, and the switch stamp is deliberately not written.
+
+    A rejoin can still be refused: someone took the slot while they were away.
+    That is not a failure to retry -- they are awake now and can pick a side
+    themselves. `_tpgAFKTeam` survives the refusal so their build keeps
+    counting against that team until they actually land on one.
+]]
+function Unbench(ply)
+    ply._tpgAFKBenched = nil
+
+    local back = ply._tpgAFKTeam
+    if back and TPG.PlayerTeams.CanJoin(ply, back) then
+        ply:SetTeam(back)
+        ply:Spawn()
+        ply._tpgAFKTeam = nil
+        ply._tpgLastAim = nil
+        TPG.Util.ChatMessage(ply, "[TPG] Welcome back - returned to your team.", Color(0, 255, 0))
+        return
+    end
+
+    TPG.Util.ChatMessage(ply, "[TPG] Welcome back - your old team is full, pick a side.", Color(255, 200, 0))
 end
 
 --- Is the player holding any key that means they are present?
@@ -101,6 +205,8 @@ hook.Add("PlayerInitialSpawn", "TPG_AFK_Init", function(ply)
     ply._tpgLastActivity = CurTime() + TPG.Config.afkKickTime
     ply._tpgWarned = false
     ply._tpgLastAim = nil
+    ply._tpgAFKBenched = nil
+    ply._tpgAFKTeam = nil
 end)
 
 --- Any key press pushes the deadline out by the full `afkKickTime` and, if the
@@ -139,14 +245,29 @@ timer.Create("TPG_AFK_Check", 0.5, 0, function()
     for _, ply in ipairs(player.GetAll()) do
         if not ply:IsConnected() or not ply:IsFullyAuthenticated() then continue end
 
-        -- Spectators (anyone not on a playing team) hold no team slot, so don't
-        -- AFK-kick them -- they're allowed to just watch. Clear any pending warn
-        -- state so they don't get kicked the instant they pick a side.
         if not TPG.Util.IsOnTeam(ply) then
+            -- Benched by this system and still idle. Keep sampling: any sign of
+            -- life sends them back to their team, and if the server fills up
+            -- while they are gone the slot stops being free and they go.
+            if ply._tpgAFKBenched then
+                if HoldingKey(ply) or AimMoved(ply) then
+                    Refresh(ply)
+                elseif SlotIsContended() then
+                    ply:Kick("AFK - server full")
+                end
+                continue
+            end
+
+            -- An ordinary spectator holds no team slot, so there is nothing to
+            -- reclaim -- they're allowed to just watch. Clear any pending warn
+            -- state so they don't get kicked the instant they pick a side.
             ply._tpgLastActivity = CurTime() + TPG.Config.afkKickTime
             ply._tpgWarned = false
             continue
         end
+
+        -- On a team under their own power: whatever the bench recorded is spent.
+        ply._tpgAFKTeam = nil
 
         -- Sampled before the deadline is read, so a player who is busy right
         -- now is never warned for what they were doing half a second ago.
@@ -158,12 +279,22 @@ timer.Create("TPG_AFK_Check", 0.5, 0, function()
         local timeLeft = afkTime - CurTime()
 
         if timeLeft <= TPG.Config.afkWarningTime and not ply._tpgWarned then
-            local msg = "[TPG] AFK Warning: Move within " .. math.ceil(timeLeft) .. " seconds or be kicked."
-            TPG.Util.ChatMessage(ply, msg, Color(255, 0, 0))
-            ply:PrintMessage(HUD_PRINTCENTER, "AFK - move within " .. math.ceil(timeLeft) .. "s or be kicked")
+            -- Say which one it will be. "Or be kicked" on a half-empty server
+            -- is a threat the gamemode does not carry out, and a player who
+            -- learns that stops reading the warning at all.
+            local fate = SlotIsContended() and "be kicked" or "be moved to spectators"
+            local secs = math.ceil(timeLeft)
+
+            TPG.Util.ChatMessage(ply, "[TPG] AFK Warning: Move within " .. secs ..
+                " seconds or " .. fate .. ".", Color(255, 0, 0))
+            ply:PrintMessage(HUD_PRINTCENTER, "AFK - move within " .. secs .. "s or " .. fate)
             ply._tpgWarned = true
         elseif timeLeft <= 0 then
-            ply:Kick("AFK")
+            if SlotIsContended() then
+                ply:Kick("AFK")
+            else
+                Bench(ply)
+            end
         end
     end
 end)

@@ -303,6 +303,19 @@ TPG.Config = {
     -- AFK
     afkWarningTime      = 20,
     afkKickTime         = 120,
+
+    -- How full the server has to be before an AFK player is KICKED rather than
+    -- moved to spectators. As a fraction of maxplayers.
+    --
+    -- The kick was only ever about reclaiming a contended slot, and on a server
+    -- that is half empty nothing is contended -- so kicking is pure cost: the
+    -- player loses their build and their round, and the server loses a body
+    -- that would have come back. Benching to spectators frees the team slot,
+    -- which is the part that actually matters for balance, and costs them
+    -- nothing. Above this fraction the seat is worth more than the courtesy and
+    -- the kick comes back; a player already benched is kicked at that point
+    -- too. Set to 0 to always kick, 1 to never kick.
+    afkKickAtLoad       = 0.75,
     
     -- Voting
     mapVoteTime         = 20,

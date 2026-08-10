@@ -60,7 +60,15 @@ function TPG.PropTracking.UpdateTeamTotals(refreshPoints)
         if not IsValid(ply) then continue end
         
         local teamId = ply:Team()
-        if not TPG.Util.IsOnTeam(ply) then continue end
+        if not TPG.Util.IsOnTeam(ply) then
+            -- A player the AFK sweep benched to spectators left their build
+            -- standing on the map, so it keeps costing the team it was built
+            -- for. Otherwise going AFK would refund the team its budget while
+            -- the tank is still sitting there being a tank. `_tpgAFKTeam` is
+            -- cleared by `sv_afk.lua` the moment they are back on a team.
+            teamId = ply._tpgAFKTeam
+            if teamId ~= TEAM_GREEN and teamId ~= TEAM_RED then continue end
+        end
         
         local props, weight, points
         
