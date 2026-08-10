@@ -33,6 +33,22 @@ TPG.Config = {
     dmTicketRefPlayers  = 8,
     dmTicketMaxMult     = 2.0,
 
+    -- What a "weight kill" is worth, priced in ACE points rather than tonnage.
+    --
+    -- Tonnage was the wrong axis for the same reason it stopped driving the
+    -- dupe cooldown: it prices the steel, not the threat. Two 60T builds where
+    -- one is a gun tank and the other is a pile of armour plate drained the
+    -- same number of tickets. ACE points already answer "how much vehicle is
+    -- this", armour and firepower and crew and all, so kills are scored off
+    -- that instead.
+    --
+    -- Calibrated so nothing moves for the reference case: a ~60T MBT is worth
+    -- roughly 5000 ACE points, and under the old weight/2000 rule it drained 30
+    -- tickets. 5000 points -> 30 tickets keeps that, and re-prices everything
+    -- lighter or heavier than an MBT by what it is actually carrying.
+    killTicketRefPoints = 5000,   -- points on a reference MBT
+    killTicketRefLoss   = 30,     -- tickets that MBT drains (was 60000kg / 2000)
+
     -- DM overtime: deaths are DM's only ticket drain, so two passive teams made
     -- a round literally endless (and spawn camping stalled it on purpose).
     -- After dmOvertimeStart seconds BOTH teams bleed tickets, and the bleed

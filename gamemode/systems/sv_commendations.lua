@@ -91,10 +91,15 @@ end
     death-based scoring: the full amount in any `useDeathTickets` game type
     (deathmatch), a smaller `TPG.Config.ctfKillTicketFrac` share in CTF (so
     fighting matters between flag runs without out-scoring the flag itself),
-    and nothing everywhere else. The loss scales with the victim's fielded
-    weight (a "weight kill" -- a 40T tank drains more than a buggy) and with
-    how few players are active (`TPG.Config.dmTicketRefPlayers` /
-    `dmTicketMaxMult`), so a small-population round does not crawl.
+    and nothing everywhere else. The loss scales with the ACE point value of
+    what the victim was fielding (a tank drains more than a buggy; see
+    `TPG.Config.killTicketRefPoints`) and with how few players are active
+    (`TPG.Config.dmTicketRefPlayers` / `dmTicketMaxMult`), so a small-population
+    round does not crawl.
+
+    Note that `killsPerTon` above is still tonnage -- it is a commendation
+    named after tonnage, and the point is to reward killing from a light
+    vehicle, not to price the vehicle.
 
     @realm server
     @function TPG_TrackKills
@@ -162,9 +167,19 @@ hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
         local victimTeam = victim:Team()
         local victimUsage = TPG.PropTracking.GetPlayerUsage(victim)
 
-        -- Base loss scales with the tonnage the victim was fielding (the
-        -- "weight kill" rule): killing a 40T tank drains far more than a buggy.
-        local baseLoss = math.max((victimUsage.weight or 0) / 2000, 1)
+        -- Base loss scales with what the victim was fielding. That used to be
+        -- tonnage; it is now ACE points, which price armour, guns, crew and
+        -- fuel rather than just steel -- see killTicketRefPoints in the config
+        -- for the calibration that keeps an MBT worth what it was worth.
+        --
+        -- Points can be stale by up to one tpg_points_refresh_interval (they
+        -- are the expensive read, so PropTracking does not force a rebuild
+        -- every 2s). A kill scored against a build that has just lost half its
+        -- components therefore drains what the build was worth a moment ago,
+        -- which is the intended reading anyway: you killed the whole thing.
+        local refPoints = TPG.Config.killTicketRefPoints or 5000
+        local refLoss   = TPG.Config.killTicketRefLoss or 30
+        local baseLoss  = math.max((victimUsage.points or 0) * refLoss / math.max(refPoints, 1), 1)
 
         -- Dynamic, player-based scaling: the fewer players on the teams, the
         -- more each kill is worth, so a 4-player round doesn't crawl. Capped at

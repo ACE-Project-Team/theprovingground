@@ -611,3 +611,68 @@ hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, class)
         end
     end)
 end)
+
+--[[--
+    Gate a stock (HL2) vehicle spawn on the same team budget everything else uses.
+
+    `PlayerSpawnVehicle` was the one spawn path with no gate on it at all: the
+    jeep, airboat and APC out of the Vehicles tab went through
+    `PlayerSpawnedVehicle` for the economy charge (`sv_economy.lua`) and the
+    safezone restriction (`sv_protection.lua`), and past that they were free of
+    the round state and the team caps that govern every other way of putting
+    something in the world.
+
+    Two consequences, both fixed here. They could be spawned during
+    `waitingForPlayers`, before the round exists, which @{TPG_PropLimitCheck}
+    and @{TPG_SENTLimitCheck} both refuse. And a team sitting on its prop,
+    weight or point cap could keep adding vehicles, because a stock vehicle is
+    barely visible to the tracker that enforces those caps -- it is not
+    `prop_physics` so it adds no props, and on its own it is under
+    `lightVehicleWeight`, so its mass never reaches the team total either. The
+    cap was not being evaded so much as never consulted.
+
+    Blocks rather than warns, matching @{TPG_PropLimitCheck} and the paste
+    check: a whole vehicle is a build, not a component. The point budget is
+    skipped when the per-player economy is running, for the same reason the
+    paste check skips it -- the wallet has already replaced the shared budget,
+    and `sv_economy.lua` charges `stockVehicleCost` for exactly this.
+
+    @tparam Player ply
+    @tparam string class
+    @treturn ?boolean false to block the spawn; nil to allow.
+    @realm server
+    @function TPG_VehicleLimitCheck
+]]
+hook.Add("PlayerSpawnVehicle", "TPG_VehicleLimitCheck", function(ply)
+    if TPG.State.waitingForPlayers then
+        TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
+        return false
+    end
+
+    -- Spectators build outside the team limit system entirely.
+    if not TPG.Util.IsOnTeam(ply) then return end
+
+    local teamLimits = TPG.State.limits[ply:Team()] or {}
+    local maxLimits  = TPG.State.maxLimits or {}
+    local econActive = TPG.Economy and TPG.Economy.Active
+
+    local reason
+    if (teamLimits.props or 0) >= (maxLimits.props or 300) then
+        reason = "team prop limit (" .. (teamLimits.props or 0) .. "/" .. (maxLimits.props or 300) .. ")"
+    elseif (teamLimits.weight or 0) >= (maxLimits.weight or 100000) then
+        reason = "team weight limit (" .. math.ceil((teamLimits.weight or 0) / 1000) ..
+            "T/" .. math.ceil((maxLimits.weight or 100000) / 1000) .. "T)"
+    elseif not econActive and TPG.Config.useACEPoints
+        and (teamLimits.points or 0) >= (maxLimits.points or 100000) then
+        reason = "team point limit (" .. math.ceil(teamLimits.points or 0) ..
+            "/" .. (maxLimits.points or 100000) .. ")"
+    end
+
+    if reason then
+        -- Throttled for the same reason the prop gate is: the spawn menu fires
+        -- once per click and a player at the cap will click more than once.
+        TPG.Util.ChatMessageThrottled(ply, "vehiclelimit",
+            "[TPG] Vehicle blocked - " .. reason .. ".", Color(255, 0, 0))
+        return false
+    end
+end)

@@ -29,6 +29,12 @@
     consulted, and there is nothing a mode can do about it. See the startup
     check at the bottom.
 
+    Installing the mode once is not enough, which cost two separate bugs and is
+    why @{TPG.ACEPermission.Install} is written to be re-callable. It runs at
+    include time, again from `Initialize` and `InitPostEntity`, and again from a
+    watchdog. The install comments and the watchdog comment say what each one is
+    defending against.
+
     @module tpg.ace_permission
     @realm server
 ]]
@@ -44,6 +50,11 @@ local MODE_DESC = "TPG: entities are protected inside their owner's team safezon
 -- clearly if ACE never turns up.
 local REGISTER_RETRY   = 1
 local REGISTER_ATTEMPTS = 15
+
+-- How often to check that the mode is still ours. Two separate things reset it
+-- and neither announces itself; see the watchdog at the bottom of this file for
+-- what they are and why an admin's own choice is not one of them.
+local WATCHDOG_INTERVAL = 5
 
 --[[
     The protection rule itself, in one place.
@@ -140,22 +151,35 @@ local function suppressACESafezones()
     return true
 end
 
+-- Set while Install() is doing the switching, so the ACE_ProtectionModeChanged
+-- listener at the bottom can tell TPG's own assert apart from an admin's.
+local asserting = false
+
 --- Register TPG's permission mode with ACE and make it the active one.
 -- Idempotent, and safe to call before ACE has finished loading -- it retries.
+-- Also re-asserts: calling it when the mode has drifted puts it back, which is
+-- what the watchdog at the bottom of this file uses it for.
 -- @treturn boolean True once the mode is registered and active.
 -- @realm server
 function TPG.ACEPermission.Install()
     local perms = ACE and ACE.Permissions
     if not perms or not perms.RegisterMode then return false end
-    if perms.Modes and perms.Modes[MODE_NAME] and perms.DamagePermission == perms.Modes[MODE_NAME] then
-        return true
-    end
 
-    -- The last argument ACE calls `defaultaction` is what CanDamage falls back
-    -- to for entities with no player owner -- map brushes, world props, debris.
-    -- True keeps those destructible, which is the behaviour everyone expects;
-    -- false would quietly armour the map.
-    perms.RegisterMode(tpgPermission, MODE_NAME, MODE_DESC, false, nil, true, false)
+    local already = perms.Modes and perms.Modes[MODE_NAME]
+        and perms.DamagePermission == perms.Modes[MODE_NAME]
+
+    asserting = true
+
+    -- Registration itself is only needed once, but the three assignments below
+    -- are NOT: ACE resets all three behind our back (see the watchdog comment),
+    -- so an already-active install still re-states them.
+    if not (perms.Modes and perms.Modes[MODE_NAME]) then
+        -- The last argument ACE calls `defaultaction` is what CanDamage falls
+        -- back to for entities with no player owner -- map brushes, world
+        -- props, debris. True keeps those destructible, which is the behaviour
+        -- everyone expects; false would quietly armour the map.
+        perms.RegisterMode(tpgPermission, MODE_NAME, MODE_DESC, false, nil, true, false)
+    end
 
     -- RegisterMode only activates a mode if it was registered as the default
     -- or the map has it saved in data/acf/permissions/. Neither is true here,
@@ -164,11 +188,27 @@ function TPG.ACEPermission.Install()
     perms.DamagePermission = perms.Modes[MODE_NAME]
     perms.DefaultPermission = MODE_NAME
 
+    -- ACE keeps ONE global DefaultCanDamage, overwritten by whichever mode
+    -- registered last -- so re-registering the stock modes leaves the
+    -- unowned-entity fallback at whatever acf_pmode_strictbuild wanted, not
+    -- ours. Restate it with the mode rather than only at registration.
+    perms.DefaultCanDamage = true
+
     -- Without this the mode is never consulted: CanDamage returns "allowed"
     -- on the convar check before it reaches any mode at all.
     local dp = GetConVar("ace_enable_dp")
     if dp then dp:SetInt(1) end
 
+    asserting = false
+
+    if already then return true end
+
+    -- Firing ACE's own hook rather than only calling ResendPermissionsOnChanged
+    -- directly: the hook is what makes ACE tell connected players the mode
+    -- changed. Install usually lands while the server is still empty, but on a
+    -- watchdog repair mid-round it is the difference between clients showing
+    -- the real mode and showing a stale "none".
+    hook.Call("ACE_ProtectionModeChanged", GAMEMODE, MODE_NAME, nil)
     if perms.ResendPermissionsOnChanged then perms.ResendPermissionsOnChanged() end
 
     print("[TPG] ACE damage permission mode \"" .. MODE_NAME .. "\" registered and active (ace_enable_dp 1).")
@@ -187,6 +227,17 @@ function TPG.ACEPermission.Install()
 end
 
 do
+    -- Install NOW if ACE is already loaded, which on a normal server it is:
+    -- addon autorun runs before the gamemode. Waiting for the first timer tick
+    -- instead left `none` -- ACE's "damage everything" mode -- active for the
+    -- whole gap, and that gap is not the one second it looks like. Timers run
+    -- on CurTime, and CurTime barely advances while the server hibernates with
+    -- nobody connected, which is exactly the state a server is in from the
+    -- moment `changelevel` fires until the first player finishes loading.
+    -- Measured on an empty server after a map change: CurTime 1.2s at 129s of
+    -- real time, with the install timer still on its first repetition.
+    TPG.ACEPermission.Install()
+
     local attempts = 0
     timer.Create("TPG_ACEPermissionInstall", REGISTER_RETRY, REGISTER_ATTEMPTS, function()
         attempts = attempts + 1
@@ -197,6 +248,12 @@ do
         end
     end)
 
+    -- Belt to the timer's braces, and the one that does not depend on CurTime
+    -- moving at all: both fire once per map, after every addon's autorun has
+    -- run, so ACE is guaranteed present by then.
+    hook.Add("Initialize", "TPG_ACEPermissionInstall", function() TPG.ACEPermission.Install() end)
+    hook.Add("InitPostEntity", "TPG_ACEPermissionInstall", function() TPG.ACEPermission.Install() end)
+
     -- Separate from the install retry above because it has a different finish
     -- line: the mode is active almost immediately, while the safezones do not
     -- exist until ACE's Initialize runs. A map with no safezone file never
@@ -204,7 +261,69 @@ do
     timer.Create("TPG_ACESafezoneSuppress", REGISTER_RETRY, REGISTER_ATTEMPTS, function()
         if suppressACESafezones() then timer.Remove("TPG_ACESafezoneSuppress") end
     end)
+
+    -- ACE fills Safezones from its own Initialize hook, registered at autorun
+    -- time and therefore before this one, so by the time this runs they exist.
+    -- Same CurTime reasoning as the install above: don't make it wait for a
+    -- timer tick that may be a minute of real time away.
+    hook.Add("Initialize", "TPG_ACESafezoneSuppress", function()
+        if suppressACESafezones() then timer.Remove("TPG_ACESafezoneSuppress") end
+    end)
 end
+
+--[[
+    Keep the mode ours, without overriding an admin who deliberately picked
+    another one.
+
+    Two things reset the active mode after install, and neither is loud:
+
+      * `ACE_ReloadPermissionModes`, and anything else that re-includes
+        acf/server/permissionmodes/*.lua. `acf_pmode_none` registers itself with
+        ACE's `default` flag set, so on any map with no saved
+        data/acf/permissions/<map>.txt it takes the active slot on the way past.
+        Measured: mode tpg -> none, DefaultPermission tpg -> none and
+        DefaultCanDamage true -> false, in one re-include, silently.
+      * any late `RegisterMode` from another addon, for the same reason.
+
+    Neither fires `ACE_ProtectionModeChanged`. An admin using
+    `ACE_SetPermissionMode` (or the ACE menu) DOES fire it -- that is the whole
+    difference, and it is what this leans on. A deliberate choice is recorded
+    and never fought; a silent reset is repaired and reported.
+]]
+hook.Add("ACE_ProtectionModeChanged", "TPG_ACEPermissionOverride", function(mode)
+    if asserting then return end
+    if mode == MODE_NAME then
+        TPG.ACEPermission.Override = nil
+        return
+    end
+
+    TPG.ACEPermission.Override = mode
+    print("[TPG] ACE damage permission mode set to \"" .. tostring(mode) ..
+        "\" by hand; TPG will stop re-asserting its own until the map changes.")
+end)
+
+timer.Create("TPG_ACEPermissionWatchdog", WATCHDOG_INTERVAL, 0, function()
+    if TPG.ACEPermission.Override then return end
+
+    local perms = ACE and ACE.Permissions
+    if not perms or not perms.Modes then return end
+
+    local mode = perms.Modes[MODE_NAME]
+    if mode and perms.DamagePermission == mode and perms.DefaultCanDamage then return end
+
+    local was = table.KeyFromValue(perms.Modes, perms.DamagePermission) or "<unregistered>"
+    if not TPG.ACEPermission.Install() then return end
+
+    if was == MODE_NAME then
+        -- Mode survived but the unowned-entity fallback did not, which is what a
+        -- late RegisterMode from another addon leaves behind on its own.
+        print("[TPG] WARNING: ACE's DefaultCanDamage had been flipped by something " ..
+            "outside TPG; restored (unowned entities stay destructible).")
+    else
+        print("[TPG] WARNING: ACE's damage permission mode had been reset to \"" ..
+            was .. "\" by something outside TPG. Restored to \"" .. MODE_NAME .. "\".")
+    end
+end)
 
 --[[
     Blocking the damage is only half of it. ACE applies kinetic shove
