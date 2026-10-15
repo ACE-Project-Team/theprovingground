@@ -136,6 +136,24 @@ it("ignores the word inside a long string", function()
     expect.eq(run(src), "press to continue")
 end)
 
+-- `-- [ply] = ...` is an ordinary line comment: one character between the
+-- dashes and the bracket. The scanner used to read any `--?[` as the opener of
+-- a long comment and skip everything up to the next `]]` -- in
+-- player/sv_protection.lua that was 170 lines of code, including two
+-- `continue`s that were then left in place and failed to compile.
+it("does not read a bracket after `-- ` as a long comment", function()
+    local kept = run([==[
+        local state = {}   -- [ply] = { a = 1 }
+        local kept = {}
+        for i = 1, 4 do
+            if i == 2 then continue end
+            kept[#kept + 1] = i
+        end
+        return table.concat(kept, ",") -- ]]
+    ]==])
+    expect.eq(kept, "1,3,4")
+end)
+
 it("leaves a file with no continue byte-identical", function()
     local src = "local a = 1\nfor i = 1, 3 do a = a + i end\nreturn a"
     expect.eq(preprocess.rewrite(src, "<test>"), src)

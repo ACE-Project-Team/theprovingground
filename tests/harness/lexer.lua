@@ -17,6 +17,12 @@ local M = {}
 local function longBracket(src, i)
     -- At src[i] == '[', return the level and the offset just past the opener,
     -- or nil when this is an ordinary '['.
+    --
+    -- The check on src[i] itself is load-bearing. The comment branch calls
+    -- this at whatever follows `--`, and without it `-- [ply] = ...` -- a
+    -- space, then a bracket -- passed as a level-0 opener and the rest of the
+    -- file up to the next `]]` vanished from the scan.
+    if src:sub(i, i) ~= "[" then return nil end
     local j, level = i + 1, 0
     while src:sub(j, j) == "=" do
         level = level + 1
