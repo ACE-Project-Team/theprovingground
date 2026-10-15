@@ -36,6 +36,7 @@ local SUITES = {
     "test_maps",
     "test_utils",
     "test_structure",
+    "test_e2sf_contract",
 }
 
 ----------------------------------------------------------------- registry
