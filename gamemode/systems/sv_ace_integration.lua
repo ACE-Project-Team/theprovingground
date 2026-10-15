@@ -160,13 +160,13 @@ end
 -- @realm server
 function TPG.ACE.GetPlayerMass(ply)
     local total = 0
-    
+
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
         -- CFW stores totalMass on the contraption
         -- It's updated automatically when entities are added/removed
         total = total + (con.totalMass or 0)
     end
-    
+
     return total
 end
 
@@ -188,7 +188,7 @@ function TPG.ACE.GetPlayerPointsByType(ply, refresh)
         Crew = 0,
         Electronics = 0,
     }
-    
+
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
         if refresh then EnsureConPoints(con) end
         local breakdown = con.ACEPointsPerType
@@ -198,7 +198,7 @@ function TPG.ACE.GetPlayerPointsByType(ply, refresh)
             end
         end
     end
-    
+
     return totals
 end
 
@@ -211,7 +211,7 @@ end
 -- @realm server
 function TPG.ACE.GetPlayerPropCount(ply)
     local count = 0
-    
+
     for _, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
         -- CFW stores all entities in con.ents
         if con.ents then
@@ -225,7 +225,7 @@ function TPG.ACE.GetPlayerPropCount(ply)
             end
         end
     end
-    
+
     return count
 end
 
@@ -237,26 +237,26 @@ end
 -- @realm server
 function TPG.ACE.DebugPlayer(ply)
     print("=== TPG ACE Debug for " .. ply:Nick() .. " ===")
-    
+
     for i, con in ipairs(TPG.ACE.GetPlayerContraptions(ply)) do
         print("Contraption " .. i .. ":")
         print("  ACEPoints: " .. (con.ACEPoints or "nil"))
         print("  totalMass: " .. (con.totalMass or "nil"))
-        
+
         if con.ACEPointsPerType then
             print("  Points by type:")
             for k, v in pairs(con.ACEPointsPerType) do
                 print("    " .. k .. ": " .. v)
             end
         end
-        
+
         if con.ents then
             local entCount = 0
             for _ in pairs(con.ents) do entCount = entCount + 1 end
             print("  Entity count: " .. entCount)
         end
     end
-    
+
     print("Total Mass: " .. TPG.ACE.GetPlayerMass(ply))
     print("Total Points: " .. TPG.ACE.GetPlayerPoints(ply))
     print("Total Props: " .. TPG.ACE.GetPlayerPropCount(ply))

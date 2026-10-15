@@ -38,7 +38,7 @@ TPG.ControlPoint.STATE_RED = -1
 -- @realm shared
 function TPG.ControlPoint.GetStateColor(state, progress, maxProgress)
     local ratio = math.abs(progress / maxProgress)
-    
+
     if state == TPG.ControlPoint.STATE_GREEN then
         return Color(0, 255 * ratio, 0, 255)
     elseif state == TPG.ControlPoint.STATE_RED then

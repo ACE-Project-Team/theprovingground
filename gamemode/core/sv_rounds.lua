@@ -194,31 +194,31 @@ function TPG.Rounds.Setup(skipCleanup)
         mapConfig.spawns[TEAM_GREEN] = mapConfig.spawns[TEAM_RED]
         mapConfig.spawns[TEAM_RED] = temp
     end
-    
+
     TPG.State.spawns[TEAM_GREEN] = mapConfig.spawns[TEAM_GREEN]
     TPG.State.spawns[TEAM_RED] = mapConfig.spawns[TEAM_RED]
-    
+
     -- Set limits
     TPG.State.maxLimits.props = mapConfig.limits.props or TPG.Config.fallbackPropLimit
     TPG.State.maxLimits.weight = (mapConfig.limits.weight or TPG.Config.fallbackWeightLimit) * 1000
     TPG.State.maxLimits.points = mapConfig.limits.points or TPG.Config.teamPointLimit
-    
+
     -- Clean map. Spectators' builds are exempt (see TPG.Rounds.CleanupMap):
     -- their whole reason to be here is testing a vehicle between matches, and
     -- losing it every round switch made that impossible.
     if not skipCleanup then
         TPG.Rounds.CleanupMap()
     end
-    
+
     -- Reset state
     TPG.State.ResetRound()
-    
+
     -- Spawn objectives
     local objectives = TPG.Maps.GetObjectives(TPG.State.gameType)
     if TPG.Objectives and TPG.Objectives.SpawnAll then
         TPG.Objectives.SpawnAll(objectives)
     end
-    
+
     -- Spawn safezone markers
     if TPG.Objectives and TPG.Objectives.SpawnSafezones then
         TPG.Objectives.SpawnSafezones()
@@ -236,7 +236,7 @@ function TPG.Rounds.Setup(skipCleanup)
     if TPG.Rush and TPG.Rush.Begin then
         TPG.Rush.Begin()
     end
-    
+
     -- Respawn everyone who's actually playing, so they start the round in their
     -- (possibly just-swapped) spawn. Spectators are skipped: they have no spawn
     -- to be moved to, so killing them was a death for nothing -- and at map
@@ -247,12 +247,12 @@ function TPG.Rounds.Setup(skipCleanup)
             ply:Kill()
         end
     end
-    
+
     -- Sync to clients
     if TPG.Net and TPG.Net.SyncState then
         TPG.Net.SyncState()
     end
-    
+
     TPG.Util.ChatBroadcast("[TPG] Round started: " .. gameType.name, Color(0, 255, 255))
 
     -- Open the preparation window: confine both teams to spawn to build/stage
@@ -317,11 +317,11 @@ end
 function TPG.Rounds.EndRound(winningTeam)
     TPG.State.round.active = false
     TPG.State.round.wins[winningTeam] = TPG.State.round.wins[winningTeam] + 1
-    
+
     local teamData = TPG.GetTeamData(winningTeam)
-    
+
     TPG.Util.ChatBroadcast(teamData.name .. " has won the round!", teamData.color)
-    
+
     -- Play sounds
     for _, ply in ipairs(player.GetAll()) do
         if ply:Team() == winningTeam then
@@ -329,12 +329,12 @@ function TPG.Rounds.EndRound(winningTeam)
         else
             TPG.Util.PlaySound(ply, "friends/friend_offline.wav")
         end
-        
+
         -- Clear dupe cooldowns
         local pState = TPG.State.GetPlayer(ply)
         pState.dupeCooldown = 0
     end
-    
+
     -- Award commendations
     if TPG.Commendations and TPG.Commendations.Award then
         TPG.Commendations.Award()
@@ -344,10 +344,10 @@ function TPG.Rounds.EndRound(winningTeam)
     if TPG.Stats and TPG.Stats.OnRoundEnd then
         TPG.Stats.OnRoundEnd(winningTeam)
     end
-    
+
     -- Check for map vote
     local totalWins = TPG.State.round.wins[TEAM_GREEN] + TPG.State.round.wins[TEAM_RED]
-    
+
     if totalWins >= TPG.Config.winsToMapVote then
         if TPG.Voting and TPG.Voting.StartMapVote then
             TPG.Voting.StartMapVote()

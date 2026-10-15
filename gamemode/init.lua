@@ -132,7 +132,7 @@ end
 ]]
 function GM:Initialize()
     self.BaseClass.Initialize(self)
-    
+
     timer.Simple(3, function()
         TPG.Config.ValidateACE()
         TPG.Config.ValidateE2SFSandbox()
@@ -140,7 +140,7 @@ function GM:Initialize()
         -- First round starts through the wait-for-players window, so fast
         -- loaders can't get a head start on slower ones.
         TPG.Rounds.BeginInitialWait()
-        
+
         -- Server settings
         RunConsoleCommand("sbox_godmode", "0")
         RunConsoleCommand("sbox_playershurtplayers", "1")

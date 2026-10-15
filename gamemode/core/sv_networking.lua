@@ -72,7 +72,7 @@ function TPG.Net.SyncLimits()
     local greenLimits = TPG.State.limits[TEAM_GREEN] or {}
     local redLimits = TPG.State.limits[TEAM_RED] or {}
     local maxLimits = TPG.State.maxLimits or {}
-    
+
     net.Start("TPG_SyncLimits")
         -- Current usage
         net.WriteUInt(greenLimits.props or 0, 12)
@@ -81,7 +81,7 @@ function TPG.Net.SyncLimits()
         net.WriteUInt(math.ceil((redLimits.weight or 0) / 500), 13)
         net.WriteUInt(math.ceil(greenLimits.points or 0), 16)
         net.WriteUInt(math.ceil(redLimits.points or 0), 16)
-        
+
         -- Max limits
         net.WriteUInt(maxLimits.props or 300, 12)
         net.WriteUInt(math.ceil((maxLimits.weight or 100000) / 500), 13)

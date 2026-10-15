@@ -88,25 +88,25 @@ end
 -- @realm server
 function TPG.PlayerTeams.CanJoin(ply, targetTeam)
     if targetTeam == TEAM_UNASSIGNED then return true end
-    
+
     local currentTeam = ply:Team()
     local greenCount = team.NumPlayers(TEAM_GREEN)
     local redCount = team.NumPlayers(TEAM_RED)
-    
+
     -- Adjust for player leaving their current team
     if currentTeam == TEAM_GREEN then
         greenCount = greenCount - 1
     elseif currentTeam == TEAM_RED then
         redCount = redCount - 1
     end
-    
+
     -- Check if joining would unbalance
     if targetTeam == TEAM_GREEN and greenCount > redCount then
         return false
     elseif targetTeam == TEAM_RED and redCount > greenCount then
         return false
     end
-    
+
     return true
 end
 
@@ -120,7 +120,7 @@ function TPG.PlayerTeams.Autobalance(ply)
     local greenCount = team.NumPlayers(TEAM_GREEN)
     local redCount = team.NumPlayers(TEAM_RED)
     local currentTeam = ply:Team()
-    
+
     -- Check if autobalance needed
     if currentTeam == TEAM_GREEN and greenCount > redCount + 1 then
         ply:SetTeam(TEAM_RED)
@@ -133,7 +133,7 @@ function TPG.PlayerTeams.Autobalance(ply)
         TPG.Util.ChatMessage(ply, "[TPG] You have been autobalanced.", Color(255, 255, 0))
         return true
     end
-    
+
     return false
 end
 

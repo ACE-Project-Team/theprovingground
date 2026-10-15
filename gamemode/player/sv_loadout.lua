@@ -200,7 +200,7 @@ end)
 function TPG.Loadout.Apply(ply)
     -- Strip existing weapons
     ply:StripWeapons()
-    
+
     -- Always give default weapons
     for _, class in ipairs(TPG.Weapons.Default) do
         ply:Give(class)
@@ -471,11 +471,11 @@ end
 -- @realm server
 function TPG.Loadout.ApplyArmor(ply, armorId)
     local armor = TPG.GetArmor(armorId)
-    
+
     -- Set model
     local model = TPG.GetArmorModel(armorId)
     ply:SetModel(model)
-    
+
     -- Set health/armor
     ply:SetHealth(armor.health)
     ply:SetMaxHealth(armor.health)

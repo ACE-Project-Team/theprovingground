@@ -308,12 +308,12 @@ end
 ]]
 hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
     if not istable(data) or table.IsEmpty(data) then return end
-    
+
     local ents = data[1] and data[1].CreatedEntities
     local ply = data[1] and data[1].Player
-    
+
     if not ents or not IsValid(ply) then return end
-    
+
     -- Nobody builds before the first round begins (wait-for-players window):
     -- the whole point is that no one gets a budget head start.
     if TPG.State.waitingForPlayers then
@@ -361,7 +361,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         end
         return
     end
-    
+
     -- Claimed here, not inside the timer: the paste is in the world from this
     -- moment, so every rival check that runs before this one resolves has to
     -- be able to see it and take it back out of their own arithmetic.
@@ -385,7 +385,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         local usage = TPG.PropTracking.GetPlayerUsage(ply)
         local teamLimits = teamTotalsExcludingPending(teamId, token)
         local maxLimits = TPG.State.maxLimits or {}
-        
+
         -- Every limit this build breaks, not just the last one checked. A
         -- build that is both too heavy and too many props used to report only
         -- "prop limit", so trimming props and re-pasting hit the weight wall
@@ -553,7 +553,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         -- costs more cooldown, and nothing else does.
         local cooldown = (points / 1000) * (TPG.Config.dupeCooldownPer1kPoints or 30)
         pState.dupeCooldown = CurTime() + cooldown
-        
+
         TPG.Util.ChatMessage(ply, "[TPG] Contraption spawned. Duplicator on cooldown for " .. math.ceil(cooldown) .. "s.", Color(0, 255, 0))
     end)
 end)
@@ -588,7 +588,7 @@ hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, model)
     local teamId = ply:Team()
     local teamLimits = TPG.State.limits[teamId] or {}
     local maxLimits = TPG.State.maxLimits or {}
-    
+
     if (teamLimits.props or 0) >= (maxLimits.props or 300) then
         -- Throttled: the spawn menu fires this once per prop, so a player
         -- holding the button down at the cap gets one line instead of thirty.
@@ -634,11 +634,11 @@ hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, class)
     timer.Simple(0.5, function()
         if not IsValid(ply) then return end
         TPG.PropTracking.UpdateTeamTotals()
-        
+
         local teamId = ply:Team()
         local teamLimits = TPG.State.limits[teamId] or {}
         local maxLimits = TPG.State.maxLimits or {}
-        
+
         if TPG.Config.useACEPoints and (teamLimits.points or 0) > (maxLimits.points or 100000) then
             TPG.Util.ChatMessage(ply, "[TPG] Warning: Team is over point limit!", Color(255, 255, 0))
         end

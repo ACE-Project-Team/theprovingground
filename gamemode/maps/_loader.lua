@@ -54,7 +54,7 @@ TPG.Maps.Default = {
     },
     safezoneRadius = 750,
     winsToMapVote = 2,
-    
+
     [GAMEMODE_CP] = {
         capMultiplier = 0.02,
         objectives = {
@@ -87,7 +87,7 @@ TPG.Maps.Configs = {
         },
         safezoneRadius = 750,
         winsToMapVote = 5,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.15,
             objectives = {
@@ -106,7 +106,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_flatgrass"] = {
         spawns = {
             [TEAM_GREEN] = Vector(0, 2000, 100),
@@ -118,7 +118,7 @@ TPG.Maps.Configs = {
             points = 15000,   -- 100t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -138,7 +138,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_baik_citycentre_v3"] = {
         spawns = {
             [TEAM_GREEN] = Vector(5280, 4760, 256),
@@ -150,7 +150,7 @@ TPG.Maps.Configs = {
             points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -169,7 +169,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_baik_coast_03"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-4678, -5985, 501),
@@ -181,7 +181,7 @@ TPG.Maps.Configs = {
             points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.025,
             objectives = {
@@ -200,7 +200,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     -- Night variant of gm_baik_coast_03: identical geometry, so it reuses the
     -- same spawns / limits / objectives.
     ["gm_baik_coast_03_night"] = {
@@ -245,7 +245,7 @@ TPG.Maps.Configs = {
             points = 6000,    -- 40t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -265,7 +265,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_de_port_opened_v2"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-1920, 3944, 513),
@@ -277,7 +277,7 @@ TPG.Maps.Configs = {
             points = 6000,    -- 40t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -297,7 +297,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_emp_arid"] = {
         spawns = {
             [TEAM_GREEN] = Vector(13127, -11026, 513),
@@ -309,7 +309,7 @@ TPG.Maps.Configs = {
             points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -329,7 +329,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_emp_manticore"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-6670, -3958, 1760),
@@ -341,7 +341,7 @@ TPG.Maps.Configs = {
             points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -361,7 +361,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_emp_midbridge"] = {
         spawns = {
             [TEAM_GREEN] = Vector(632, -9715, 2081),
@@ -373,7 +373,7 @@ TPG.Maps.Configs = {
             points = 24000,   -- 160t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.01,
             objectives = {
@@ -394,7 +394,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_emp_palmbay"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-6577, -8994, -2331),
@@ -406,7 +406,7 @@ TPG.Maps.Configs = {
             points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -426,7 +426,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_greenchoke"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-9156, 10610, 1038),
@@ -438,7 +438,7 @@ TPG.Maps.Configs = {
             points = 15000,   -- 100t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.01,
             objectives = {
@@ -460,7 +460,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_baik_frontline"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-9284, 357, -20),
@@ -472,7 +472,7 @@ TPG.Maps.Configs = {
             points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -492,7 +492,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_baik_stalingrad"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-1360, -8207, 1),
@@ -504,7 +504,7 @@ TPG.Maps.Configs = {
             points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -524,7 +524,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_baik_trenches"] = {
         spawns = {
             [TEAM_GREEN] = Vector(3852, 0, 102),
@@ -536,7 +536,7 @@ TPG.Maps.Configs = {
             points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -556,7 +556,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_baik_valley_split"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-6285, -5632, 7),
@@ -568,7 +568,7 @@ TPG.Maps.Configs = {
             points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -588,7 +588,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_bigcity_improved"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-10163, 11922, -11136),
@@ -600,7 +600,7 @@ TPG.Maps.Configs = {
             points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.025,
             objectives = {
@@ -619,7 +619,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_diprip_refinery"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-7754, 6833, 161),
@@ -631,7 +631,7 @@ TPG.Maps.Configs = {
             points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -651,7 +651,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_diprip_village"] = {
         spawns = {
             [TEAM_GREEN] = Vector(5974, 3971, 7),
@@ -663,7 +663,7 @@ TPG.Maps.Configs = {
             points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -683,7 +683,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_emp_bush"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-11392, -11104, -3333),
@@ -695,7 +695,7 @@ TPG.Maps.Configs = {
             points = 24000,   -- 160t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -715,7 +715,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_emp_commandergrad"] = {
         spawns = {
             [TEAM_GREEN] = Vector(3216, 12558, 9),
@@ -727,7 +727,7 @@ TPG.Maps.Configs = {
             points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -747,7 +747,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_freedom_city"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-10769, 3232, 34),
@@ -759,7 +759,7 @@ TPG.Maps.Configs = {
             points = 15000,   -- 100t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -779,7 +779,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_greenland"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-3461, -10270, 2),
@@ -791,7 +791,7 @@ TPG.Maps.Configs = {
             points = 18000,   -- 120t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -811,7 +811,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_islandrain_v3"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-3831, 10741, -1200),
@@ -823,7 +823,7 @@ TPG.Maps.Configs = {
             points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -843,7 +843,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_pacific_island_a3"] = {
         spawns = {
             [TEAM_GREEN] = Vector(13995, 8546, -10539),
@@ -855,7 +855,7 @@ TPG.Maps.Configs = {
             points = 9000,    -- 60t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -875,7 +875,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_toysoldiers"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-5186, 5086, -383),
@@ -887,7 +887,7 @@ TPG.Maps.Configs = {
             points = 12000,   -- 80t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -907,7 +907,7 @@ TPG.Maps.Configs = {
             objectives = {},
         },
     },
-    
+
     ["gm_yanov"] = {
         spawns = {
             [TEAM_GREEN] = Vector(-4246, -4855, 65),
@@ -919,7 +919,7 @@ TPG.Maps.Configs = {
             points = 6000,    -- 40t × 150
         },
         safezoneRadius = 750,
-        
+
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
@@ -1088,11 +1088,11 @@ end
 function TPG.Maps.GetObjectives(gameType)
     local config = TPG.Maps.Get()
     local gtConfig = config[gameType]
-    
+
     if gtConfig and gtConfig.objectives then
         return gtConfig.objectives
     end
-    
+
     return {}
 end
 

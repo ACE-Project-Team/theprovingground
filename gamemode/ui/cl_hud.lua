@@ -58,7 +58,7 @@ net.Receive("TPG_SyncLimits", function()
     TPG.UI.State.limits[TEAM_RED].weight = net.ReadUInt(13) * 500
     TPG.UI.State.limits[TEAM_GREEN].points = net.ReadUInt(16)
     TPG.UI.State.limits[TEAM_RED].points = net.ReadUInt(16)
-    
+
     -- Max limits
     TPG.UI.State.maxLimits.props = net.ReadUInt(12)
     TPG.UI.State.maxLimits.weight = net.ReadUInt(13) * 500

@@ -17,40 +17,40 @@
 
 TPG.State = {
     gameType = GAMEMODE_CP,
-    
+
     scores = {
         [TEAM_GREEN] = 300,
         [TEAM_RED]   = 300,
     },
-    
+
     -- Published by TPG.Rounds.Setup once a round actually starts. Deliberately
     -- EMPTY until then: these used to default to Vector(0, 0, 0), which is a
     -- perfectly truthy Vector, so every "do we have a spawn yet" check said yes
     -- and handed out the map origin. See player/sv_spawning.lua for what that
     -- cost. Read them through TPG.State.GetSpawn, never directly.
     spawns = {},
-    
+
     limits = {
         [TEAM_GREEN] = { props = 0, weight = 0, points = 0 },
         [TEAM_RED]   = { props = 0, weight = 0, points = 0 },
     },
-    
+
     maxLimits = {
         props   = 300,
         weight  = 100000,
         points  = 5000,
     },
-    
+
     objectives = {},
-    
+
     round = {
         active      = false,
         startTime   = 0,
         wins        = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 },
     },
-    
+
     players = {},  -- Per-player state
-    
+
     voting = {
         active  = false,
         maps    = {},
@@ -152,7 +152,7 @@ end
 -- @realm server
 function TPG.State.AddScore(teamId, amount)
     TPG.State.scores[teamId] = TPG.State.scores[teamId] + amount
-    
+
     if TPG.State.scores[teamId] < 0 then
         TPG.State.scores[teamId] = 0
     end
@@ -168,13 +168,13 @@ end
 function TPG.State.ResetRound()
     TPG.State.scores[TEAM_GREEN] = TPG.Config.startingTickets
     TPG.State.scores[TEAM_RED] = TPG.Config.startingTickets
-    
+
     TPG.State.limits[TEAM_GREEN] = { props = 0, weight = 0, points = 0 }
     TPG.State.limits[TEAM_RED] = { props = 0, weight = 0, points = 0 }
-    
+
     TPG.State.round.active = true
     TPG.State.round.startTime = CurTime()
-    
+
     -- Reset player stats
     for ply, data in pairs(TPG.State.players) do
         if IsValid(ply) then

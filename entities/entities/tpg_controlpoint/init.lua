@@ -120,14 +120,14 @@ function ENT:CaptureStep(dt)
     local greenOnPoint = 0
     local redOnPoint = 0
     local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters or 5)
-    
+
     -- Count players on point
     for _, ply in ipairs(player.GetAll()) do
         if not ply:Alive() or ply:InVehicle() then continue end
-        
+
         local dist = ply:GetPos():Distance(self:GetPos())
         if dist > capRadius then continue end
-        
+
         local teamId = ply:Team()
         if teamId == TEAM_GREEN then
             greenOnPoint = greenOnPoint + 1
@@ -135,7 +135,7 @@ function ENT:CaptureStep(dt)
             redOnPoint = redOnPoint + 1
         end
     end
-    
+
     -- Objective overtime shrinks capture times toward instant so a stalemated
     -- round can actually be broken (objectives/sv_objectives.lua). Outside
     -- overtime the factor is 1 and these are the configured times.
@@ -179,12 +179,12 @@ function ENT:CaptureStep(dt)
             if math.abs(self.CapProgress) < 0.01 then self.CapProgress = 0 end
         end
     end
-    
+
     -- Update color and network state
     self:UpdateColor()
     self:SetNWInt("CapOwnership", self.CapOwnership)
     self:SetNWFloat("CapProgress", self.CapProgress)
-    
+
     -- Check for capture state change
     if self.CapOwnership ~= self.LastCapState then
         self:OnCaptureStateChanged()
@@ -242,12 +242,12 @@ function ENT:OnCaptureStateChanged()
     else
         -- Captured
         self:EmitSound("ambient/alarms/warningbell1.wav", 100, 100, 1)
-        
+
         local capTeam = (self.CapOwnership == 1) and TEAM_GREEN or TEAM_RED
         local teamData = TPG.GetTeamData(capTeam)
-        
+
         TPG.Util.ChatBroadcast("[" .. self.PointName .. "] captured by " .. teamData.name .. "!", teamData.color)
-        
+
         -- Play sounds and track captures
         for _, ply in ipairs(player.GetAll()) do
             if ply:Team() == capTeam then
@@ -256,7 +256,7 @@ function ENT:OnCaptureStateChanged()
                 TPG.Util.PlaySound(ply, "friends/friend_offline.wav")
             end
         end
-        
+
         -- Track capture for commendations
         if TPG.Objectives and TPG.Objectives.OnCapture then
             TPG.Objectives.OnCapture(self, capTeam)

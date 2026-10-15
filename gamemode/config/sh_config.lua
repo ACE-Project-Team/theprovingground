@@ -217,7 +217,7 @@ TPG.Config = {
     -- Safezone
     safezoneRadius      = 750,
     spawnProtectionTime = 5,
-    
+
     -- Movement
     baseWalkSpeed       = 200,
     baseRunSpeed        = 350,
@@ -238,14 +238,14 @@ TPG.Config = {
         this if it plays too slow.
     ]]
     minSpeedPercent     = 15,
-    
+
     -- Limits (fallback if ACE unavailable)
     fallbackPropLimit   = 300,
     -- Raised 20x with TPG.Maps.LimitMult.weight (see maps/_loader.lua): weight is
     -- being retired as a balance metric, and a map with no authored tonnage
     -- should not be the one place it still bites.
     fallbackWeightLimit = 2000,
-    
+
     -- ACE Integration
     useACEPoints        = true,
     teamPointLimit      = 5000,
@@ -293,13 +293,13 @@ TPG.Config = {
     -- so switching a real cap on by surprise would change how maps play.
     -- Enforced in sv_duplication.lua when set.
     maxDupeWeight       = 0,
-    
+
     -- Vehicles
     maxSpeedUnits       = 3500,
     maxGForce           = 50,
     easyEntryRange      = 750,
     easyEntryDelay      = 3,
-    
+
     -- AFK
     afkWarningTime      = 20,
     afkKickTime         = 120,
@@ -316,7 +316,7 @@ TPG.Config = {
     -- the kick comes back; a player already benched is kicked at that point
     -- too. Set to 0 to always kick, 1 to never kick.
     afkKickAtLoad       = 0.75,
-    
+
     -- Voting
     mapVoteTime         = 20,
     rtvMinPlayers       = 3,
@@ -345,7 +345,7 @@ TPG.Config = {
     capTimeNeutral      = 10,
     capTimeMax          = 15,
     capMaxPlayers       = 3,
-    
+
     -- Think rates (wall-clock seconds). Game logic used to run every N *ticks*,
     -- so captures and ticket drain ran slower on low-tickrate (e.g. 33-tick)
     -- servers. These keep the 66-tick feel on any tickrate (~0.075s = 5 ticks @66).
