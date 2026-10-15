@@ -85,13 +85,13 @@ def overlay_for(caption, number, total, icon, fonts):
     d.text((x0 + 22, y0 + 9), "%02d / %02d" % (number, total), font=f_small, fill=MUTED + (255,))
     d.text((x0 + 22, y0 + 26), text, font=f_cap, fill=TEXT + (255,))
 
-    # Brand chip, top left: icon24.png and the logo's two bars.
+    # Brand chip, top left: icon512.png and the logo's two bars.
     d.rectangle([14, 14, 14 + 48 + 196, 14 + 48 + 12], fill=PANEL + (200,))
     d.text((14 + 60, 22), "THE PROVING GROUND", font=f_small, fill=TEXT + (255,))
     d.rectangle([14 + 60, 44, 14 + 60 + 80, 47], fill=GREEN + (255,))
     d.rectangle([14 + 60 + 86, 44, 14 + 60 + 166, 47], fill=RED + (255,))
     d.rectangle([14, 14, 14 + 48 + 196, 14 + 60], outline=PURPLE + (255,), width=2)
-    overlay.alpha_composite(icon.resize((48, 48), Image.NEAREST), (20, 20))
+    overlay.alpha_composite(icon.resize((48, 48), Image.LANCZOS), (20, 20))
 
     return overlay
 
@@ -104,7 +104,7 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     src = sys.argv[1]
-    icon = Image.open(os.path.join(REPO, "icon24.png")).convert("RGBA")
+    icon = Image.open(os.path.join(REPO, "icon512.png")).convert("RGBA")
     fonts = (ImageFont.truetype(os.path.join(FONTS, "Exo2-800.ttf"), 25),
              ImageFont.truetype(os.path.join(FONTS, "Exo2-600.ttf"), 13))
 

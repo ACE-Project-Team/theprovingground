@@ -22,7 +22,7 @@ that way first.
 ## README media
 
 `media/header.gif` is drawn by `python tools/media/make_header.py`, from the HUD palette, Exo 2
-and `icon24.png`. `media/gameplay.gif` is built by `python tools/media/make_gameplay.py <steam
+and `icon512.png`. `media/gameplay.gif` is built by `python tools/media/make_gameplay.py <steam
 screenshot folder>`, which blurs out chat, names and overlays before anything else. Both need
 Pillow.
 

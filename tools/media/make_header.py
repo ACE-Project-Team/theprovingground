@@ -7,7 +7,8 @@ changing hands on a loop: neutral, captured by Green, neutralized, captured
 by Red, neutralized again. The messages are the ones the control point
 really broadcasts (entities/entities/tpg_controlpoint/init.lua), and every
 colour is from the HUD palette (gamemode/config/sh_palette.lua), itself
-sampled off icon24.png, which is drawn in the corner as the brand mark.
+sampled off the TPG icon. icon512.png is drawn in the corner as the brand
+mark.
 
 Needs Pillow. Drawn at twice the size and scaled down, so edges are smooth
 but the art stays flat.
@@ -43,7 +44,7 @@ RED = (255, 0, 0)
 RED_TEXT = (255, 110, 110)
 NEUTRAL = (255, 214, 64)
 WARN = (255, 140, 50)
-# icon24.png's tank
+# The icon's tank
 OLIVE = (115, 160, 0)
 OLIVE_DARK = (80, 112, 0)
 TRACK = (44, 40, 52)
@@ -118,7 +119,7 @@ def hill_y(x):
 
 
 def tank(d, x, ground, facing, recoil, flash):
-    """icon24's tank, flat, facing +1 (right) or -1 (left)."""
+    """The icon's tank, flat, facing +1 (right) or -1 (left)."""
     def P(px, py):
         return ((x + px * facing) * S, (ground - py) * S)
 
@@ -258,8 +259,8 @@ def frame(t, icon, fonts):
         d.rectangle([box[0], box[1], box[0] + 4 * S, box[3]], fill=mix(PANEL, c, a))
         d.text((box[0] + 16 * S, box[1] + 6 * S), s, font=f_msg, fill=mix(PANEL, c, a))
 
-    # icon24.png, pixel for pixel, as the brand mark.
-    big = icon.resize((24 * 4 * S, 24 * 4 * S), Image.NEAREST)
+    # icon512.png as the brand mark.
+    big = icon.resize((96 * S, 96 * S), Image.LANCZOS)
     im.paste(big, (28 * S, 24 * S), big)
     d.text(((28 + 96 + 14) * S, 44 * S), "TPG", font=fonts[1], fill=ACCENT)
     d.text(((28 + 96 + 14) * S, 72 * S), "for ACE", font=fonts[2], fill=MUTED)
@@ -268,7 +269,7 @@ def frame(t, icon, fonts):
 
 
 def main():
-    icon = Image.open(os.path.join(REPO, "icon24.png")).convert("RGBA")
+    icon = Image.open(os.path.join(REPO, "icon512.png")).convert("RGBA")
     fonts = (font(800, 92), font(700, 22), font(600, 17))
     n = int(LOOP * FPS)
     frames = [frame(i / FPS, icon, fonts) for i in range(n)]
