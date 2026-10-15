@@ -23,19 +23,6 @@
 local objectiveCache = {}
 local lastUpdate = 0
 
--- Get contrasting text color based on background
-local function GetContrastColor(bgColor)
-    -- Calculate luminance
-    local luminance = (0.299 * bgColor.r + 0.587 * bgColor.g + 0.114 * bgColor.b) / 255
-
-    -- If light background, use dark text; if dark, use white
-    if luminance > 0.5 then
-        return Color(0, 0, 0)  -- Black text
-    else
-        return Color(255, 255, 255)  -- White text
-    end
-end
-
 hook.Add("HUDPaint", "TPG_ObjectiveMarkers", function()
     local ply = LocalPlayer()
     if not IsValid(ply) or not ply:Alive() then return end
@@ -57,7 +44,6 @@ hook.Add("HUDPaint", "TPG_ObjectiveMarkers", function()
         -- Get networked data
         local pointName = obj:GetNWString("PointName", "Point " .. i)
         local pointColor = obj:GetColor()
-        local textColor = GetContrastColor(pointColor)
 
         -- Draw marker circle with outline
         draw.RoundedBox(10, screenPos.x - 8, screenPos.y - 8, 18, 18, Color(0, 0, 0, 200))  -- Outline

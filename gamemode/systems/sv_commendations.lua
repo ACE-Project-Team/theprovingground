@@ -112,7 +112,7 @@ local KILL_FRAC_CONFIG = {
     [GAMEMODE_RUSH] = "rushKillTicketFrac",
 }
 
-hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, inflictor, attacker)
+hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, _inflictor, attacker)
     if victim == attacker then return end
     if not IsValid(attacker) or not attacker:IsPlayer() then return end
 

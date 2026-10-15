@@ -22,7 +22,7 @@ local TEAM_ALIASES = {
     ["spectator"] = TEAM_UNASSIGNED, ["0"] = TEAM_UNASSIGNED,
 }
 
-concommand.Add("tpg_team", function(ply, cmd, args)
+concommand.Add("tpg_team", function(ply, _cmd, args)
     local arg = string.lower(tostring(args[1] or ""))
     local teamId = TEAM_ALIASES[arg] or tonumber(arg)
 
@@ -37,7 +37,7 @@ end)
 -- Loadout change. Weapons are addressed by class string (validated against the
 -- enabled, discovered set so a crafted command can't hand out arbitrary SWEPs);
 -- armor stays numeric.
-concommand.Add("tpg_loadout", function(ply, cmd, args)
+concommand.Add("tpg_loadout", function(ply, _cmd, args)
     local category = tonumber(args[1])
     if not category then return end
 
@@ -101,7 +101,7 @@ end)
 ]]
 local FALLBACK_KEYS = { [1] = "Primary", [2] = "Secondary", [3] = "Special" }
 
-concommand.Add("tpg_fallback", function(ply, cmd, args)
+concommand.Add("tpg_fallback", function(ply, _cmd, args)
     local key = FALLBACK_KEYS[tonumber(args[1] or "")]
     if not key then return end
 
@@ -186,28 +186,28 @@ concommand.Add("tpg_rekit", function(ply)
 end)
 
 -- Easy vehicle entry
-concommand.Add("tpg_easyentry", function(ply, cmd, args)
+concommand.Add("tpg_easyentry", function(ply, _cmd, _args)
     if TPG.Vehicles and TPG.Vehicles.EasyEntry then
         TPG.Vehicles.EasyEntry(ply)
     end
 end)
 
 -- RTV
-concommand.Add("tpg_rtv", function(ply, cmd, args)
+concommand.Add("tpg_rtv", function(ply, _cmd, _args)
     if TPG.Voting and TPG.Voting.RockTheVote then
         TPG.Voting.RockTheVote(ply)
     end
 end)
 
 -- Vote scramble
-concommand.Add("tpg_scramble", function(ply, cmd, args)
+concommand.Add("tpg_scramble", function(ply, _cmd, _args)
     if TPG.Voting and TPG.Voting.VoteScramble then
         TPG.Voting.VoteScramble(ply)
     end
 end)
 
 -- Map vote
-concommand.Add("tpg_votemap", function(ply, cmd, args)
+concommand.Add("tpg_votemap", function(ply, _cmd, args)
     local mapIndex = tonumber(args[1])
     if mapIndex and TPG.Voting and TPG.Voting.CastMapVote then
         TPG.Voting.CastMapVote(ply, mapIndex)
@@ -219,7 +219,7 @@ end)
 -- on a dedicated server -- only at the server console. This concommand runs
 -- server-side, so any admin can flip it in-game. Latched, so it applies on the
 -- NEXT map change (matching the convar's behaviour).
-concommand.Add("tpg_economy", function(ply, cmd, args)
+concommand.Add("tpg_economy", function(ply, _cmd, args)
     if IsValid(ply) and not ply:IsAdmin() then
         TPG.Util.ChatMessage(ply, "[TPG] Admins only.", Color(255, 0, 0))
         return
@@ -247,12 +247,12 @@ concommand.Add("tpg_economy", function(ply, cmd, args)
 end)
 
 -- Admin commands
-concommand.Add("tpg_admin_restart", function(ply, cmd, args)
+concommand.Add("tpg_admin_restart", function(ply, _cmd, _args)
     if not ply:IsAdmin() then return end
     TPG.Rounds.Setup()
 end)
 
-concommand.Add("tpg_admin_endround", function(ply, cmd, args)
+concommand.Add("tpg_admin_endround", function(ply, _cmd, args)
     if not ply:IsAdmin() then return end
     local winner = tonumber(args[1]) or TEAM_GREEN
     TPG.Rounds.EndRound(winner)

@@ -241,7 +241,7 @@ local function RestrictSpawning(ply, ent)
     end
 end
 
-hook.Add("PlayerSpawnedProp", "TPG_PropRestriction", function(ply, model, ent) RestrictSpawning(ply, ent) end)
+hook.Add("PlayerSpawnedProp", "TPG_PropRestriction", function(ply, _model, ent) RestrictSpawning(ply, ent) end)
 hook.Add("PlayerSpawnedSENT", "TPG_SENTRestriction", function(ply, ent) RestrictSpawning(ply, ent) end)
 hook.Add("PlayerSpawnedVehicle", "TPG_VehicleRestriction", function(ply, ent) RestrictSpawning(ply, ent) end)
 

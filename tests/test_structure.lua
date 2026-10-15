@@ -183,7 +183,7 @@ local KNOWN_UNWIRED = {
 -- test says so rather than passing vacuously.
 local function listLuaFiles()
     local cmd = package.config:sub(1, 1) == "\\"
-        and ('dir /b /s "' .. GAMEMODE:gsub("/", "\\") .. '\\*.lua" 2>nul')
+        and ([[dir /b /s "]] .. GAMEMODE:gsub("/", "\\") .. [[\*.lua" 2>nul]])
         or  ("find '" .. GAMEMODE .. "' -name '*.lua' 2>/dev/null")
 
     local pipe = io.popen(cmd)

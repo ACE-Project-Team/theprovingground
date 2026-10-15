@@ -252,7 +252,7 @@ function TPG.PlayerTeams.ScrambleAll()
 end
 
 -- Check for autobalance on death
-hook.Add("PlayerDeath", "TPG_DeathAutobalance", function(victim, inflictor, attacker)
+hook.Add("PlayerDeath", "TPG_DeathAutobalance", function(victim, _inflictor, _attacker)
     timer.Simple(0.1, function()
         if IsValid(victim) then
             TPG.PlayerTeams.Autobalance(victim)

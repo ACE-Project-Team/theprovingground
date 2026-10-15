@@ -278,7 +278,10 @@ function M.install()
 
     local function record(...)
         local parts = {}
-        for i = 1, select("#", ...) do parts[#parts + 1] = tostring((select(i, ...))) end
+        for i = 1, select("#", ...) do
+            local v = select(i, ...)
+            parts[#parts + 1] = tostring(v)
+        end
         local line = table.concat(parts, "\t")
         M.output[#M.output + 1] = line
         if not M.quiet then io.write(line, "\n") end

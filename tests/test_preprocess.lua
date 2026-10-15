@@ -126,13 +126,13 @@ it("ignores the word inside a block comment", function()
 end)
 
 it("ignores the word inside a string", function()
-    local src = 'return "continue"'
+    local src = [[return "continue"]]
     expect.eq(preprocess.rewrite(src, "<test>"), src)
     expect.eq(run(src), "continue")
 end)
 
 it("ignores the word inside a long string", function()
-    local src = 'return [[press to continue]]'
+    local src = "return [[press to continue]]"
     expect.eq(run(src), "press to continue")
 end)
 

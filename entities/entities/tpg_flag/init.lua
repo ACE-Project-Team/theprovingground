@@ -227,11 +227,9 @@ function ENT:GameplayStep()
         return
     end
 
-    if state == self.STATE_DROPPED then
-        if CurTime() - self.DroppedAt > (TPG.Config.ctfReturnTime or 25) then
-            self:ReturnHome("timed out")
-            return
-        end
+    if state == self.STATE_DROPPED and CurTime() - self.DroppedAt > (TPG.Config.ctfReturnTime or 25) then
+        self:ReturnHome("timed out")
+        return
     end
 
     -- Home or dropped: first alive teamed player in range grabs it.

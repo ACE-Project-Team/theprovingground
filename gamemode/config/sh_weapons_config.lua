@@ -155,11 +155,11 @@ TPG.WeaponConfig = {
         ["gpmg"]               = "Machine Guns",
 
         -- Shotguns / precision
-        ["shotgun"]      = "Shotguns",
-        ["sniperrifle"]  = "Sniper Rifles",
-        ["sniper"]       = "Sniper Rifles",
-        ["marksmanrifle"]= "Sniper Rifles",
-        ["dmr"]          = "Sniper Rifles",
+        ["shotgun"]       = "Shotguns",
+        ["sniperrifle"]   = "Sniper Rifles",
+        ["sniper"]        = "Sniper Rifles",
+        ["marksmanrifle"] = "Sniper Rifles",
+        ["dmr"]           = "Sniper Rifles",
 
         -- Sidearms and kit
         ["pistol"]   = "Pistols",

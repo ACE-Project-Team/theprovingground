@@ -107,7 +107,7 @@ end
     ACE only calls this once it has resolved `owner` and `attacker` to real
     players -- entities with no player owner never reach a mode.
 ]]
-local function tpgPermission(owner, attacker, ent)
+local function tpgPermission(owner, _attacker, ent)
     if not IsValid(ent) then return false end
 
     -- People and NPCs are somebody else's problem: player damage runs through

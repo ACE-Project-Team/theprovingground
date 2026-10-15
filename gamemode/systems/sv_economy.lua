@@ -604,7 +604,7 @@ function SettleRebill(con)
     end
 end
 
-hook.Add("ACE_OnContraptionPointsRecalculated", "TPG_RebillModifiedVehicle", function(con, change)
+hook.Add("ACE_OnContraptionPointsRecalculated", "TPG_RebillModifiedVehicle", function(con, _change)
     if not istable(con) or con.ACERemoving then return end
     if con.TPG_BilledPoints == nil then return end   -- scratch build; nothing to re-bill
 

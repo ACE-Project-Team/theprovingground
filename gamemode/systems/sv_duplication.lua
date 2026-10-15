@@ -434,7 +434,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         -- Check weight limit
         if (teamLimits.weight or 0) > (maxLimits.weight or 100000) then
             reasons[#reasons + 1] = "team weight limit (" ..
-                math.ceil(teamLimits.weight/1000) .. "T/" .. math.ceil(maxLimits.weight/1000) .. "T)"
+                math.ceil(teamLimits.weight / 1000) .. "T/" .. math.ceil(maxLimits.weight / 1000) .. "T)"
         end
 
         -- Tonnage cap on a SINGLE dupe, as opposed to the team total above:
@@ -443,7 +443,7 @@ hook.Add("AdvDupe_FinishPasting", "TPG_DupeFinished", function(data)
         local dupeWeightCap = TPG.Config.maxDupeWeight or 0
         if dupeWeightCap > 0 and pasteWeight > dupeWeightCap then
             reasons[#reasons + 1] = "single dupe too heavy (" ..
-                math.ceil(pasteWeight/1000) .. "T/" .. math.ceil(dupeWeightCap/1000) .. "T)"
+                math.ceil(pasteWeight / 1000) .. "T/" .. math.ceil(dupeWeightCap / 1000) .. "T)"
         end
 
         -- Check prop limit
@@ -574,7 +574,7 @@ end)
     @realm server
     @function TPG_PropLimitCheck
 ]]
-hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, model)
+hook.Add("PlayerSpawnProp", "TPG_PropLimitCheck", function(ply, _model)
     if TPG.State.waitingForPlayers then
         TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
         return false
@@ -619,7 +619,7 @@ end)
     @realm server
     @function TPG_SENTLimitCheck
 ]]
-hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, class)
+hook.Add("PlayerSpawnSENT", "TPG_SENTLimitCheck", function(ply, _class)
     if TPG.State.waitingForPlayers then
         TPG.Util.ChatMessage(ply, "[TPG] Waiting for players to load - the round hasn't started yet.", Color(255, 200, 0))
         return false

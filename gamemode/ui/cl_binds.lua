@@ -12,7 +12,7 @@
     @realm client
 ]]
 
-hook.Add("PlayerBindPress", "TPG_Binds", function(ply, bind, pressed)
+hook.Add("PlayerBindPress", "TPG_Binds", function(_ply, bind, pressed)
     if not pressed then return end
 
     if bind == "gm_showteam" then

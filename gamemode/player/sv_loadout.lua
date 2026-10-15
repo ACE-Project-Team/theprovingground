@@ -212,8 +212,6 @@ function TPG.Loadout.Apply(ply)
         ply:Give(class)
     end
 
-    local teamId = ply:Team()
-
     -- Not on a team, minimal loadout (default weapons + tools, no team kit)
     if not TPG.Util.IsOnTeam(ply) then
         return

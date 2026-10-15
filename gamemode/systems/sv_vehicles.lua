@@ -70,7 +70,7 @@ function TPG.Vehicles.EasyEntry(ply)
     local bestSeat = nil
     local bestDist = TPG.Config.easyEntryRange
 
-    for seat, data in pairs(TPG.Vehicles.Seats) do
+    for seat in pairs(TPG.Vehicles.Seats) do
         if not IsValid(seat) then continue end
         if TPG.Util.GetOwner(seat) ~= ply then continue end
 
@@ -111,7 +111,7 @@ end
 -- `canUseSeat` flag is false, the juggernaut tier being the current example.
 -- @realm server
 -- @function TPG_JuggernautCheck
-hook.Add("CanPlayerEnterVehicle", "TPG_JuggernautCheck", function(ply, veh)
+hook.Add("CanPlayerEnterVehicle", "TPG_JuggernautCheck", function(ply, _veh)
     local armorId = TPG.Util.GetPData(ply, "Armor", 1)
     local armor = TPG.GetArmor(armorId)
 
