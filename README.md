@@ -10,6 +10,13 @@ Requires ACE (Armored Combat Extended) installed under `garrysmod/addons/`. On
 startup TPG checks for ACE/CFW and prints a warning to the server console if
 either is missing (see `TPG.Config.ValidateACE()` in `gamemode/config/sh_config.lua`).
 
+## Workshop build
+
+`python tools/build_gma.py` packs the gamemode into `build/theprovingground.gma` for upload.
+Title, type and tags come from `addon.json`. Running gmad on the repo directly doesn't work: a
+gamemode has to sit under `gamemodes/theprovingground/` inside a .gma, so the script stages it
+that way first.
+
 ## E2 and Starfall functions
 
 The `tpg*` chip functions (team roster, loadouts, teammate checks) are a separate addon,

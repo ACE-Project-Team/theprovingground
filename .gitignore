@@ -1,3 +1,6 @@
 # Generated LDoc output. The source comments are the record; the HTML is a
 # convenience you rebuild with `ldoc .` whenever you want to read it.
 doc/
+
+# tools/build_gma.py output.
+build/
