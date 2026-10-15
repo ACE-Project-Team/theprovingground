@@ -54,7 +54,7 @@ wait-for-players window that leads into the first round.
 | `ui/` | The HUD and every menu. Client only. |
 | `voting/` | Rock the vote, scramble votes, end-of-map map votes. |
 | `entities/` | The control point, the flag, the safezone marker, the point tool, the disposable AT weapon. |
-| `addons/tpg_e2sf_sandbox/` | Wire Expression 2 and Starfall bindings. See the README for why this needs a junction. |
+| `addons/tpg_e2sf_sandbox/` | Submodule: the Wire Expression 2 and Starfall bindings, a separate addon ([tpg_e2sf](https://github.com/ACE-Project-Team/tpg_e2sf)). It only loads from `garrysmod/addons/`; see the README. |
 
 ## The round loop
 

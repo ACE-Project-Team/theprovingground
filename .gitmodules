@@ -1,0 +1,4 @@
+[submodule "addons/tpg_e2sf_sandbox"]
+	path = addons/tpg_e2sf_sandbox
+	url = https://github.com/ACE-Project-Team/tpg_e2sf.git
+	branch = main

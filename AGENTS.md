@@ -30,6 +30,8 @@ maintainers are the human author's own words.
 - **Line endings: let git handle them.** Don't normalise files. Check churn with
   `git diff --numstat` vs `git diff --ignore-cr-at-eol --numstat`.
 - **Player-facing text uses a single dash**, never `--`. In-game strings only, not comments.
+- **`addons/tpg_e2sf_sandbox` is a submodule** (its own repo, tpg_e2sf). Change it there, not
+  here. What it reads from TPG is pinned by `tests/test_e2sf_contract.lua` -- keep both in step.
 
 ## Traps that have already cost a bug here
 

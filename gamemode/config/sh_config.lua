@@ -399,21 +399,17 @@ function TPG.Config.ValidateACE()
 end
 
 --[[--
-    Check whether the tpg_e2sf_sandbox addon is mounted, and warn if not.
+    Check whether the E2/Starfall addon (tpg_e2sf) is mounted, and warn if not.
 
-    The E2/Starfall `tpg*` chip functions have to exist as a REAL addon under
-    `garrysmod/addons/`, normally a junction/symlink to this repo's
-    `addons/tpg_e2sf_sandbox` folder, since git does not carry filesystem
-    links. That is easy to forget on a fresh deploy, so this checks for one of
-    its files and prints a loud warning rather than letting the chip functions
-    silently not exist.
+    The `tpg*` chip functions live in a separate addon, which only loads from
+    `garrysmod/addons/` -- never from inside this gamemode, where this repo
+    carries it as the `addons/tpg_e2sf_sandbox` submodule. That is easy to
+    forget on a fresh deploy, so this checks for one of its files and prints a
+    loud warning rather than letting the chip functions silently not exist.
 
-    Detection is indirect: it does not check for the sandbox addon itself, it
-    checks for `autorun/server/tpg_e2sf_stub.lua` under the `LUA` search path
-    as a stand-in for "the junction is in place". Sets `TPG.E2SFSandboxMounted`
-    for anything else that needs to know. Even when mounted, the chip
-    functions only work while TPG is the active gamemode, not in plain
-    sandbox; see `addons/tpg_e2sf_sandbox` and README.md.
+    Detection is indirect: it checks for `autorun/server/tpg_e2sf_stub.lua`
+    under the `LUA` search path, which is there exactly when the addon is.
+    Sets `TPG.E2SFSandboxMounted` for anything else that needs to know.
 
     @treturn boolean Whether the stub file was found.
     @realm shared
@@ -424,10 +420,9 @@ function TPG.Config.ValidateE2SFSandbox()
 
     if not mounted then
         print("[TPG] ================================================================")
-        print("[TPG] NOTE: tpg_e2sf_sandbox addon not found under garrysmod/addons/.")
-        print("[TPG] E2/Starfall tpg* chip functions will only work while TPG is the")
-        print("[TPG] active gamemode (they won't load in plain sandbox). See")
-        print("[TPG] addons/tpg_e2sf_sandbox and README.md to fix.")
+        print("[TPG] NOTE: the TPG E2/Starfall addon (tpg_e2sf) is not installed.")
+        print("[TPG] The tpg* chip functions don't exist until it is under")
+        print("[TPG] garrysmod/addons/. See README.md.")
         print("[TPG] ================================================================")
     end
 
