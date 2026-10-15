@@ -1,0 +1,15 @@
+# Text files are stored with LF in the repository and checked out however the
+# contributor's git is set up to (core.autocrlf / core.eol). This writes down
+# what was already happening on the machines that had autocrlf on, so it stops
+# depending on that setting -- it does not force LF into anyone's working tree.
+* text=auto
+
+# Never touch these, whatever their bytes look like.
+*.png binary
+*.jpg binary
+*.gif binary
+*.ttf binary
+*.vtf binary
+*.mdl binary
+*.wav binary
+*.mp3 binary
