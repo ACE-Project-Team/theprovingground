@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+
+# The two jobs run side by side rather than tests waiting on lint: a stray
+# space should not hide a broken round timer, and each failure is worth
+# seeing on its own.
+jobs:
+  Lint:
+    uses: FPtje/GLuaFixer/.github/workflows/glualint.yml@7d26f3a416e6174991c21c962aaf295ff3e17f52 # master, 2026-07-17
+    with:
+      config: .glualint.json
+
+  Tests:
+    name: Shared-code tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out TPG
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      # LuaJIT rather than stock Lua 5.1 because it is the VM GMod runs. The
+      # suite passes on both; this is the one that matches the game.
+      - name: Install LuaJIT
+        run: sudo apt-get update && sudo apt-get install --yes luajit
+
+      - name: Run tests
+        run: luajit tests/run.lua
