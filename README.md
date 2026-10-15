@@ -1,7 +1,9 @@
-<img src="logo.svg" alt="The Proving Ground" width="640">
+<img src="media/header.gif" alt="The Proving Ground - a control point changing hands between Green and Red" width="100%">
 
 # The Proving Ground
 A gamemode heavily inspired by the Baiknor combined arms gamemode, but for ACE
+
+<img src="media/gameplay.gif" alt="Screenshots from a match on gm_diprip_refinery" width="100%">
 
 To install:
 Garrysmod/garrysmod/gamemodes
@@ -16,6 +18,13 @@ either is missing (see `TPG.Config.ValidateACE()` in `gamemode/config/sh_config.
 Title, type and tags come from `addon.json`. Running gmad on the repo directly doesn't work: a
 gamemode has to sit under `gamemodes/theprovingground/` inside a .gma, so the script stages it
 that way first.
+
+## README media
+
+`media/header.gif` is drawn by `python tools/media/make_header.py`, from the HUD palette, Exo 2
+and `icon24.png`. `media/gameplay.gif` is built by `python tools/media/make_gameplay.py <steam
+screenshot folder>`, which blurs out chat, names and overlays before anything else. Both need
+Pillow.
 
 ## E2 and Starfall functions
 
