@@ -10,7 +10,8 @@ that owns the item. Visibility is left alone: a hidden item stays hidden.
 Each run replaces the gallery rather than adding to it, so it can be rerun
 after any change. The gallery JPGs come from
 `python tools/media/make_gameplay.py <screenshots> --stills build/workshop`,
-the previews from `python tools/media/make_workshop.py`.
+the previews from `python tools/media/make_workshop.py` and the GIFs from
+`python tools/media/make_showcase.py`.
 
 Standard library only.
 """
@@ -33,7 +34,8 @@ ITEMS = {
         "id": 3820591474,
         "preview": "media/workshop/tpg_thumb.gif",
         "description": "workshop/tpg.bbcode",
-        "gallery": ["build/workshop/gameplay_%02d.jpg" % i for i in range(1, 8)],
+        "gallery": ["media/modes.gif", "media/loadout.gif"]
+                   + ["build/workshop/gameplay_%02d.jpg" % i for i in range(1, 8)],
         "requires": [ACE, CFW, 3820591473],
     },
     "tpg_e2sf": {

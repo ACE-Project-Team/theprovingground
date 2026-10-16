@@ -58,7 +58,7 @@ TPG.GameTypes = {
         id              = GAMEMODE_CTF,
         name            = "Capture the Flag",
         shortName       = "CTF",
-        description     = "Steal the enemy flag, bring it back to your base",
+        description     = "Grab the neutral flag, carry it to your spawn",
         useDeathTickets = false,
         -- Scoring is handled by flag captures (objectives/sv_ctf.lua), not the
         -- passive control-point drain, so no cap multiplier here.

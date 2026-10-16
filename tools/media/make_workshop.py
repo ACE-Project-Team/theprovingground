@@ -2,10 +2,12 @@
 
     python tools/media/make_workshop.py
 
-tpg_thumb.gif and tpg_e2sf_thumb.gif are the animated 16:9 previews for the
-two Workshop items. Each opens on its logo, splits it along the green/red
-seam, then slides it aside for the title and slides it back, so the first
-frame works as a still. They stay under the 1 MB Steam allows for a preview.
+tpg_thumb.gif and tpg_e2sf_thumb.gif are the animated previews for the two
+Workshop items. They are square because the Workshop grid and GMod's addon
+list show square tiles, and anything wider gets black bars. Each opens on its
+logo filling the tile, splits it along the green/red seam, then shrinks it to
+the top for the title and grows it back, so the first frame works as a still.
+They stay under the 1 MB Steam allows for a preview.
 
 tpg_e2sf_icon.png is the addon's own logo, drawn in the style of icon512.png:
 the same frame, split and blocky blue letters, with a chip where the tank is.
@@ -22,7 +24,7 @@ REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 FONTS = os.path.join(REPO, "resource", "fonts")
 OUT = os.path.join(REPO, "media", "workshop")
 
-W, H = 640, 360
+W, H = 512, 512
 S = 2                      # supersampling
 FPS = 12
 LOOP = 6.0
@@ -210,6 +212,10 @@ def text(d, x, y, s, f, fill):
     d.text((x * S, y * S), s, font=f, fill=fill)
 
 
+def centred(d, y, s, f, fill):
+    text(d, W / 2 - d.textlength(s, font=f) / S / 2, y, s, f, fill)
+
+
 def tpg_extra(d, t, x, y, a, fonts):
     """Tug of war between the teams under the TPG title."""
     w = 300
@@ -247,32 +253,34 @@ def frame(t, base, icon_for, item, fonts):
     split = math.sin(math.pi * s) ** 0.6 if 0 < s < 1 else 0
     shine = span(t, T_SHINE) if T_SHINE[0] <= t <= T_SHINE[1] else None
 
-    size = lerp(270, 220, aside)
-    cx = lerp(W / 2, 140, aside)
-    cy = lerp(H / 2, H / 2 - 4, aside)
+    size = lerp(476, 220, aside)
+    cx = W / 2
+    cy = lerp(H / 2, 136, aside)
     img, gap = logo(icon_for(t), size, split, shine)
     im.paste(img, (int(cx * S - img.width / 2), int(cy * S - img.height / 2)), img)
 
-    # The title wipes in from the left edge of its column.
+    # The title, centred under the logo, wipes in from the left.
     if reveal > 0:
         layer = Image.new("RGB", im.size, PANEL)
         mask = Image.new("L", im.size, 0)
         ld = ImageDraw.Draw(layer)
-        x0, y0 = 272, 70
-        text(ld, x0, y0, item["kicker"], fonts["kicker"], ACCENT)
+        lines = len(item["title"])
+        y0 = 262 + (2 - lines) * 26
+        centred(ld, y0, item["kicker"], fonts["kicker"], ACCENT)
         for i, line in enumerate(item["title"]):
-            text(ld, x0 - 2, y0 + 18 + i * 52, line, fonts["title"], TEXT)
-        y1 = y0 + 26 + len(item["title"]) * 52
-        text(ld, x0, y1, item["subtitle"], fonts["sub"], MUTED)
-        item["extra"](ld, t, x0, y1 + 44, 1.0, fonts)
-        right = lerp(x0 - 10, W, reveal)
-        ImageDraw.Draw(mask).rectangle([(x0 - 10) * S, 0, right * S, H * S], fill=255)
+            centred(ld, y0 + 18 + i * 52, line, fonts["title"], TEXT)
+        y1 = y0 + 26 + lines * 52
+        centred(ld, y1, item["subtitle"], fonts["sub"], MUTED)
+        item["extra"](ld, t, W / 2 - 150, y1 + 36, 1.0, fonts)
+        top = 250
+        right = lerp(0, W, reveal)
+        ImageDraw.Draw(mask).rectangle([0, top * S, right * S, H * S], fill=255)
         # Text pixels only, so the backdrop stripes show through.
         ink = ImageChops.difference(layer, Image.new("RGB", im.size, PANEL)).convert("L")
         ink = ink.point(lambda v: 255 if v > 4 else 0)
         im.paste(layer, (0, 0), ImageChops.multiply(mask, ink))
         if reveal < 1:
-            d.rectangle([(right - 2) * S, 60 * S, (right + 1) * S, 300 * S], fill=ACCENT)
+            d.rectangle([(right - 2) * S, top * S, (right + 1) * S, (H - 10) * S], fill=ACCENT)
 
     return im.resize((W, H), Image.LANCZOS)
 

@@ -39,7 +39,12 @@ screenshot folder>`, which blurs out chat, names and overlays before anything el
 `media/e2sf.gif` is drawn by `python tools/media/make_e2sf.py` in the header's style.
 `media/workshop/` holds the Workshop previews and the tpg_e2sf logo, drawn by
 `python tools/media/make_workshop.py`. The gallery stills come from
-`make_gameplay.py <steam screenshot folder> --stills build/workshop`. All of these need Pillow.
+`make_gameplay.py <steam screenshot folder> --stills build/workshop`.
+`media/modes.gif` (all five game modes) and `media/loadout.gif` (armour tiers, kits, ranks,
+commendations) are drawn by `python tools/media/make_showcase.py`. Its soldiers are the tiers'
+real player models, rendered out of GMod's own VPKs into `media/tiers/` by
+`python tools/media/render_tiers.py` (needs numpy and a GMod install; GMod never starts).
+All of these need Pillow.
 
 ## E2 and Starfall functions
 
