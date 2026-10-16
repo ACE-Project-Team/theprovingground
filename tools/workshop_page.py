@@ -10,7 +10,9 @@ that owns the item. Visibility is left alone: a hidden item stays hidden.
 Each run replaces the gallery rather than adding to it, so it can be rerun
 after any change. The gallery JPGs come from
 `python tools/media/make_gameplay.py <screenshots> --stills build/workshop`,
-the previews from `python tools/media/make_workshop.py` and the GIFs from
+the previews from `python tools/media/make_workshop.py`. The showcase GIFs are
+over the ~1 MB Steam takes for a gallery file, so they only appear in the
+description, from
 `python tools/media/make_showcase.py`.
 
 Standard library only.
@@ -34,8 +36,7 @@ ITEMS = {
         "id": 3820591474,
         "preview": "media/workshop/tpg_thumb.gif",
         "description": "workshop/tpg.bbcode",
-        "gallery": ["media/modes.gif", "media/loadout.gif"]
-                   + ["build/workshop/gameplay_%02d.jpg" % i for i in range(1, 8)],
+        "gallery": ["build/workshop/gameplay_%02d.jpg" % i for i in range(1, 8)],
         "requires": [ACE, CFW, 3820591473],
     },
     "tpg_e2sf": {
@@ -129,13 +130,18 @@ class Steam:
             sys.exit("%s: Steam call failed" % what)
         return out
 
-    def submit(self, update, note, what):
+    def submit(self, update, note, what, fatal=True):
         res = self.wait(self.call("SubmitItemUpdate", update, note.encode()),
                         SubmitItemUpdateResult, SUBMIT_RESULT, what)
         if res.needs_legal:
             sys.exit("%s: accept the Workshop legal agreement on the item page first" % what)
         if res.result != 1:
-            sys.exit("%s: Steam returned EResult %d" % (what, res.result))
+            # 25 is LimitExceeded: the file is over Steam's size cap for that slot.
+            msg = "%s: Steam returned EResult %d" % (what, res.result)
+            if fatal:
+                sys.exit(msg)
+            print(msg + ", skipped")
+            return
         print("%s: done" % what)
 
     def gallery_count(self, file_id):
@@ -181,7 +187,7 @@ def main():
     steam = Steam()
     try:
         # Preview and description go together; each gallery file is its own
-        # update, so one rejected image doesn't take the rest down with it.
+        # update, so one rejected image is skipped without taking the rest down.
         update = steam.call("StartItemUpdate", APP_ID, fid)
         steam.call("SetItemPreview", update, os.path.join(REPO, item["preview"]).encode())
         steam.call("SetItemDescription", update, text.encode("utf-8"))
@@ -196,7 +202,7 @@ def main():
         for path in item["gallery"]:
             update = steam.call("StartItemUpdate", APP_ID, fid)
             steam.call("AddItemPreviewFile", update, os.path.join(REPO, path).encode(), 0)
-            steam.submit(update, "", "gallery " + path)
+            steam.submit(update, "", "gallery " + path, fatal=False)
 
         # Adding a dependency that is already there is harmless.
         for child in item["requires"]:
