@@ -30,6 +30,7 @@ APP_ID = 4000
 
 ACE = 3333669763
 CFW = 3154971187
+NADMOD = 159298542
 
 ITEMS = {
     "tpg": {
@@ -37,7 +38,7 @@ ITEMS = {
         "preview": "media/workshop/tpg_thumb.gif",
         "description": "workshop/tpg.bbcode",
         "gallery": ["build/workshop/gameplay_%02d.jpg" % i for i in range(1, 8)],
-        "requires": [ACE, CFW, 3820591473],
+        "requires": [ACE, CFW, 3820591473, NADMOD],
     },
     "tpg_e2sf": {
         "id": 3820591473,

@@ -11,7 +11,9 @@ and [TPG E2 & Starfall Team Functions](https://steamcommunity.com/sharedfiles/fi
 To install:
 Garrysmod/garrysmod/gamemodes
 
-Requires ACE (Armored Combat Extended) installed under `garrysmod/addons/`. On
+Requires ACE (Armored Combat Extended) installed under `garrysmod/addons/`, and a CPPI prop
+protection addon such as [Nadmod Prop Protection](https://steamcommunity.com/sharedfiles/filedetails/?id=159298542)
+(without one, vehicles are not protected in the safezones). On
 startup TPG checks for ACE/CFW and prints a warning to the server console if
 either is missing (see `TPG.Config.ValidateACE()` in `gamemode/config/sh_config.lua`).
 
