@@ -403,7 +403,7 @@ end
 
     The `tpg*` chip functions live in a separate addon, which only loads from
     `garrysmod/addons/` -- never from inside this gamemode, where this repo
-    carries it as the `addons/tpg_e2sf_sandbox` submodule. That is easy to
+    carries it as the `addons/tpg_e2sf` submodule. That is easy to
     forget on a fresh deploy, so this checks for one of its files and prints a
     loud warning rather than letting the chip functions silently not exist.
 

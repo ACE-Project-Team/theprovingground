@@ -19,7 +19,7 @@ title       = 'The Proving Ground -- gamemode reference'
 description = 'A team-based combined-arms gamemode for Garry\'s Mod, built on ACE.'
 
 --[[
-    addons/tpg_e2sf_sandbox is deliberately not in here. Its Starfall library
+    addons/tpg_e2sf is deliberately not in here. Its Starfall library
     is already annotated in Starfall's own format (@name, @class library,
     @libtbl), which Starfall's documentation generator reads -- rewriting it in
     LDoc's tags to get it into this build would break the docs that chip

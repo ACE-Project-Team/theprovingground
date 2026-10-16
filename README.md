@@ -23,31 +23,36 @@ that way first.
 
 `media/header.gif` is drawn by `python tools/media/make_header.py`, from the HUD palette, Exo 2
 and `icon512.png`. `media/gameplay.gif` is built by `python tools/media/make_gameplay.py <steam
-screenshot folder>`, which blurs out chat, names and overlays before anything else. Both need
-Pillow.
+screenshot folder>`, which blurs out chat, names and overlays before anything else.
+`media/e2sf.gif` is drawn by `python tools/media/make_e2sf.py` in the header's style. All three
+need Pillow.
 
 ## E2 and Starfall functions
 
-The `tpg*` chip functions (team roster, loadouts, teammate checks) are a separate addon,
-[tpg_e2sf](https://github.com/ACE-Project-Team/tpg_e2sf), so they also work in plain sandbox.
-Its README lists every function.
+The `tpg*` chip functions (team roster, loadouts, teammate checks) live in a separate addon,
+[tpg_e2sf](https://github.com/ACE-Project-Team/tpg_e2sf). **TPG servers need it installed**,
+because TPG has no chip functions of its own. The same addon also works in plain sandbox: there
+it adds stand-in teams (`tpg_test_team`), so you can build and test chips before joining a
+match. Its README lists every function.
+
+<img src="media/e2sf.gif" alt="An E2 chip reading its team through tpg_e2sf, first on a TPG server, then in sandbox with tpg_test_team" width="100%">
 
 GMod only loads Wire and Starfall extensions from a real addon under `garrysmod/addons/`, never
-from inside a gamemode, so install it there like any other addon. On startup TPG prints a
-warning to the server console if it isn't (`TPG.Config.ValidateE2SFSandbox()` in
+from inside a gamemode. Install it there like any other addon. On startup TPG prints a warning
+to the server console if it's missing (`TPG.Config.ValidateE2SFSandbox()` in
 `gamemode/config/sh_config.lua`).
 
-For development this repo carries it as a submodule at `addons/tpg_e2sf_sandbox`. Clone with
+For development this repo carries it as a submodule at `addons/tpg_e2sf`. Clone with
 `git clone --recurse-submodules`, or run `git submodule update --init` in an existing clone,
 then link the folder into `garrysmod/addons/` once per machine so the copy you edit is the one
 the game loads:
 
 ```powershell
-New-Item -ItemType Junction -Path "<garrysmod>\addons\tpg_e2sf_sandbox" -Target "<garrysmod>\gamemodes\theprovingground\addons\tpg_e2sf_sandbox"
+New-Item -ItemType Junction -Path "<garrysmod>\addons\tpg_e2sf" -Target "<garrysmod>\gamemodes\theprovingground\addons\tpg_e2sf"
 ```
 
 ```bash
-ln -s "<garrysmod>/gamemodes/theprovingground/addons/tpg_e2sf_sandbox" "<garrysmod>/addons/tpg_e2sf_sandbox"
+ln -s "<garrysmod>/gamemodes/theprovingground/addons/tpg_e2sf" "<garrysmod>/addons/tpg_e2sf"
 ```
 
 The addon is its own repository: commit and push changes to it there, then commit the updated
