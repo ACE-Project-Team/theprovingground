@@ -3,6 +3,9 @@
 # The Proving Ground
 A gamemode heavily inspired by the Baiknor combined arms gamemode, but for ACE
 
+On the Workshop: [The Proving Ground](https://steamcommunity.com/sharedfiles/filedetails/?id=3820591474)
+and [TPG E2 & Starfall Team Functions](https://steamcommunity.com/sharedfiles/filedetails/?id=3820591473).
+
 <img src="media/gameplay.gif" alt="Screenshots from a match on gm_diprip_refinery" width="100%">
 
 To install:
@@ -19,13 +22,24 @@ Title, type and tags come from `addon.json`. Running gmad on the repo directly d
 gamemode has to sit under `gamemodes/theprovingground/` inside a .gma, so the script stages it
 that way first.
 
+Upload a new build of an existing item with
+`gmpublish update -id 3820591474 -addon build/theprovingground.gma -changes "..."`
+(3820591473 for tpg_e2sf, packed with `gmad create -folder addons/tpg_e2sf`).
+
+gmpublish only sets the file and a square JPG icon. `python tools/workshop_page.py tpg` (or
+`tpg_e2sf`) sets the rest of the page through Steam's API, with Steam running: the animated
+preview, the description from `workshop/*.bbcode`, the gallery and the required items. It leaves
+visibility alone.
+
 ## README media
 
 `media/header.gif` is drawn by `python tools/media/make_header.py`, from the HUD palette, Exo 2
 and `icon512.png`. `media/gameplay.gif` is built by `python tools/media/make_gameplay.py <steam
 screenshot folder>`, which blurs out chat, names and overlays before anything else.
-`media/e2sf.gif` is drawn by `python tools/media/make_e2sf.py` in the header's style. All three
-need Pillow.
+`media/e2sf.gif` is drawn by `python tools/media/make_e2sf.py` in the header's style.
+`media/workshop/` holds the Workshop previews and the tpg_e2sf logo, drawn by
+`python tools/media/make_workshop.py`. The gallery stills come from
+`make_gameplay.py <steam screenshot folder> --stills build/workshop`. All of these need Pillow.
 
 ## E2 and Starfall functions
 

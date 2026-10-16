@@ -1,6 +1,7 @@
 """Build media/gameplay.gif, the README's slideshow of real matches.
 
     python tools/media/make_gameplay.py SCREENSHOT_DIR
+    python tools/media/make_gameplay.py SCREENSHOT_DIR --stills OUT_DIR
 
 SCREENSHOT_DIR is the Steam screenshot folder the shots below came from
 (userdata/<id>/760/remote/4000/screenshots). They are 1920x1080 frames from
@@ -9,6 +10,9 @@ a July 2026 match on gm_diprip_refinery, plus one from The Hill.
 Player chat, names and the playtime overlay are blurred out of every shot
 before anything else happens, and the caption panel is laid over where the
 chat was, so nobody's messages end up in the repository.
+
+With --stills it writes the same shots as full-size JPGs into OUT_DIR
+instead, blurred the same way, for the Workshop gallery.
 
 Needs Pillow.
 """
@@ -100,7 +104,17 @@ def compose(im, overlay):
     return Image.alpha_composite(im.convert("RGBA"), overlay).convert("RGB")
 
 
+def stills(src, out):
+    os.makedirs(out, exist_ok=True)
+    for i, (f, _) in enumerate(SHOTS):
+        path = os.path.join(out, "gameplay_%02d.jpg" % (i + 1))
+        scrub(Image.open(os.path.join(src, f)).convert("RGB"), f).save(path, quality=88)
+        print("-> %s" % path)
+
+
 def main():
+    if len(sys.argv) == 4 and sys.argv[2] == "--stills":
+        return stills(sys.argv[1], sys.argv[3])
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     src = sys.argv[1]

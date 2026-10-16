@@ -1,0 +1,44 @@
+[img]https://raw.githubusercontent.com/ACE-Project-Team/tpg_e2sf/main/media/e2sf.gif[/img]
+
+[h1]TPG E2 & Starfall Team Functions[/h1]
+Expression 2 and Starfall functions for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3820591474]The Proving Ground[/url]: who is on your team, where they are, and what they are carrying.
+
+[b]Everything is scoped to the chip owner's own team.[/b] Enemy names, positions and loadouts are never exposed. A chip owned by a spectator or an unassigned player gets empty results.
+
+It needs [url=https://steamcommunity.com/sharedfiles/filedetails/?id=160250458]Wiremod[/url] for the E2 functions and/or Starfall for the Starfall library. Whichever is missing is skipped.
+
+[h2]Expression 2[/h2]
+[table]
+[tr][th]Function[/th][th]Returns[/th][/tr]
+[tr][td]tpgTeamCount()[/td][td]number of players on your team[/td][/tr]
+[tr][td]tpgTeamName()[/td][td]your team's name, "" if you aren't on one[/td][/tr]
+[tr][td]tpgTeammates()[/td][td]array of teammate entities[/td][/tr]
+[tr][td]tpgTeammateNames()[/td][td]array of teammate names[/td][/tr]
+[tr][td]E:tpgIsTeammate()[/td][td]1 if E is on your team, else 0[/td][/tr]
+[tr][td]E:tpgArmor()[/td][td]teammate's armour tier name[/td][/tr]
+[tr][td]E:tpgPrimary() / E:tpgSecondary() / E:tpgSpecial()[/td][td]teammate's loadout pick[/td][/tr]
+[/table]
+The per-player getters return "" for anyone who isn't your teammate.
+
+[h2]Starfall (tpg library, server)[/h2]
+[table]
+[tr][th]Function[/th][th]Returns[/th][/tr]
+[tr][td]tpg.getTeamCount()[/td][td]number of players on your team[/td][/tr]
+[tr][td]tpg.getTeamName()[/td][td]your team's name, "" if you aren't on one[/td][/tr]
+[tr][td]tpg.getTeammates()[/td][td]array of teammate entities[/td][/tr]
+[tr][td]tpg.getRoster()[/td][td]array of { player, name, pos, primary, secondary, special, armor }[/td][/tr]
+[tr][td]ent:tpgGetLoadout()[/td][td]{ primary, secondary, special, armor }, {} for non-teammates[/td][/tr]
+[tr][td]ent:tpgIsTeammate()[/td][td]true if ent is on your team[/td][/tr]
+[/table]
+
+[h2]Building chips in sandbox[/h2]
+Outside TPG there are no teams, so every function would return nothing. To give you something to wire up, the addon adds two stand-in teams when TPG isn't running:
+[code]
+tpg_test_team green
+tpg_test_team red
+tpg_test_team none
+[/code]
+Loadouts and armour come from TPG, so in sandbox they read as "" and "Unknown". When the gamemode is running, the stand-in does nothing and the real teams are used.
+
+[h2]Source[/h2]
+[url=https://github.com/ACE-Project-Team/tpg_e2sf]github.com/ACE-Project-Team/tpg_e2sf[/url] - MIT licensed.
