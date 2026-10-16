@@ -62,6 +62,11 @@ TPG.Teams = {
 
     @realm shared
 ]]
+-- Team 0 is the engine's TEAM_CONNECTING, which the base gamemode registers as
+-- "Joining/Connecting" on every server. TPG keeps its unassigned players there,
+-- so taking it over is the intent, not a clash with another addon.
+local ENGINE_TEAMS = { [0] = true }
+
 function TPG.SetupTeams()
     TPG._ownTeams = TPG._ownTeams or {}
 
@@ -69,7 +74,7 @@ function TPG.SetupTeams()
         -- Safety net: never clobber a team another addon already registered
         -- (e.g. ULX UTeam role-teams). We only ever overwrite IDs we set up
         -- ourselves; if something else holds this ID, skip and warn.
-        if team.Valid(id) and not TPG._ownTeams[id] then
+        if team.Valid(id) and not TPG._ownTeams[id] and not ENGINE_TEAMS[id] then
             ErrorNoHalt("[TPG] Team ID " .. id .. " is already in use by another addon; " ..
                 "skipping to avoid overwriting roles. Adjust TEAM_* in shared.lua.\n")
         else

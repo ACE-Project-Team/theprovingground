@@ -132,37 +132,51 @@ end
     Open the end-of-round map vote: pick candidates, sync them to clients, and
     schedule the whole vote's lifecycle with `timer.Simple`.
 
-    Candidates are drawn without replacement from `TPG.Voting.MapLists.Open`
-    and `.Urban` per `TPG.Config.mapVoteSlots` (default `{ open = 3, urban = 2,
-    bonus = 1 }`), each tagged with its category (1=Open, 2=Urban, 3=Bonus) so
+    Candidates are drawn without replacement from the maps in
+    `TPG.Voting.MapLists.Open` and `.Urban` that this server has installed
+    (never the current one), per `TPG.Config.mapVoteSlots` (default `{ open = 3,
+    urban = 2, bonus = 1 }`), each tagged with its category (1=Open, 2=Urban, 3=Bonus) so
     the vote screen can label the card. The bonus slot draws from whatever is
     left of BOTH pools after Open/Urban picks are removed, so it can never
     repeat a map already offered. If a pool runs out early its remaining slots
     are simply skipped -- the candidate list can come back shorter than the
-    slot config asked for.
+    slot config asked for. With no candidates at all there is no vote: from the
+    round-end flow it resets the win count and starts the next round here.
 
     Schedules, all via `timer.Simple` relative to `TPG.Config.mapVoteTime`:
     opening every player's vote menu (`tpg_menu_mapvote` -- deferred 0.25s so the
     synced map data has already arrived), a 10s-left and 5s-left chat
     countdown, and the final call to @{TPG.Voting.TallyVotes} one second after
-    the window closes. None of these timers are named, so calling this again
-    before they fire stacks a second full set rather than replacing the first.
+    the window closes. None of these timers are named, so a call while a vote
+    is already open returns without doing anything.
 
     @realm server
 ]]
 function TPG.Voting.StartMapVote()
-    TPG.State.voting.active = true
-    TPG.State.voting.endTime = CurTime() + TPG.Config.mapVoteTime
-    TPG.State.voting.votes = {}
+    -- One vote at a time: its timers are unnamed, so a second call would stack
+    -- a second countdown and a second changelevel.
+    if TPG.State.voting.active then return end
 
     -- Generate map choices. Each entry carries its category (1=Open, 2=Urban,
-    -- 3=Bonus) so the vote screen can label it.
+    -- 3=Bonus) so the vote screen can label it. Only maps this server has
+    -- installed are offered: changelevel to a missing map fails and leaves the
+    -- server with no round running.
     local maps = {}
 
     local slots = TPG.Config.mapVoteSlots or { open = 3, urban = 2, bonus = 1 }
 
+    local function installed(list)
+        local out = {}
+        for _, name in ipairs(list) do
+            if name ~= game.GetMap() and file.Exists("maps/" .. name .. ".bsp", "GAME") then
+                out[#out + 1] = name
+            end
+        end
+        return out
+    end
+
     -- Open maps
-    local openMaps = table.Copy(TPG.Voting.MapLists.Open)
+    local openMaps = installed(TPG.Voting.MapLists.Open)
     for _ = 1, (slots.open or 0) do
         if #openMaps > 0 then
             local idx = math.random(1, #openMaps)
@@ -172,7 +186,7 @@ function TPG.Voting.StartMapVote()
     end
 
     -- Urban maps
-    local urbanMaps = table.Copy(TPG.Voting.MapLists.Urban)
+    local urbanMaps = installed(TPG.Voting.MapLists.Urban)
     for _ = 1, (slots.urban or 0) do
         if #urbanMaps > 0 then
             local idx = math.random(1, #urbanMaps)
@@ -191,6 +205,23 @@ function TPG.Voting.StartMapVote()
         end
     end
 
+    if #maps == 0 then
+        -- Nothing to change to: keep playing here rather than stopping.
+        TPG.Util.ChatBroadcast("[TPG] No other TPG maps are installed - staying on " ..
+            game.GetMap() .. ".", Color(0, 255, 255))
+        -- From the round-end flow, start the next round as EndRound would have.
+        -- A rock-the-vote mid-round just carries on.
+        if not TPG.State.round.active then
+            TPG.State.round.wins[TEAM_GREEN] = 0
+            TPG.State.round.wins[TEAM_RED] = 0
+            timer.Simple(10, function() TPG.Rounds.Setup() end)
+        end
+        return
+    end
+
+    TPG.State.voting.active = true
+    TPG.State.voting.endTime = CurTime() + TPG.Config.mapVoteTime
+    TPG.State.voting.votes = {}
     TPG.State.voting.maps = maps
 
     -- Sync to clients

@@ -38,10 +38,9 @@ TPG.Commendations.Types = {
 
     There is no bot exclusion here, unlike @{tpg.stats}: `TPG.State.players`
     is not filtered by `IsPlayer()`/`IsBot()`, so if a bot ever leads a
-    category it receives a PData medal write like anyone else. A leader with 0
-    in every category still wins that category, since the running best starts
-    at -1 -- there is no "nobody qualifies" case as long as at least one
-    tracked player exists.
+    category it receives a PData medal write like anyone else. A category
+    whose best value is 0 awards nothing: a round with no kills hands out no
+    kill medals.
 
     Meant to be called once, from the round-end flow.
 
@@ -62,7 +61,8 @@ function TPG.Commendations.Award()
             end
         end
 
-        if bestPlayer and bestValue >= 0 then
+        -- Nobody earns a medal for a category nobody scored in.
+        if bestPlayer and bestValue > 0 then
             -- Increment medal count
             local medals = TPG.Util.GetPData(bestPlayer, commType.pdataKey, 0) + 1
             TPG.Util.SetPData(bestPlayer, commType.pdataKey, medals)

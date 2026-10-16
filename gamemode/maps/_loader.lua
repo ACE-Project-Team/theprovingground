@@ -13,7 +13,7 @@
         spawns          [TEAM_GREEN] / [TEAM_RED], swapped each round
         limits          weight (tons), props, points -- the team build budget
         safezoneRadius  spawn protection radius
-        winsToMapVote   rounds before the map vote opens
+        winsToMapVote   optional; rounds before the map vote opens (falls back to TPG.Config.winsToMapVote)
         dupeGracePeriod optional; grace seconds after a paste (see TPG.Duplication.GetGracePeriod)
         [GAMEMODE_X]    capMultiplier, and a list of objective positions
 
@@ -53,7 +53,6 @@ TPG.Maps.Default = {
         points = 30000,   -- 200t × 150 = 30000
     },
     safezoneRadius = 750,
-    winsToMapVote = 2,
 
     [GAMEMODE_CP] = {
         capMultiplier = 0.02,
@@ -109,8 +108,8 @@ TPG.Maps.Configs = {
 
     ["gm_flatgrass"] = {
         spawns = {
-            [TEAM_GREEN] = Vector(0, 2000, 100),
-            [TEAM_RED]   = Vector(0, -2000, 100),
+            [TEAM_GREEN] = Vector(0, 2000, -12790),
+            [TEAM_RED]   = Vector(0, -2000, -12790),
         },
         limits = {
             weight = 100,
@@ -122,15 +121,15 @@ TPG.Maps.Configs = {
         [GAMEMODE_CP] = {
             capMultiplier = 0.02,
             objectives = {
-                { pos = Vector(2000, 0, 100), name = "East Point" },
-                { pos = Vector(0, 0, 100), name = "Center" },
-                { pos = Vector(-2000, 0, 100), name = "West Point" },
+                { pos = Vector(2000, 0, -12790), name = "East Point" },
+                { pos = Vector(0, 0, -12278), name = "Center" },
+                { pos = Vector(-2000, 0, -12790), name = "West Point" },
             },
         },
         [GAMEMODE_KOTH] = {
             capMultiplier = 0.15,
             objectives = {
-                { pos = Vector(0, 0, 100), name = "The Hill" },
+                { pos = Vector(0, 0, -12278), name = "The Hill" },
             },
         },
         [GAMEMODE_DM] = {

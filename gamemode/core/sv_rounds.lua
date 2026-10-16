@@ -306,8 +306,8 @@ end
     applies the round result to everyone's lifetime rating via
     @{tpg.stats.OnRoundEnd}.
 
-    Then one of two things: once the two teams' wins add up to
-    `TPG.Config.winsToMapVote` it hands off to the map vote, otherwise it
+    Then one of two things: once the two teams' wins add up to the map's
+    `winsToMapVote` (else `TPG.Config.winsToMapVote`) it hands off to the map vote, otherwise it
     queues the next @{Setup} ten seconds later.
 
     @tparam number winningTeam TEAM_GREEN or TEAM_RED. There is no draw path --
@@ -348,7 +348,8 @@ function TPG.Rounds.EndRound(winningTeam)
     -- Check for map vote
     local totalWins = TPG.State.round.wins[TEAM_GREEN] + TPG.State.round.wins[TEAM_RED]
 
-    if totalWins >= TPG.Config.winsToMapVote then
+    local winsToVote = TPG.Maps.Get().winsToMapVote or TPG.Config.winsToMapVote
+    if totalWins >= winsToVote then
         if TPG.Voting and TPG.Voting.StartMapVote then
             TPG.Voting.StartMapVote()
         end
