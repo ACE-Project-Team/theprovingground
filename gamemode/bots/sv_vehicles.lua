@@ -3,9 +3,13 @@
 
     A player marks seats on a vehicle they own (E2 or Starfall, through the
     tpg_e2sf addon). A bot on the same team whose goal is far away boards a
-    free marked seat nearby, rides hidden inside the vehicle, and gets out
-    near its goal, or when a player takes the seat and stays in it for
+    free marked seat nearby, rides inside the vehicle, and gets out near its
+    goal, or when a player takes the seat and stays in it for
     `tpg_bots_seat_grace` seconds.
+
+    The riding bot itself is hidden; a look-alike prop with the matching
+    player model sits in the seat instead (`TPG_Lookalike` on the bot).
+    Damage to the seat reaches the rider, as it reaches a seated player.
 
     A riding bot gets no movement orders: sv_bots.lua and sv_cai.lua skip it,
     and TPG.Util.Fighters leaves it out of control point counts.
@@ -215,12 +219,94 @@ local function findExit(seat, npc)
     return center + Vector(0, 0, 100)
 end
 
+-- ── Look-alike ──────────────────────────────────────────────────────────────
+-- NPC models have no seated pose, so the hidden bot is shown by a prop with
+-- the matching player model, sitting the way a player in that seat would.
+
+local FEET_ATTACHMENT = "vehicle_feet_passenger0"
+local REBEL_MODEL     = "models/player/group03/male_07.mdl"
+local COMBINE_MODEL   = "models/player/combine_soldier.mdl"
+
+-- The player model for a bot: its citizen or Combine model under models/player/.
+local function lookalikeModel(npc)
+    local mdl = string.lower(npc:GetModel() or "")
+    local candidates = {
+        (string.gsub(mdl, "^models/humans/", "models/player/")),
+        "models/player/" .. (string.match(mdl, "([^/]+)$") or ""),
+    }
+    for _, path in ipairs(candidates) do
+        if path ~= mdl and util.IsValidModel(path) then return path end
+    end
+    return npc:GetClass() == "npc_combine_s" and COMBINE_MODEL or REBEL_MODEL
+end
+
+-- The sequence a player would play in this seat, picked the way the base
+-- gamemode's HandlePlayerDriving does.
+local function sitSequence(dummy, seat)
+    local entry = isfunction(seat.GetVehicleClass) and list.Get("Vehicles")[seat:GetVehicleClass()]
+    local handle = entry and entry.Members and entry.Members.HandleAnimation
+    if isfunction(handle) then
+        local ok, seq = pcall(handle, seat, dummy)
+        if ok and isnumber(seq) and seq >= 0 then return seq end
+    end
+
+    local class = seat:GetClass()
+    if class == "prop_vehicle_jeep" then return dummy:LookupSequence("drive_jeep") end
+    if class == "prop_vehicle_airboat" then return dummy:LookupSequence("drive_airboat") end
+    if class == "prop_vehicle_prisoner_pod" and seat:GetModel() == "models/vehicles/prisoner_pod_inner.mdl" then
+        return dummy:LookupSequence("drive_pd")
+    end
+    return dummy:LookupSequence("sit_rollercoaster")
+end
+
+local function removeLookalike(npc)
+    if IsValid(npc.TPG_Lookalike) then npc.TPG_Lookalike:Remove() end
+    npc.TPG_Lookalike = nil
+end
+
+-- Sit a look-alike of the bot in the seat. It is parented to the seat's feet
+-- attachment, which is where the engine puts a seated player.
+local function addLookalike(npc, seat)
+    removeLookalike(npc)
+
+    local dummy = ents.Create("prop_dynamic")
+    if not IsValid(dummy) then return end
+    dummy:SetModel(lookalikeModel(npc))
+    dummy:SetKeyValue("solid", "0")
+    local seq = sitSequence(dummy, seat)
+    if seq and seq >= 0 then dummy:SetKeyValue("DefaultAnim", dummy:GetSequenceName(seq)) end
+    dummy:Spawn()
+    dummy:SetSolid(SOLID_NONE)
+    dummy:SetSkin(npc:GetSkin())
+
+    local att = seat:LookupAttachment(FEET_ATTACHMENT)
+    if att and att > 0 then
+        dummy:SetParent(seat, att)
+        dummy:SetLocalAngles(angle_zero)
+    else
+        dummy:SetParent(seat)
+        dummy:SetLocalAngles(Angle(0, 90, 0))
+    end
+    dummy:SetLocalPos(vector_origin)
+    if seq and seq >= 0 then dummy:ResetSequence(seq) end
+
+    -- Not part of the vehicle: no dupes, no tools, no physgun.
+    dummy.DoNotDuplicate = true
+    dummy.PhysgunDisabled = true
+    dummy.m_tblToolsAllowed = {}
+    dummy.TPG_LookalikeOf = npc
+
+    seat:DeleteOnRemove(dummy)
+    npc.TPG_Lookalike = dummy
+end
+
 -- Clear a bot's ride state and unparent it. Returns the seat it rode in.
 local function release(npc)
     local seat = npc.TPG_Riding
     npc.TPG_Riding = nil
     npc.TPG_BoardingSeat = nil
     if IsValid(seat) and seat.TPG_Rider == npc then seat.TPG_Rider = nil end
+    removeLookalike(npc)
 
     npc:SetParent()
     npc:SetNoDraw(false)
@@ -245,6 +331,7 @@ local function mount(npc, seat)
     npc:AddEFlags(EFL_NO_THINK_FUNCTION)
     npc:SetSchedule(SCHED_IDLE_STAND)
     npc:AddFlags(FL_NOTARGET)
+    addLookalike(npc, seat)
 end
 
 --- Put a riding bot out of its seat, at the seat's exit point where it can
@@ -416,6 +503,35 @@ end)
 -- A rider that dies lets go of its seat, so the seat can be boarded again.
 hook.Add("OnNPCKilled", "TPG_BotsVehicleDeath", function(npc)
     if IsValid(npc) and npc.TPG_Riding then release(npc) end
+end)
+
+-- Hurting the seat hurts its rider, the way it hurts a seated player. For an
+-- ACE hit, ACE.VehicleDamage hurts the driver by 40 times the seat's damage
+-- and kills them when the seat is destroyed; a rider gets the same. The
+-- damage goes through TakeDamage, so friendly fire and spawn protection
+-- still apply.
+local ACE_DRIVER_DAMAGE = 40
+
+hook.Add("ACE_OnDamage", "TPG_BotsSeatDamage", function(ent, _, _, _, inflictor, _, gun, _, hitRes)
+    if not marked[ent] or not istable(hitRes) or hitRes.KineticThresholdFailed then return end
+    local rider = ent.TPG_Rider
+    if not alive(rider) then return end
+
+    local attacker = IsValid(inflictor) and inflictor or game.GetWorld()
+    gun = IsValid(gun) and gun or attacker
+    if hitRes.Kill then
+        rider:TakeDamage(math.max(rider:Health(), 1) * 10, attacker, gun)
+    elseif (hitRes.Damage or 0) > 0 then
+        rider:TakeDamage(hitRes.Damage * ACE_DRIVER_DAMAGE, attacker, gun)
+    end
+end)
+
+-- Anything else that hurts the seat (bullets, explosions) is passed on as is.
+hook.Add("EntityTakeDamage", "TPG_BotsSeatDamage", function(ent, dmg)
+    if not marked[ent] then return end
+    local rider = ent.TPG_Rider
+    if not alive(rider) or dmg:GetDamage() <= 0 then return end
+    rider:TakeDamage(dmg:GetDamage(), dmg:GetAttacker(), dmg:GetInflictor())
 end)
 
 -- A removed seat gets its rider out where it was last seen. A removed bot frees its seat.

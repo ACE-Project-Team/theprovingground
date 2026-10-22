@@ -116,6 +116,7 @@ include("bots/sv_bots.lua")
 include("bots/sv_threat.lua")
 include("bots/sv_vehicles.lua")
 include("bots/sv_cai.lua")
+include("bots/sv_grenades.lua")
 include("voting/sv_voting.lua")
 
 -- Ship the Exo 2 font (point tool HUD) to clients.

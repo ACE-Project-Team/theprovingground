@@ -81,7 +81,8 @@
 
     Convars: `tpg_bots_fill`, `tpg_bots_test` (command), `tpg_bots_difficulty`,
     `tpg_bots_at_ratio`, `tpg_bots_respawn_delay`, `tpg_bots_drops`,
-    `tpg_bots_corpses` (this file), `tpg_bots_armor_points` (sv_threat.lua),
+    `tpg_bots_corpses`, `tpg_bots_friendly_fire` (this file),
+    `tpg_bots_armor_points` (sv_threat.lua),
     `tpg_bots_reward_scale` (sv_economy.lua), `tpg_bots_cai_wallbang`
     (sv_cai.lua, Combat AI only), `tpg_bots_seat_grace` (sv_vehicles.lua).
 
@@ -115,6 +116,9 @@ local DEFEND_SPREAD  = 120
 local GOAL_TIME      = 30
 local REARM_DELAY    = 8
 local SUPPORT_SHARE  = 0.15
+-- Within this distance a bot counts as having reached the flag. The flag's own
+-- pickup radius (tpg_flag, PICKUP_RADIUS) is 100 units.
+local FLAG_REACH    = 60
 
 local TEAMS      = { TEAM_GREEN, TEAM_RED }
 local ROLE_ORDER = { "at", "support", "rifleman" }
@@ -142,6 +146,8 @@ local cvDrops = CreateConVar("tpg_bots_drops", "0", { FCVAR_ARCHIVE },
     "Dead bots drop their weapons.")
 local cvCorpses = CreateConVar("tpg_bots_corpses", "0", { FCVAR_ARCHIVE },
     "Dead bots leave ragdolls that stay.")
+local cvFriendly = CreateConVar("tpg_bots_friendly_fire", "0", { FCVAR_ARCHIVE },
+    "Players can hurt the bots on their own team.")
 
 local nextSpawn     = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
 local nextRelations = 0
@@ -505,10 +511,34 @@ local function planTeam(teamId, bots, now)
     local mode   = TPG.State.gameType
     local points = ents.FindByClass("tpg_controlpoint")
 
+    -- Only the carrier is marked below, so a bot that dropped the flag, or a
+    -- round that moved on, loses the mark on this same pass.
+    for _, npc in ipairs(bots) do npc.TPG_CarryHome = nil end
+
     if mode == GAMEMODE_CTF then
         local flag = ents.FindByClass("tpg_flag")[1]
         if IsValid(flag) then
-            return orderAll(bots, flag, flag:GetPos(), now)
+            -- A bot carrying the flag runs it home itself, and the rest escort it.
+            -- setGoal replaces the carrier's goal outright, so a stale flag goal
+            -- is overwritten here and goalHeld cannot keep it on the flag.
+            local carrier = flag:GetCarrier()
+            if not (IsValid(carrier) and carrier:IsNPC() and TPG.Util.TeamOf(carrier) == teamId) then
+                carrier = nil
+            end
+
+            local escorts = {}
+            for _, npc in ipairs(bots) do
+                if npc == carrier then
+                    local home = TPG.State.GetSpawn(teamId)
+                    if home then
+                        setGoal(npc, nil, home, nil, now)
+                        npc.TPG_CarryHome = home
+                    end
+                else
+                    escorts[#escorts + 1] = npc
+                end
+            end
+            return orderAll(escorts, flag, flag:GetPos(), now)
         end
     end
 
@@ -716,6 +746,22 @@ local function holdOnPoint(npc, capRadius, now)
     npc:SetSchedule(SCHED_FORCED_GO_RUN)
 end
 
+-- Combat AI stops a bot to shoot once it has an enemy, and it only moves a
+-- bot again through its own schedules. A flag carrier with an enemy is
+-- therefore given a fresh move on every zone tick, and sv_cai.lua sends that
+-- move to TPG_CarryHome. combatMoveAt is kept current so Combat AI's
+-- stop-and-shoot burst does not cut the run short.
+local function driveCarrier(npc)
+    if not npc.TPG_CarryHome or not IsValid(npc:GetEnemy()) then return end
+    if not istable(CAI) or not istable(CAI.Manager) or not isfunction(CAI.Manager.All) then return end
+    if not istable(CAI.Nav) or not isfunction(CAI.Nav.MoveTo) then return end
+    local data = CAI.Manager.All()[npc]
+    if not data then return end
+
+    data.combatMoveAt = CurTime()
+    CAI.Nav.MoveTo(data, npc.TPG_CarryHome, "run")
+end
+
 local function zoneTick()
     local now = CurTime()
     local grace = TPG.Config.spawnProtectionTime or 5
@@ -737,7 +783,10 @@ local function zoneTick()
                 npc.TPG_ZoneKill = nil
             end
 
-            if isAlive(npc) then holdOnPoint(npc, capRadius, now) end
+            if isAlive(npc) then
+                holdOnPoint(npc, capRadius, now)
+                driveCarrier(npc)
+            end
         end
     end
 end
@@ -838,7 +887,16 @@ brain = function()
                 end
             else
                 local pos = IsValid(npc.TPG_Goal) and npc.TPG_Goal:GetPos() or goalPos(npc)
-                if npc:GetPos():Distance(pos) > holdRadius then
+                -- A bot sent for the flag must get within the flag's pickup
+                -- radius, which is tighter than the hold radius, so it heads
+                -- straight onto the flag instead of stopping short of it.
+                local onFlag = IsValid(npc.TPG_Goal) and npc.TPG_Goal:GetClass() == "tpg_flag"
+                if onFlag then
+                    if npc:GetPos():Distance(pos) > FLAG_REACH then
+                        npc:SetLastPosition(pos)
+                        npc:SetSchedule(SCHED_FORCED_GO_RUN)
+                    end
+                elseif npc:GetPos():Distance(pos) > holdRadius then
                     npc:SetLastPosition(pos + randomOffset(DEFEND_SPREAD))
                     npc:SetSchedule(SCHED_FORCED_GO_RUN)
                 end
@@ -986,6 +1044,12 @@ local function botName(npc)
     return (TEAM_TAG[npc.TPG_BotTeam] or "Bot") .. " " .. label
 end
 
+--- A bot's display name, its team and role, such as "Green AT".
+-- @tparam Entity npc A TPG bot.
+-- @treturn string
+-- @realm server
+function TPG.Bots.Name(npc) return botName(npc) end
+
 --- Kill feed name for an entity. Overrides the stock gamemode method: a bot
 -- gets its team and role ("Green AT") instead of its class, which the death
 -- notice takes as a plain string. Everything else goes to the stock method.
@@ -1040,10 +1104,10 @@ hook.Add("PostCleanupMap", "TPG_Bots", function()
     end)
 end)
 
--- Same-team damage is blocked whenever a bot is either side of it. TPG has no
--- friendly fire setting (nothing in gamemode/ reads one, and the only damage
--- rule is the spectator one in player/sv_protection.lua), so this is
--- unconditional. A bot shooting a player on the other team is untouched.
+-- Same-team damage is blocked whenever a bot is either side of it, except a
+-- player hurting a bot on their own team while `tpg_bots_friendly_fire` is on.
+-- A bot never hurts its own team. A bot shooting a player on the other team
+-- is untouched.
 hook.Add("EntityTakeDamage", "TPG_BotsFriendlyFire", function(victim, dmg)
     -- Spawn protection: a bot inside its grace period takes no damage, from
     -- anyone. The zone kill is the one exception, so it can still land.
@@ -1057,6 +1121,7 @@ hook.Add("EntityTakeDamage", "TPG_BotsFriendlyFire", function(victim, dmg)
 
     local side = TPG.Util.TeamOf(victim)
     if side ~= nil and side == TPG.Util.TeamOf(attacker) then
+        if cvFriendly:GetBool() and victim.TPG_BotTeam and attacker:IsPlayer() then return end
         return true
     end
 end)
@@ -1072,6 +1137,20 @@ hook.Add("OnNPCKilled", "TPG_Bots", function(npc, attacker, inflictor)
     nextSpawn[team] = math.max(nextSpawn[team] or 0, CurTime() + cvRespawn:GetFloat())
 
     hook.Run("TPG_BotKilled", npc, attacker, inflictor)
+end)
+
+-- With ai_serverragdolls on (sandbox's Keep Corpses), an NPC's corpse is a
+-- server ragdoll, and Source leaves those in place even with
+-- SF_NPC_FADE_CORPSE set. Fade a bot's out here, after the same delay as
+-- the client-side ones in bots/cl_corpses.lua.
+local CORPSE_FADE_DELAY = 5
+
+hook.Add("CreateEntityRagdoll", "TPG_BotCorpses", function(owner, rag)
+    if not IsValid(owner) or not owner.TPG_BotTeam or cvCorpses:GetBool() then return end
+
+    timer.Simple(CORPSE_FADE_DELAY, function()
+        if IsValid(rag) then rag:Fire("FadeAndRemove", "1") end
+    end)
 end)
 
 local function report(ply, text)

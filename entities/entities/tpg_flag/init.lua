@@ -86,22 +86,25 @@ function ENT:ReturnHome(reason)
         (reason and (" (" .. reason .. ")") or "") .. ".", Color(230, 230, 230))
 end
 
---- Enters STATE_CARRIED for `ply`, starts the carry clock and networks
+--- Enters STATE_CARRIED for `carrier`, starts the carry clock and networks
 -- `CarryEnd` (`CurTime() + TPG.Config.ctfMaxCarryTime`) so the carrier's HUD
 -- can count it down independently.
--- @tparam Player ply
+-- @tparam Entity carrier A player or an NPC bot.
 -- @realm server
-function ENT:PickUp(ply)
+function ENT:PickUp(carrier)
+    local teamId = TPG.Util.TeamOf(carrier)
+
     self:SetFlagState(self.STATE_CARRIED)
-    self:SetPossessTeam(ply:Team())
-    self:SetCarrier(ply)
+    self:SetPossessTeam(teamId)
+    self:SetCarrier(carrier)
     self.CarryStart = CurTime()
     -- Networked so the carrier's HUD can count the carry timer down (cl_hud_ctf).
     self:SetCarryEnd(CurTime() + (TPG.Config.ctfMaxCarryTime or 150))
 
     self:EmitSound("ambient/alarms/warningbell1.wav", 90, 110)
-    local td = TPG.GetTeamData(ply:Team())
-    TPG.Util.ChatBroadcast("[CTF] " .. ply:Nick() .. " grabbed the flag for " ..
+    local td   = TPG.GetTeamData(teamId)
+    local name = carrier:IsPlayer() and carrier:Nick() or (TPG.Bots and TPG.Bots.Name and TPG.Bots.Name(carrier)) or "Bot"
+    TPG.Util.ChatBroadcast("[CTF] " .. name .. " grabbed the flag for " ..
         td.name .. "!", td.color)
 end
 
@@ -142,15 +145,19 @@ function ENT:Drop()
     TPG.Util.ChatBroadcast("[CTF] The flag was dropped!", Color(255, 200, 80))
 end
 
---- Whether the current carrier is still a legitimate holder: valid, a player,
--- alive, and on a team. Used by @{ENT:Think} to decide whether to drop the
+--- Whether the current carrier is still a legitimate holder. A player must be
+-- alive and on a team. An NPC bot must have health and a bot team
+-- (@{TPG.Util.TeamOf}). Used by @{ENT:Think} to decide whether to drop the
 -- flag every tick -- a carrier who disconnects, dies, or gets moved to
 -- spectate all fail this the same way.
 -- @treturn boolean
 -- @realm server
 function ENT:CarrierStillValid()
     local c = self:GetCarrier()
-    return IsValid(c) and c:IsPlayer() and c:Alive() and TPG.Util.IsOnTeam(c)
+    if not IsValid(c) then return false end
+
+    return (c:IsPlayer() and c:Alive() and TPG.Util.IsOnTeam(c))
+        or (c:IsNPC() and c:Health() > 0 and TPG.Util.TeamOf(c) ~= nil)
 end
 
 --- Runs every server tick: rides the flag above an invalidated-or-not carrier
@@ -190,10 +197,13 @@ end
     safezone, so a flag near the safezone edge could read as delivered under
     one path and not the other depending on which is active.
 
-    Pickup: the FIRST alive, teamed player found within `PICKUP_RADIUS` in
+    Pickup: players are checked first, then NPC bots in `TPG.Bots.list`. The
+    FIRST alive, teamed player found within `PICKUP_RADIUS` in
     `player.GetAll()` iteration order grabs it -- not the nearest one -- so if
     two teammates are both in range on the same tick, which one gets credited
-    depends on `player.GetAll()`'s ordering, not proximity.
+    depends on `player.GetAll()`'s ordering, not proximity. Bots are only
+    considered when no player in range took it, and the first one found wins
+    the same way.
 
     @realm server
 ]]
@@ -214,7 +224,12 @@ function ENT:GameplayStep()
         -- you actually gain spawn protection, instead of a tighter inner radius
         -- that forced you to walk deep past the safezone edge to score.
         local delivered = false
-        if TPG.Protection and TPG.Protection.IsInSafezone then
+        if not c:IsPlayer() then
+            -- NPC bots have no safezone of their own, so they deliver inside a
+            -- flat radius around their team's spawn.
+            local home = TPG.State.GetSpawn(TPG.Util.TeamOf(c))
+            delivered = home and c:GetPos():Distance(home) < TPG.Maps.GetSafezoneRadius()
+        elseif TPG.Protection and TPG.Protection.IsInSafezone then
             delivered = TPG.Protection.IsInSafezone(c)
         else
             local home = TPG.State.spawns[c:Team()]
@@ -232,11 +247,20 @@ function ENT:GameplayStep()
         return
     end
 
-    -- Home or dropped: first alive teamed player in range grabs it.
+    -- Home or dropped: first alive teamed player in range grabs it, then the
+    -- first live bot on a team in range.
     for _, ply in ipairs(player.GetAll()) do
         if not (IsValid(ply) and ply:Alive() and TPG.Util.IsOnTeam(ply)) then continue end
         if ply:GetPos():Distance(self:GetPos()) < PICKUP_RADIUS then
             self:PickUp(ply)
+            return
+        end
+    end
+
+    for _, npc in ipairs(TPG.Bots and TPG.Bots.list or {}) do
+        if not (IsValid(npc) and npc:Health() > 0 and TPG.Util.TeamOf(npc) ~= nil) then continue end
+        if npc:GetPos():Distance(self:GetPos()) < PICKUP_RADIUS then
+            self:PickUp(npc)
             return
         end
     end

@@ -16,6 +16,10 @@
         a bot as taking a point (`TPG_HoldPoint`), any move Combat AI orders
         is pulled inside the capture radius, so the bot still fights its own
         way but does not step off the point.
+      * Carrying home: a bot carrying the CTF flag has `npc.TPG_CarryHome` set (a
+        position, by sv_bots.lua). Its moves go to that spot at a run, and
+        sv_bots.lua re-issues the move while the bot has an enemy, so it keeps
+        running home and still shoots. Fleeing a grenade keeps priority.
       * Firing range: Combat AI stops a bot firing past a fixed range per
         archetype (a rifle stops at 1800 units). `CAI.WeaponIntel.OwnRange` is
         wrapped so an ACE weapon uses its own `NPCMaxRange` instead.
@@ -73,8 +77,9 @@ local function addWeaponPatterns()
 end
 
 -- Wrap CAI.Nav.MoveTo once. A bot running from a grenade goes only to its
--- flee spot. A bot taking a point keeps Combat AI's chosen direction, but the
--- destination is kept within the hold radius.
+-- flee spot. A flag carrier goes only to its home spot, at a run. A bot taking
+-- a point keeps Combat AI's chosen direction, but the destination is kept
+-- within the hold radius.
 local function wrapMoveTo()
     if not istable(CAI) or not istable(CAI.Nav) or not isfunction(CAI.Nav.MoveTo) then return end
     if CAI.Nav.TPG_MoveToWrapped then return end
@@ -85,6 +90,9 @@ local function wrapMoveTo()
         if IsValid(npc) and npc.TPG_Riding then return false end -- riding in a bot seat (sv_vehicles.lua)
         if IsValid(npc) and isvector(npc.TPG_FleePos) and CurTime() < (npc.TPG_FleeUntil or 0) then
             return moveTo(data, npc.TPG_FleePos, "run")
+        end
+        if IsValid(npc) and isvector(npc.TPG_CarryHome) then
+            return moveTo(data, npc.TPG_CarryHome, "run")
         end
 
         local pt = IsValid(npc) and npc.TPG_HoldPoint
@@ -203,7 +211,9 @@ timer.Create("TPG_GrenadeWatch", GRENADE_TICK, 0, function()
             local pos = nade:GetPos()
             sound.EmitHint(SOUND_DANGER, pos, GRENADE_DANGER, GRENADE_TICK * 2, nade)
 
-            if istable(CAI) and istable(CAI.Manager) then
+            if istable(CAI) and istable(CAI.Manager) and isfunction(CAI.Manager.All)
+                and istable(CAI.Memory) and isfunction(CAI.Memory.AddDanger)
+                and istable(CAI.Nav) and isfunction(CAI.Nav.MoveTo) then
                 for npc, data in pairs(CAI.Manager.All()) do
                     if IsValid(npc) and npc:GetPos():DistToSqr(pos) < GRENADE_WARN * GRENADE_WARN then
                         data.reflex = data.reflex or {}

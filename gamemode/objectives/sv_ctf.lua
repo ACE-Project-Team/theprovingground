@@ -154,13 +154,14 @@ end
     check itself, because the drain happens between scoring steps.
 
     @tparam Entity flag The flag entity.
-    @tparam Player carrier Who delivered it.
+    @tparam Entity carrier Who delivered it: a player or an NPC bot.
     @realm server
 ]]
 function TPG.CTF.OnCapture(flag, carrier)
     if not (IsValid(flag) and IsValid(carrier)) then return end
 
-    local capTeam = carrier:Team()
+    local capTeam = TPG.Util.TeamOf(carrier)
+    if not capTeam then return end
     local enemy   = TPG.GetEnemyTeam(capTeam)
 
     -- Drain the enemy's tickets; the normal win check resolves the round.
@@ -171,17 +172,20 @@ function TPG.CTF.OnCapture(flag, carrier)
             and TPG.Objectives.GetOvertimeDrainMul()) or 1)
     TPG.State.AddScore(enemy, -math.ceil(loss))
 
-    local ps = TPG.State.GetPlayer(carrier)
-    ps.stats.captures = (ps.stats.captures or 0) + 1
-    if TPG.Economy and TPG.Economy.Reward then
-        TPG.Economy.Reward(carrier, TPG.Config.ctfCaptureReward or 1500, "ctf_capture")
-    end
-    if TPG.Stats and TPG.Stats.OnFlagCapture then
-        TPG.Stats.OnFlagCapture(carrier)
+    if carrier:IsPlayer() then
+        local ps = TPG.State.GetPlayer(carrier)
+        ps.stats.captures = (ps.stats.captures or 0) + 1
+        if TPG.Economy and TPG.Economy.Reward then
+            TPG.Economy.Reward(carrier, TPG.Config.ctfCaptureReward or 1500, "ctf_capture")
+        end
+        if TPG.Stats and TPG.Stats.OnFlagCapture then
+            TPG.Stats.OnFlagCapture(carrier)
+        end
     end
 
-    local td = TPG.GetTeamData(capTeam)
-    TPG.Util.ChatBroadcast("[CTF] " .. carrier:Nick() .. " delivered the flag for " ..
+    local td   = TPG.GetTeamData(capTeam)
+    local name = carrier:IsPlayer() and carrier:Nick() or (TPG.Bots and TPG.Bots.Name and TPG.Bots.Name(carrier)) or "Bot"
+    TPG.Util.ChatBroadcast("[CTF] " .. name .. " delivered the flag for " ..
         td.name .. "!", td.color)
 
     for _, ply in ipairs(player.GetAll()) do

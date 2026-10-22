@@ -46,6 +46,7 @@ TPG.AdminSettings.List = {
     { name = "tpg_bots_respawn_delay",      type = "number", group = "Bots",     rank = "superadmin", label = "Bot respawn delay (s)", min = 0, max = 120, decimals = 0 },
     { name = "tpg_bots_drops",              type = "bool",   group = "Bots",     rank = "superadmin", label = "Bots drop weapons" },
     { name = "tpg_bots_corpses",            type = "bool",   group = "Bots",     rank = "superadmin", label = "Bot corpses stay" },
+    { name = "tpg_bots_friendly_fire",      type = "bool",   group = "Bots",     rank = "superadmin", label = "Players can hurt teammate bots" },
     { name = "tpg_bots_cai_wallbang",       type = "bool",   group = "Bots",     rank = "superadmin", label = "Bots shoot through walls (Combat AI)" },
 
     { name = "tpg_collection_min_maps",     type = "int",    group = "Server",   rank = "superadmin", label = "Map collection reminder below", min = 0, max = 64, decimals = 0 },
