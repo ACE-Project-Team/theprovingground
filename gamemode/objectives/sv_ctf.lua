@@ -55,21 +55,27 @@ local function CPPoints()
     return pts
 end
 
---- The flag's home anchor: an admin-placed CTF point, else the map's KOTH point.
+-- The map's fixed flag home, if it has one: `ctfFlag` in the map config, which
+-- is where a CTF point placed with the map editor ends up too.
+local function FixedPoint()
+    local flag = TPG.Maps.Get().ctfFlag
+    return isvector(flag) and flag or nil
+end
+
+--- The flag's home anchor: the map's fixed flag home, else its KOTH point.
 -- This is the "can this map host CTF at all" answer. The spot the flag actually
 -- uses for a given round comes from @{RollFlagPoint}.
 -- @treturn ?Vector nil if the map has neither.
 -- @realm server
 function TPG.CTF.GetFlagPoint()
-    local custom = TPG.Maps.GetCustomFlagPoint and TPG.Maps.GetCustomFlagPoint()
-    if custom then return custom end
-    return KothPoint()
+    return FixedPoint() or KothPoint()
 end
 
 --[[--
     Pick where the flag lives for this round.
 
-    An admin-placed point always wins outright. Otherwise the KOTH point keeps
+    A fixed flag home (`ctfFlag` in the map config, or a CTF point placed with
+    the map editor) always wins outright. Otherwise the KOTH point keeps
     at least a 50% share (`TPG.Config.ctfKothWeight`, clamped to 0.5 and up) and
     the rest is split evenly among the map's CP capture points, so the flag does
     not always sit on the same hill. CP points within about 256 units of the
@@ -81,8 +87,8 @@ end
     @realm server
 ]]
 function TPG.CTF.RollFlagPoint()
-    local custom = TPG.Maps.GetCustomFlagPoint and TPG.Maps.GetCustomFlagPoint()
-    if custom then return custom end
+    local fixed = FixedPoint()
+    if fixed then return fixed end
 
     local koth = KothPoint()
     if not koth then return nil end

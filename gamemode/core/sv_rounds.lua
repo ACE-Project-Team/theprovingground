@@ -132,7 +132,10 @@ end
     Two things only happen from the second round on, both gated on
     `TPG.State.round.startTime > 0`: the spawn swap, so the first round of a map
     uses the config as written; and the auto-scramble, which also needs at least
-    four players on teams.
+    four players on teams. The swap alternates: odd rounds use the spawns as
+    written, even rounds the other way round. (It used to swap the freshly
+    loaded config every round, which is the same swap every time, so from the
+    second round on each team kept one side for the rest of the map.)
 
     Respawning kills only players who are on a playing team. Spectators are
     skipped on purpose: they have no spawn to be moved to, so killing them was a
@@ -144,12 +147,24 @@ end
     through here too, which is why it force-clears the wait window rather than
     assuming it is already closed.
 
+    A preview (`opts.preview`, from the map editor) is a round restart that
+    disturbs nobody: no cleanup, no scramble, no side swap, nobody is killed,
+    and no prep window, so an admin can look at a layout with their builds and
+    their point tool intact. It is for looking, not playing: the budgets start
+    again at zero with everyone's builds still standing.
+
     @tparam[opt=false] boolean skipCleanup Skip the map cleanup entirely (see
      @{TPG.Rounds.CleanupMap}). Used when the caller has already cleaned, or is
      reloading config mid-round and wants players' builds left standing.
+    @tparam[opt] table opts `{ preview = boolean, gameType = GAMEMODE_* }`.
+     `gameType` plays that mode instead of rolling one.
     @realm server
 ]]
-function TPG.Rounds.Setup(skipCleanup)
+function TPG.Rounds.Setup(skipCleanup, opts)
+    opts = opts or {}
+    local preview = opts.preview == true
+    if preview then skipCleanup = true end
+
     -- If a round is being set up by any path (admin restart, points reload),
     -- the wait-for-players window is over -- never leave building blocked.
     TPG.State.waitingForPlayers = false
@@ -172,7 +187,7 @@ function TPG.Rounds.Setup(skipCleanup)
     -- match-ups moving without making rosters feel arbitrary. Skipped while
     -- waiting for players (nobody's really on a team yet).
     local scrambleChance = TPG.Config.autoScrambleChance or 0
-    if scrambleChance > 0 and TPG.State.round.startTime > 0
+    if scrambleChance > 0 and not preview and TPG.State.round.startTime > 0
         and team.NumPlayers(TEAM_GREEN) + team.NumPlayers(TEAM_RED) >= 4
         and math.random() < scrambleChance then
         TPG.Util.ChatBroadcast("[TPG] Rolling a fresh match-up for this round.", Color(255, 255, 0))
@@ -180,16 +195,20 @@ function TPG.Rounds.Setup(skipCleanup)
     end
 
     -- Select gametype
-    TPG.State.gameType = TPG.SelectRandomGameType()
+    TPG.State.gameType = TPG.GameTypes[opts.gameType] and opts.gameType or TPG.SelectRandomGameType()
     local gameType = TPG.GetGameType(TPG.State.gameType)
 
     -- Per-player economy is a secondary mode: roll its activation for this round
     -- (before ResetRound, which resets wallets when active).
     local economyOn = TPG.Economy and TPG.Economy.RollForRound and TPG.Economy.RollForRound() or false
 
-    -- Set spawns (swap each round)
-    if TPG.State.round.startTime > 0 then
-        -- Swap spawns
+    -- Swap sides every round after the first. The config is loaded fresh
+    -- above, so the swap has to be remembered across rounds rather than read
+    -- off the config; a preview keeps whatever sides are in play.
+    if TPG.State.round.startTime > 0 and not preview then
+        TPG.Rounds.sidesSwapped = not TPG.Rounds.sidesSwapped
+    end
+    if TPG.Rounds.sidesSwapped then
         local temp = mapConfig.spawns[TEAM_GREEN]
         mapConfig.spawns[TEAM_GREEN] = mapConfig.spawns[TEAM_RED]
         mapConfig.spawns[TEAM_RED] = temp
@@ -242,9 +261,11 @@ function TPG.Rounds.Setup(skipCleanup)
     -- to be moved to, so killing them was a death for nothing -- and at map
     -- start, when nobody has picked a side yet, that's a death for *everyone*
     -- on the server as their first impression of the gamemode.
-    for _, ply in ipairs(player.GetAll()) do
-        if ply:Alive() and TPG.Util.IsOnTeam(ply) then
-            ply:Kill()
+    if not preview then
+        for _, ply in ipairs(player.GetAll()) do
+            if ply:Alive() and TPG.Util.IsOnTeam(ply) then
+                ply:Kill()
+            end
         end
     end
 
@@ -257,7 +278,9 @@ function TPG.Rounds.Setup(skipCleanup)
 
     -- Open the preparation window: confine both teams to spawn to build/stage
     -- once enough players are present (core/sv_prep.lua).
-    if TPG.Prep and TPG.Prep.Begin then
+    if preview then
+        if TPG.Prep and TPG.Prep.Stop then TPG.Prep.Stop() end
+    elseif TPG.Prep and TPG.Prep.Begin then
         TPG.Prep.Begin()
     end
 

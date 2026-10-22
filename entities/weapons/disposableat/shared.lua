@@ -29,6 +29,16 @@
 
 AddCSLuaFile("shared.lua")
 
+-- ACE has named these three ways over time: ACF_* (older builds), ACE_*
+-- and the current ACE.* table. Resolved at call time, since ACE may load after this file.
+local function aceMuzzleVelocity(...)
+	return ((ACE and ACE.MuzzleVelocity) or _G.ACE_MuzzleVelocity or _G.ACF_MuzzleVelocity)(...)
+end
+
+local function aceKinetic(...)
+	return ((ACE and ACE.Kinetic) or _G.ACE_Kinetic or _G.ACF_Kinetic)(...)
+end
+
 SWEP.Base = "weapon_ace_base"
 
 SWEP.PrintName    = "Disposable AT"
@@ -146,7 +156,7 @@ function SWEP:InitBulletData()
 		self.BulletData.DragCoef  = ((self.BulletData.FrArea / 10000) / self.BulletData.ProjMass)
 
 		--Don't touch below here
-		self.BulletData.MuzzleVel = ACE_MuzzleVelocity( self.BulletData.PropMass, self.BulletData.ProjMass, self.BulletData.Caliber )
+		self.BulletData.MuzzleVel = aceMuzzleVelocity( self.BulletData.PropMass, self.BulletData.ProjMass, self.BulletData.Caliber )
 		self.BulletData.ShovePower = 0.2
 		self.BulletData.KETransfert = 0.3
 		self.BulletData.PenArea = self.BulletData.FrArea^ACF.PenAreaMod
@@ -156,9 +166,9 @@ function SWEP:InitBulletData()
 		self.BulletData.Flight = Vector(0 , 0 , 0)
 		self.BulletData.BoomPower = self.BulletData.PropMass + self.BulletData.FillerMass
 
-		local SlugEnergy = ACE_Kinetic( self.BulletData.SlugMV * 39.37 , self.BulletData.SlugMass, 999999 )
+		local SlugEnergy = aceKinetic( self.BulletData.SlugMV * 39.37 , self.BulletData.SlugMass, 999999 )
 		self.BulletData.MaxPen = (SlugEnergy.Penetration / self.BulletData.SlugPenArea) * ACF.KEtoRHA
-		local SlugEnergy2 = ACE_Kinetic( self.BulletData.SlugMV2 * 39.37 , self.BulletData.SlugMass2, 999999 )
+		local SlugEnergy2 = aceKinetic( self.BulletData.SlugMV2 * 39.37 , self.BulletData.SlugMass2, 999999 )
 		self.BulletData.MaxPen = (SlugEnergy2.Penetration / self.BulletData.SlugPenArea2) * ACF.KEtoRHA
 
 		--For Fake Crate

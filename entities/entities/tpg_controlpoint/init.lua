@@ -92,7 +92,8 @@ end
 --[[--
     One fixed-size step of capture math: count who's standing on the point,
     move `CapProgress` toward whichever side outnumbers the other, and flip
-    `CapOwnership` when it crosses `timeNeutral`/`-timeNeutral`.
+    `CapOwnership` when it crosses `timeNeutral`/`-timeNeutral`. Living
+    players and test-mode NPC infantry both count, via @{TPG.Util.Fighters}.
 
     `dt` is the wall-clock duration of this step (seconds, defaulting to
     `TPG.Config.captureStep`). Progress is tracked in seconds, so
@@ -121,18 +122,20 @@ function ENT:CaptureStep(dt)
     local redOnPoint = 0
     local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters or 5)
 
-    -- Count players on point
-    for _, ply in ipairs(player.GetAll()) do
-        if not ply:Alive() or ply:InVehicle() then continue end
+    -- Count living fighters on point: players, and NPC infantry from the test
+    -- mode (gamemode/bots/sv_bots.lua). Players in a vehicle don't count.
+    local pos = self:GetPos()
+    local r2 = capRadius * capRadius
+    for _, teamId in ipairs({ TEAM_GREEN, TEAM_RED }) do
+        for _, ent in ipairs(TPG.Util.Fighters(teamId)) do
+            if ent:IsPlayer() and ent:InVehicle() then continue end
+            if ent:GetPos():DistToSqr(pos) > r2 then continue end
 
-        local dist = ply:GetPos():Distance(self:GetPos())
-        if dist > capRadius then continue end
-
-        local teamId = ply:Team()
-        if teamId == TEAM_GREEN then
-            greenOnPoint = greenOnPoint + 1
-        elseif teamId == TEAM_RED then
-            redOnPoint = redOnPoint + 1
+            if teamId == TEAM_GREEN then
+                greenOnPoint = greenOnPoint + 1
+            else
+                redOnPoint = redOnPoint + 1
+            end
         end
     end
 

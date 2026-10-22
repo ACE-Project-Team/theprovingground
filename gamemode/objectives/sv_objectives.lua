@@ -33,8 +33,10 @@ function TPG.Objectives.SpawnAll(objectiveList)
     -- Clear existing objectives
     TPG.State.objectives = TPG.State.objectives or {}
 
-    for _, obj in pairs(TPG.State.objectives) do
-        if IsValid(obj) then obj:Remove() end
+    -- Every point on the map, not just the listed ones: a preview round skips
+    -- the map cleanup, and a point that fell off the list would stay forever.
+    for _, obj in ipairs(ents.FindByClass("tpg_controlpoint")) do
+        obj:Remove()
     end
     TPG.State.objectives = {}
 
@@ -68,11 +70,16 @@ function TPG.Objectives.SpawnAll(objectiveList)
 end
 
 --- Put a coloured marker on each team's spawn.
--- Visual only; the protection itself is in `player/sv_protection.lua`. A team
+-- Visual only; the protection itself is in `player/sv_protection.lua`. Removes
+-- any markers already standing first. A team
 -- whose spawn hasn't been published yet gets no marker rather than one at the
 -- map origin -- see @{tpg.state.GetSpawn}.
 -- @realm server
 function TPG.Objectives.SpawnSafezones()
+    -- A round set up without a map cleanup (a map editor preview) still has
+    -- the last round's markers standing.
+    for _, old in ipairs(ents.FindByClass("tpg_safezonemarker")) do old:Remove() end
+
     -- Green safezone
     local greenSpawn = TPG.State.GetSpawn(TEAM_GREEN)
     if greenSpawn then

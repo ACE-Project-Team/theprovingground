@@ -175,6 +175,18 @@ function TPG.Util.MetersToUnits(meters)
     return meters * 39.37
 end
 
+--- Brings an ACE contraption's point total up to date. Uses whichever name
+-- the loaded ACE has: `ACE.EnsureContraptionPoints`, or the global
+-- `ACE_EnsureContraptionPoints` from before ACE moved its functions into the
+-- `ACE` table. Does nothing without ACE.
+-- @tparam table con The CFW contraption.
+-- @tparam ?Entity baseEnt Its ACE baseplate, if it has one.
+-- @realm shared
+function TPG.Util.ACEEnsurePoints(con, baseEnt)
+    local fn = (ACE and ACE.EnsureContraptionPoints) or _G.ACE_EnsureContraptionPoints
+    if fn then fn(con, baseEnt) end
+end
+
 -- ── Team helpers ────────────────────────────────────────────────────────────
 
 --- Is this player on one of the two playing teams?
@@ -185,6 +197,53 @@ end
 function TPG.Util.IsOnTeam(ply)
     local t = ply:Team()
     return t == TEAM_GREEN or t == TEAM_RED
+end
+
+--- Which playing team an entity fights for.
+-- Players report their team when they are on one. Any other entity reports
+-- the `TPG_BotTeam` network int that the test-mode NPCs carry
+-- (gamemode/bots/sv_bots.lua), so a bot and a player share one lookup.
+-- @tparam Entity ent
+-- @treturn ?number TEAM_GREEN or TEAM_RED, or nil for spectators, unassigned
+-- players, invalid entities and anything else.
+-- @realm shared
+function TPG.Util.TeamOf(ent)
+    if not IsValid(ent) then return nil end
+
+    if ent:IsPlayer() then
+        return TPG.Util.IsOnTeam(ent) and ent:Team() or nil
+    end
+
+    local t = ent:GetNWInt("TPG_BotTeam", 0)
+    if t == TEAM_GREEN or t == TEAM_RED then return t end
+    return nil
+end
+
+if SERVER then
+    --- Living fighters on one team: its alive players, plus the test-mode NPC
+    -- infantry on that team that are still standing.
+    -- @tparam number teamId TEAM_GREEN or TEAM_RED.
+    -- @treturn table Array of players and NPCs, possibly empty.
+    -- @realm server
+    function TPG.Util.Fighters(teamId)
+        local out = {}
+
+        for _, ply in ipairs(player.GetAll()) do
+            if ply:Alive() and ply:Team() == teamId then
+                out[#out + 1] = ply
+            end
+        end
+
+        if TPG.Bots and TPG.Bots.list then
+            for _, npc in ipairs(TPG.Bots.list) do
+                if IsValid(npc) and npc:Health() > 0 and npc.TPG_BotTeam == teamId and not npc.TPG_Riding then
+                    out[#out + 1] = npc
+                end
+            end
+        end
+
+        return out
+    end
 end
 
 --- How lopsided the teams are, as green minus red.

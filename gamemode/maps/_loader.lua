@@ -15,6 +15,8 @@
         safezoneRadius  spawn protection radius
         winsToMapVote   optional; rounds before the map vote opens (falls back to TPG.Config.winsToMapVote)
         dupeGracePeriod optional; grace seconds after a paste (see TPG.Duplication.GetGracePeriod)
+        displayName     optional; the map's name on the vote screen
+        ctfFlag         optional; a fixed home for the CTF flag (see TPG.CTF.RollFlagPoint)
         [GAMEMODE_X]    capMultiplier, and a list of objective positions
 
     `safezoneRadius` is read through @{TPG.Maps.GetSafezoneRadius}, which falls
@@ -32,8 +34,9 @@
     balance intent behind them is 150 ACE points per ton of weight limit.
 
     Shared, because the map-vote screen shows the same budgets the server
-    enforces. Admin-placed custom points are overlaid on top at load time and
-    are server-side only; see `maps/sv_custom_points.lua`.
+    enforces. A layout built in game with the map editor is overlaid on top at
+    load time, server-side only; see `maps/sv_custom_points.lua`. The editor's
+    Export writes a block in this file's format.
 
     @module tpg.maps
     @realm shared
@@ -1003,44 +1006,58 @@ local function ApplyLimitMult(limits)
     limits.props  = math.floor((limits.props  or 0) * (m.props  or 1))
 end
 
+--[[--
+    A map's config as authored: the map's entry merged over
+    `TPG.Maps.Default`, with (on the server) the admin layout from
+    `data/tpg/points/` laid over that. The budget multipliers are NOT applied,
+    so the limits are the numbers written in this file.
+
+    Each call builds a fresh copy, so nothing a caller does to the result can
+    leak back into `TPG.Maps.Configs` or `TPG.Maps.Default`.
+
+    @tparam[opt] string mapName Defaults to the running map.
+    @tparam[opt=true] boolean withLayout false leaves the admin layout out,
+     which is what the map editor shows as the map's built-in points.
+    @treturn table
+    @realm shared
+]]
+function TPG.Maps.BuildConfig(mapName, withLayout)
+    mapName = mapName or game.GetMap()
+
+    local config = table.Copy(TPG.Maps.Default)
+    if TPG.Maps.Configs[mapName] then
+        config = table.Merge(config, table.Copy(TPG.Maps.Configs[mapName]))
+    end
+
+    if withLayout ~= false and SERVER and TPG.Maps.ApplyCustomPoints then
+        TPG.Maps.ApplyCustomPoints(config, mapName)
+    end
+
+    return config
+end
+
 --- Load a map's config and make it current.
--- Merges the map's entry over `TPG.Maps.Default`, applies the limit
--- multipliers, and (on the server) overlays admin-placed custom points. A map
--- with no entry gets the defaults, which are generic enough to be playable but
--- are not tuned for it. Called from @{tpg.rounds.Setup} each round, so editing
--- a map config and restarting the round is enough to see the change.
+-- @{TPG.Maps.BuildConfig} with the limit multipliers applied. A map with no
+-- entry gets the defaults, which are generic enough to be playable but are
+-- not tuned for it. Called from @{tpg.rounds.Setup} each round, so editing a
+-- map config or its layout and restarting the round is enough to see the
+-- change.
 -- @tparam[opt] string mapName Defaults to the running map.
 -- @treturn table The merged config, also stored as `TPG.Maps.Current`.
 -- @realm shared
 function TPG.Maps.Load(mapName)
     mapName = mapName or game.GetMap()
 
-    -- Check if we have an inline config for this map
-    if TPG.Maps.Configs[mapName] then
-        TPG.Maps.Current = table.Merge(table.Copy(TPG.Maps.Default), TPG.Maps.Configs[mapName])
-        ApplyLimitMult(TPG.Maps.Current.limits)
-
-        -- Overlay any admin-placed custom points (server only).
-        if SERVER and TPG.Maps.ApplyCustomPoints then
-            TPG.Maps.ApplyCustomPoints(TPG.Maps.Current, mapName)
-        end
-
-        -- Debug: verify limits loaded correctly
-        local limits = TPG.Maps.Current.limits
-        print("[TPG] Loaded map config: " .. mapName)
-        print("[TPG] Limits - Props: " .. limits.props .. ", Weight: " .. limits.weight .. "T, Points: " .. limits.points)
-
-        return TPG.Maps.Current
+    if not TPG.Maps.Configs[mapName] then
+        print("[TPG] No config for " .. mapName .. ", using defaults")
     end
 
-    -- Fall back to defaults
-    print("[TPG] No config for " .. mapName .. ", using defaults")
-    TPG.Maps.Current = table.Copy(TPG.Maps.Default)
+    TPG.Maps.Current = TPG.Maps.BuildConfig(mapName)
     ApplyLimitMult(TPG.Maps.Current.limits)
 
-    if SERVER and TPG.Maps.ApplyCustomPoints then
-        TPG.Maps.ApplyCustomPoints(TPG.Maps.Current, mapName)
-    end
+    local limits = TPG.Maps.Current.limits
+    print("[TPG] Loaded map config: " .. mapName)
+    print("[TPG] Limits - Props: " .. limits.props .. ", Weight: " .. limits.weight .. "T, Points: " .. limits.points)
 
     return TPG.Maps.Current
 end
@@ -1117,13 +1134,10 @@ function TPG.Maps.GetSafezoneRadius()
     return (config and config.safezoneRadius) or TPG.Config.safezoneRadius
 end
 
--- Merge default + per-map config (without disturbing the loaded Current) and
--- apply the limit multipliers, for read-only queries like the vote screen.
+-- The config for any map with the limit multipliers applied, for read-only
+-- queries like the vote screen. Does not disturb the loaded Current.
 local function mergedConfig(mapName)
-    local cfg = table.Copy(TPG.Maps.Default)
-    if TPG.Maps.Configs[mapName] then
-        cfg = table.Merge(cfg, TPG.Maps.Configs[mapName])
-    end
+    local cfg = TPG.Maps.BuildConfig(mapName)
     ApplyLimitMult(cfg.limits)
     return cfg
 end

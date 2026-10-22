@@ -23,7 +23,13 @@
 local objectiveCache = {}
 local lastUpdate = 0
 
+-- Q-menu toggle (Utilities > The Proving Ground > Player). 0 hides the markers.
+CreateClientConVar("tpg_hud_objectives", "1", true, false,
+    "Show objective markers over control points and flags. 0 = hidden.", 0, 1)
+
 hook.Add("HUDPaint", "TPG_ObjectiveMarkers", function()
+    if GetConVar("tpg_hud_objectives"):GetInt() == 0 then return end
+
     local ply = LocalPlayer()
     if not IsValid(ply) or not ply:Alive() then return end
 

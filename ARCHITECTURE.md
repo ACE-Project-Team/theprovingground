@@ -50,18 +50,21 @@ wait-for-players window that leads into the first round.
 | `player/` | Everything that happens to a player: spawning, loadout, team assignment, safezone protection, AFK. |
 | `systems/` | Self-contained features that the round loop doesn't need to know about: stats and rating, the per-player economy, prop tracking, ACE integration, underdog assistance, commendations, duplicator rules, vehicles. |
 | `objectives/` | Control point capture logic and the CTF flag round. |
-| `maps/` | Per-map spawns, budgets and objective positions, plus the admin-placed points saved under `data/tpg/points/`. |
+| `bots/` | NPC infantry (`tpg_bots_test` for a fixed count, `tpg_bots_fill` to top a thin server up to a fighter count): NPCs in rifleman, support and AT roles that fight and capture like players, with a per-team planner for control points and CTF. `sv_threat.lua` tags armored vehicles so AT bots go after them. `sv_cai.lua` bridges to the optional Combat AI addon (weapon archetypes, shot reports, wallbang) without overriding it. Killing a bot pays the attacker through `TPG_BotKilled`. `cl_hud_bots.lua` draws friendly bot markers (client). Server only, except the marker. |
+| `maps/` | Per-map spawns, budgets and objective positions, plus the in-game map editor (point tool + `tpg_mapedit`) and the layouts it saves under `data/tpg/points/`. `sv_collection.lua` points admins at the official map collection when few supported maps are installed. |
 | `ui/` | The HUD and every menu. Client only. |
 | `voting/` | Rock the vote, scramble votes, end-of-map map votes. |
 | `entities/` | The control point, the flag, the safezone marker, the point tool, the disposable AT weapon. |
 | `addons/tpg_e2sf/` | Submodule: the Wire Expression 2 and Starfall bindings, a separate addon ([tpg_e2sf](https://github.com/ACE-Project-Team/tpg_e2sf)). It only loads from `garrysmod/addons/`; see the README. |
+
+The Q-menu section (Utilities > The Proving Ground) is `ui/cl_qmenu.lua`, with its server settings allow-list in `core/sh_admin_settings.lua` and the server half in `core/sv_admin_settings.lua`.
 
 ## The round loop
 
     GM:Initialize
       └─ TPG.Rounds.BeginInitialWait      wait for enough players
            └─ TPG.Rounds.Setup            per round, from here on
-                ├─ TPG.Maps.Load                    map config + custom points
+                ├─ TPG.Maps.Load                    map config + the saved map layout
                 ├─ TPG.SelectRandomGameType         which mode this round is
                 ├─ game.CleanUpMap / State.ResetRound
                 ├─ TPG.Objectives.SpawnAll          control points for this mode

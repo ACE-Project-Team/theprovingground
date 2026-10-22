@@ -1,35 +1,27 @@
 --[[--
-    `weapon_tpg_pointtool`: admin SWEP for placing gamemode points live.
+    `weapon_tpg_pointtool`: admin SWEP for laying out a map in game.
 
-    Sits under "ACE Tools" in the Q-menu, beside the torch, for placing
-    control points, KOTH hills, the CTF flag home and team spawns without
-    editing `_loader.lua`. Placements persist per map via
-    @{tpg.custompoints} (`gamemode/maps/sv_custom_points.lua`).
+    Sits under "The Proving Ground" in the Q-menu Weapons tab. It places control
+    points, KOTH hills, Rush stages, the CTF flag and both team spawns, saved
+    per map by @{tpg.custompoints}. Everything else (names, order, budgets,
+    previews, export) is in the map editor panel, `tpg_mapedit`.
 
-        Left click   place the selected point type at your aim
-        Right click  cycle the point type
-        Reload (R)   remove the nearest placed point
+        Left click     place the selected type at your aim; for a spawn or the
+                       flag, move it there
+        Right click    next type (Shift: previous); cancels a move. Rush
+                       stages and the CTF flag are optional and only come
+                       up with "Advanced types" ticked in the editor
+        Reload (R)     remove the nearest placed point of the selected type
+        Shift + R      open the map editor
 
-    After placing, run `tpg_points_reload` to rebuild the round with the new
-    layout -- this weapon only writes to the saved point list, it does not
-    itself restart the round or touch the currently-loaded config.
+    While it is out, every point in the layout is drawn in the world with its
+    capture or safezone radius (`ui/cl_mapedit.lua`). Edits are saved at once
+    and put in play a second later as a preview round (see @{tpg.mapedit}),
+    without killing anyone or clearing builds.
 
-    Every action (fire, secondary, reload) is admin-gated server-side via the
-    local `isAdmin(owner)` helper, which just checks `ply:IsAdmin()` -- there
-    is no separate permission tier, any admin can place or remove any point.
-    The point-type cycle state (`TPG_PtType`, an index into `PointTypes`) is a
-    plain NWInt with no validation on read beyond a `math.Clamp`, so it is
-    safe even if desynced.
-
-    Themed HUD (`SWEP:DrawHUD`, client-only) uses TPG's red palette + the Exo 2
-    font family, and a `PostDrawTranslucentRenderables` hook draws a ghost
-    sphere + line at the aim point matching the currently-selected type's tint
-    -- purely a client-side preview, it has no effect on where a placement
-    actually lands (that is always the owner's live eye-trace at fire time).
-
-    This single file covers both realms: the HUD/ghost-marker code near the
-    bottom is wrapped in `if CLIENT then ... end` rather than split into a
-    separate client file.
+    Every action is admin-gated server-side, and the server does the work in
+    @{tpg.mapedit}. The selected type (`TPG_PtType`, an index into
+    `TPG.Layout.Types`) is a plain NWInt, clamped on read.
 
     @module tpg.weapon.pointtool
     @realm shared
@@ -39,30 +31,20 @@ if SERVER then AddCSLuaFile() end
 
 SWEP.PrintName    = "TPG Point Tool"
 SWEP.Author       = "RDC"
-SWEP.Instructions = "LMB place  ·  RMB cycle type  ·  R remove nearest"
-SWEP.Purpose      = "Place TPG gamemode points (control/KOTH/CTF/spawns)."
+SWEP.Instructions = "LMB place  ·  RMB next type  ·  R remove  ·  Shift+R editor"
+SWEP.Purpose      = "Lay out a map for TPG: points, flag and spawns."
 
-SWEP.Category       = "ACE Tools"     -- groups it with the torch in the Q-menu
-SWEP.SubCategory    = "Tools"
+-- Its own category: ACE rebuilds "ACE Tools" from weapon_ace_base weapons
+-- only (weapon_ace_base/cl_ace_spawnmenu.lua), so a tool listed there never
+-- shows up.
+SWEP.Category       = "The Proving Ground"
+SWEP.SubCategory    = "Admin"
 SWEP.Spawnable      = true
 SWEP.AdminOnly      = true
 SWEP.AdminSpawnable = true
 
 SWEP.Slot     = 1
 SWEP.SlotPos  = 7
-
--- Weapons defined in a GAMEMODE's entities/weapons folder are registered as
--- usable weapons but are NOT auto-added to the spawnmenu's "Weapon" list (only
--- lua/weapons/ autoloads into it). Without this the torch shows under "ACE
--- Tools" but this tool doesn't. Register it manually so it appears beside it.
-list.Set("Weapon", "weapon_tpg_pointtool", {
-    PrintName      = SWEP.PrintName,
-    ClassName      = "weapon_tpg_pointtool",
-    Category       = SWEP.Category,
-    Spawnable      = SWEP.Spawnable,
-    AdminOnly      = SWEP.AdminOnly,
-    AdminSpawnable = SWEP.AdminSpawnable,
-})
 
 SWEP.Base       = "weapon_base"
 SWEP.ViewModel  = "models/weapons/c_toolgun.mdl"
@@ -82,48 +64,45 @@ SWEP.Secondary.DefaultClip = -1
 SWEP.Secondary.Automatic   = false
 SWEP.Secondary.Ammo        = "none"
 
--- Point types the tool can place, in cycle order.
-SWEP.PointTypes = {
-    { id = "cp",    label = "CONTROL POINT", team = nil,        tint = Color(245, 245, 245) },
-    { id = "koth",  label = "KOTH HILL",     team = nil,        tint = Color(255, 210, 90) },
-    { id = "ctf",   label = "CTF FLAG",      team = nil,        tint = Color(245, 245, 245) },
-    { id = "spawn", label = "SPAWN · GREEN", team = TEAM_GREEN, tint = Color(60, 220, 95) },
-    { id = "spawn", label = "SPAWN · RED",   team = TEAM_RED,   tint = Color(220, 70, 70) },
-}
-
 --- The current point-type index, clamped into range regardless of what the
 -- networked value actually holds.
--- @treturn number 1-based index into `self.PointTypes`.
+-- @treturn number 1-based index into `TPG.Layout.Types`.
 -- @realm shared
 function SWEP:GetTypeIndex()
-    return math.Clamp(self:GetNWInt("TPG_PtType", 1), 1, #self.PointTypes)
+    return math.Clamp(self:GetNWInt("TPG_PtType", 1), 1, #TPG.Layout.Types)
 end
 
---- The point-type table entry currently selected (`{ id, label, team, tint }`).
+--- The selected `TPG.Layout.Types` entry.
 -- @treturn table
 -- @realm shared
 function SWEP:CurrentType()
-    return self.PointTypes[self:GetTypeIndex()]
+    return TPG.Layout.Types[self:GetTypeIndex()]
 end
 
---- Sets the revolver hold type and, server-side only, initialises the type
--- cycle to index 1 (control point).
+--- Sets the revolver hold type and, server-side only, starts on the first
+-- type (control point).
 -- @realm shared
 function SWEP:Initialize()
     self:SetHoldType("revolver")
     if SERVER then self:SetNWInt("TPG_PtType", 1) end
 end
 
--- Shared admin gate for every action below: valid player + IsAdmin, no
--- separate permission tier.
+--- Sends the owner the current layout, so the overlay is up to date the
+-- moment the tool comes out.
+-- @treturn boolean true, to allow the deploy.
+-- @realm shared
+function SWEP:Deploy()
+    if SERVER and TPG.MapEdit then TPG.MapEdit.Push(self:GetOwner()) end
+    return true
+end
+
+-- Valid player + IsAdmin; there is no separate permission tier.
 local function isAdmin(ply)
     return IsValid(ply) and ply:IsAdmin()
 end
 
---- Places the currently-selected point type at the owner's eye-trace hit
--- position, via `TPG.Maps.AddPoint`. Admin-gated server-side; a non-admin
--- owner is refused with a chat message and nothing is placed. Does nothing
--- if the trace didn't hit anything.
+--- Places the selected type at the owner's aim, or drops the point being
+-- moved there (see `TPG.MapEdit.DropMove`). A non-admin owner is refused.
 -- @realm shared
 function SWEP:PrimaryAttack()
     self:SetNextPrimaryFire(CurTime() + 0.3)
@@ -138,54 +117,62 @@ function SWEP:PrimaryAttack()
     local tr = owner:GetEyeTrace()
     if not tr.Hit then return end
 
-    local pt = self:CurrentType()
-    TPG.Maps.AddPoint(pt.id, pt.team, tr.HitPos, nil)
-
+    if TPG.MapEdit.GetMove(owner) then
+        TPG.MapEdit.DropMove(owner, tr.HitPos)
+    else
+        TPG.MapEdit.Place(owner, self:CurrentType().key, tr.HitPos)
+    end
     owner:EmitSound("buttons/button14.wav", 65, 120)
-    owner:ChatPrint(string.format(
-        "[TPG] Placed %s. (%d total) - run tpg_points_reload to apply.",
-        pt.label, TPG.Maps.CountPoints()))
 end
 
---- Cycles to the next point type (wrapping), server-side, and plays a UI
--- rollover sound client-side. Not admin-gated on its own -- cycling the type
--- is harmless without a place/remove action, so any holder can do it, though
--- only an admin owner will ever be holding this weapon in practice
--- (`AdminOnly = true`, `AdminSpawnable = true`).
+--- Cycles the type (Shift goes backwards), or cancels a move in progress.
 -- @realm shared
 function SWEP:SecondaryAttack()
     self:SetNextSecondaryFire(CurTime() + 0.2)
+    local owner = self:GetOwner()
 
-    if SERVER then
-        local i = (self:GetTypeIndex() % #self.PointTypes) + 1
-        self:SetNWInt("TPG_PtType", i)
+    if SERVER and IsValid(owner) then
+        if TPG.MapEdit.GetMove(owner) then
+            TPG.MapEdit.CancelMove(owner)
+            owner:ChatPrint("[TPG] Move cancelled.")
+            return
+        end
+        -- Rush stages and the CTF flag are optional (Rush shuffles the
+        -- control points, the flag sits on the KOTH hill), so they are only
+        -- offered with the admin's `tpg_pointtool_advanced 1`.
+        local step = owner:KeyDown(IN_SPEED) and -1 or 1
+        local advanced = owner:GetInfoNum("tpg_pointtool_advanced", 0) ~= 0
+        local n = #TPG.Layout.Types
+        local idx = self:GetTypeIndex()
+        for _ = 1, n do
+            idx = (idx - 1 + step) % n + 1
+            local t = TPG.Layout.Types[idx]
+            if advanced or (t.id ~= "rush" and t.id ~= "ctf") then break end
+        end
+        self:SetNWInt("TPG_PtType", idx)
+        owner:EmitSound("ui/buttonrollover.wav", 50)
     end
-    if CLIENT then surface.PlaySound("ui/buttonrollover.wav") end
 end
 
---- Removes whichever placed point is nearest the owner's eye-trace hit, within
--- 300 units (via `TPG.Maps.RemoveNearest`). Throttled to once per 0.4s by
--- `self.NextReload` and admin-gated; a non-admin's Reload silently does
--- nothing (no chat message, unlike @{SWEP:PrimaryAttack}'s refusal).
+--- Removes the nearest placed point of the selected type within 300 units.
+-- With Shift held it opens the map editor instead. Server side only, since
+-- singleplayer never runs Reload on the client. Throttled to once per 0.4s.
 -- @realm shared
 function SWEP:Reload()
-    if not SERVER then return end
+    if CLIENT then return end
     if (self.NextReload or 0) > CurTime() then return end
     self.NextReload = CurTime() + 0.4
 
     local owner = self:GetOwner()
     if not isAdmin(owner) then return end
 
-    local tr = owner:GetEyeTrace()
-    local removed = TPG.Maps.RemoveNearest(tr.HitPos, 300)
-
-    if removed then
-        owner:EmitSound("buttons/button10.wav", 65, 90)
-        owner:ChatPrint("[TPG] Removed nearest point (" .. tostring(removed.type) ..
-            "). " .. TPG.Maps.CountPoints() .. " left.")
-    else
-        owner:ChatPrint("[TPG] No placed point within range.")
+    if owner:KeyDown(IN_SPEED) then
+        owner:ConCommand("tpg_mapedit")
+        return
     end
+
+    TPG.MapEdit.RemoveNearest(owner, self:CurrentType().key, owner:GetEyeTrace().HitPos)
+    owner:EmitSound("buttons/button10.wav", 65, 90)
 end
 
 -- ── Themed HUD (client) ─────────────────────────────────────────────────────
@@ -217,13 +204,14 @@ if CLIENT then
         surface.DrawRect(x + 2, y + 2, w - 4, 2)
     end
 
-    --- Draws the bottom-centre "POINT TOOL / PLACING <type>" panel in TPG's
-    -- red theme, plus the LMB/RMB/R hint line.
+    --- Draws the bottom-centre "POINT TOOL" panel in TPG's red theme: what LMB
+    -- will place (or which point is being moved) and the controls.
     -- @realm client
     function SWEP:DrawHUD()
         local pt = self:CurrentType()
+        local moving = LocalPlayer():GetNWString("TPG_MapEditMove", "")
         local sw, sh = ScrW(), ScrH()
-        local w, h = 360, 104
+        local w, h = 420, 104
         local x, y = sw / 2 - w / 2, sh - h - 70
 
         panel(x, y, w, h)
@@ -231,42 +219,31 @@ if CLIENT then
         draw.SimpleText("POINT TOOL", "TPG.Tool.Head", x + 16, y + 12,
             COL_SECONDARY, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 
-        draw.SimpleText("PLACING", "TPG.Tool.Label", x + 16, y + 44,
+        if moving ~= "" then
+            draw.SimpleText("MOVING", "TPG.Tool.Label", x + 16, y + 44,
+                Color(245, 245, 245, 180), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+            draw.SimpleText(moving, "TPG.Tool.Sub", x + 16, y + 60,
+                Color(255, 230, 120), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
+            draw.SimpleText("LMB drop   RMB cancel", "TPG.Tool.Body",
+                x + w - 16, y + h - 22, Color(245, 245, 245, 220),
+                TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
+            return
+        end
+
+        draw.SimpleText(pt.single and "PLACING (MOVES THE CURRENT ONE)" or "PLACING", "TPG.Tool.Label", x + 16, y + 44,
             Color(245, 245, 245, 180), TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
         draw.SimpleText(pt.label, "TPG.Tool.Sub", x + 16, y + 60,
             pt.tint, TEXT_ALIGN_LEFT, TEXT_ALIGN_TOP)
 
-        draw.SimpleText("LMB place   RMB cycle   R remove", "TPG.Tool.Body",
+        draw.SimpleText("LMB place   RMB type   R remove   Shift+R editor", "TPG.Tool.Body",
             x + w - 16, y + h - 22, Color(245, 245, 245, 220),
             TEXT_ALIGN_RIGHT, TEXT_ALIGN_TOP)
     end
 
-    --- Ghost marker at the aim point so placement is precise. World-model draw
-    -- is unmodified (plain `DrawModel`); the actual ghost is the sphere+line
-    -- drawn by the `PostDrawTranslucentRenderables` hook just below.
+    --- Plain world model; the layout overlay and the aim marker are drawn by
+    -- `ui/cl_mapedit.lua`.
     -- @realm client
     function SWEP:DrawWorldModel()
         self:DrawModel()
     end
-
-    -- Draws a tinted ghost sphere + vertical line at the LOCAL player's own
-    -- eye-trace hit, but only while they are actively holding this weapon --
-    -- it re-derives everything from LocalPlayer() each frame rather than
-    -- reading anything off a specific SWEP instance's state.
-    hook.Add("PostDrawTranslucentRenderables", "TPG_PointToolGhost", function(depth, sky)
-        if depth or sky then return end
-        local ply = LocalPlayer()
-        if not IsValid(ply) or not ply:Alive() then return end
-
-        local wep = ply:GetActiveWeapon()
-        if not IsValid(wep) or wep:GetClass() ~= "weapon_tpg_pointtool" then return end
-
-        local tr = ply:GetEyeTrace()
-        if not tr.Hit then return end
-
-        local pt = wep.PointTypes[math.Clamp(wep:GetNWInt("TPG_PtType", 1), 1, #wep.PointTypes)]
-        render.SetColorMaterial()
-        render.DrawSphere(tr.HitPos, 12, 12, 12, ColorAlpha(pt.tint, 120))
-        render.DrawLine(tr.HitPos, tr.HitPos + Vector(0, 0, 96), pt.tint, false)
-    end)
 end

@@ -5,7 +5,7 @@
     commands plus everyday ones like `tpg_team`.
 
     The gameplay/admin concommands are registered server-side (`sv_commands.lua`,
-    `sv_custom_points.lua`). Server-only concommands never appear in a CLIENT's
+    `sv_mapedit.lua`). Server-only concommands never appear in a CLIENT's
     console autocomplete, so an admin on a dedicated server "can't see" them and
     has to know the exact spelling. This module registers a matching client-side
     stub for each so it autocompletes, then forwards the call to the server over
@@ -46,8 +46,12 @@ TPG.Commands.List = {
     { name = "tpg_admin_scramble", help = "Admin: scramble the teams immediately (no vote)." },
     { name = "tpg_admin_stats_reset", help = "Superadmin: wipe lifetime stats and the leaderboard." },
     { name = "tpg_economy",        help = "Admin: toggle per-player economy (applies next map). No arg = status." },
-    { name = "tpg_points_reload",  help = "Admin: apply placed custom points and restart the round." },
-    { name = "tpg_points_clear",   help = "Superadmin: clear all custom points for this map." },
+    { name = "tpg_points_reload",  help = "Admin: preview the saved map layout without killing anyone: tpg_points_reload [cp|koth|ctf|rush|dm]" },
+    { name = "tpg_points_clear",   help = "Superadmin: clear this map's whole layout (points and settings)." },
+    { name = "tpg_mapedit_export", help = "Admin: export this map's config and layout as a _loader.lua block." },
+    { name = "tpg_bots_test", help = "Superadmin: NPC infantry test mode - tpg_bots_test <per team, 0 = off>" },
+    { name = "tpg_collection", help = "Superadmin: list installed TPG maps and show the map collection hint." },
+    { name = "tpg_admin_set", help = "Admin: change a TPG server setting: tpg_admin_set <convar> <value>" },
 }
 
 if SERVER then

@@ -52,7 +52,12 @@ net.Receive("TPG_MoneyDelta", function()
     while #popups > 6 do popups[#popups] = nil end
 end)
 
+-- Q-menu toggle (Utilities > The Proving Ground > Player). 0 hides the wallet panel.
+CreateClientConVar("tpg_hud_economy", "1", true, false,
+    "Show the per-player wallet panel while the economy is active. 0 = hidden.", 0, 1)
+
 hook.Add("HUDPaint", "TPG_EconomyHUD", function()
+    if GetConVar("tpg_hud_economy"):GetInt() == 0 then return end
     if not GetGlobalBool("TPG_EconomyActive", false) then return end
 
     local ply = LocalPlayer()

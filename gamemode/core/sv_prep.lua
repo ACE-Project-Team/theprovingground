@@ -77,6 +77,17 @@ function TPG.Prep.Begin()
     SetGlobalFloat("TPG_PrepEnd", 0)
 end
 
+--- Drop the prep window without announcing anything. Used by a map editor
+-- preview, which restarts the round without a prep window and must not leave
+-- the previous round's confinement running against the new spawns.
+-- @realm server
+function TPG.Prep.Stop()
+    prepActive = false
+    prepEnd    = 0
+    SetGlobalBool("TPG_PrepActive", false)
+    SetGlobalFloat("TPG_PrepEnd", 0)
+end
+
 local function EndPrep()
     prepActive = false
     prepEnd    = 0

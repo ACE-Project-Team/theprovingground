@@ -291,8 +291,8 @@ function ECON.GetContraptionCost(entList)
         seen[con] = true
 
         -- Make sure ACE's point total is up to date before reading it.
-        if _G.ACE_EnsureContraptionPoints then
-            ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+        if TPG.Util.ACEEnsurePoints then
+            TPG.Util.ACEEnsurePoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
         end
         cost = cost + (con.ACEPoints or 0)
     end
@@ -339,6 +339,12 @@ hook.Add("Think", "TPG_EconomyIncome", function()
     end
 end)
 
+-- Kill payout for a victim fielding `vehValue` points of vehicle.
+local function killReward(vehValue)
+    return math.min(ECON.Config.killRewardBase + vehValue * ECON.Config.killRewardVehFrac,
+                    ECON.Config.killRewardMax)
+end
+
 -- ── Income: kills (anti-farm: nothing for safezone kills / protected targets)
 hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, attacker)
     if not ECON.Active then return end
@@ -370,9 +376,36 @@ hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, at
 
     -- Scale reward by the value of the vehicle the victim was fielding.
     local vehValue = (TPG.ACE and TPG.ACE.GetPlayerPoints and TPG.ACE.GetPlayerPoints(victim)) or 0
-    local reward   = math.min(ECON.Config.killRewardBase + vehValue * ECON.Config.killRewardVehFrac,
-                              ECON.Config.killRewardMax)
     local before   = ECON.GetMoney(attacker)
+    ECON.Reward(attacker, killReward(vehValue), "kill")
+    ECON.Notify(attacker, ECON.GetMoney(attacker) - before, "kill")
+end)
+
+-- ── Income: killing a test-mode bot (gamemode/bots/sv_bots.lua) ──────────────
+-- Bots carry no vehicle value, so the payout is the base kill reward, scaled
+-- down by this so bots are not a farm. Bot kills never reach the stats or
+-- commendation hooks, since those only run for player deaths.
+local cvBotReward = CreateConVar("tpg_bots_reward_scale", "0.5", { FCVAR_ARCHIVE },
+    "Share of the normal kill reward paid for killing a test-mode bot.")
+
+hook.Add("TPG_BotKilled", "TPG_EconomyBotReward", function(npc, attacker)
+    if not ECON.Active then return end
+    if not IsValid(attacker) or not attacker:IsPlayer() then return end
+
+    local myTeam = TPG.Util.TeamOf(attacker)
+    local theirs = TPG.Util.TeamOf(npc)
+    if myTeam == nil or theirs == nil or myTeam == theirs then return end
+
+    -- Same safezone rule as a player kill: no reward for shooting from home.
+    if TPG.Protection and TPG.Protection.IsInSafezone and TPG.Protection.IsInSafezone(attacker) then
+        return
+    end
+
+    local scale = TPG.Util.Clamp(cvBotReward:GetFloat(), 0, 1)
+    local reward = killReward(0) * scale
+    if reward <= 0 then return end
+
+    local before = ECON.GetMoney(attacker)
     ECON.Reward(attacker, reward, "kill")
     ECON.Notify(attacker, ECON.GetMoney(attacker) - before, "kill")
 end)
@@ -503,8 +536,8 @@ function ECON.MarkContraptionsBilled(entList)
             local con = ent:CFW_GetContraption()
             if con and not seen[con] then
                 seen[con] = true
-                if _G.ACE_EnsureContraptionPoints then
-                    ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+                if TPG.Util.ACEEnsurePoints then
+                    TPG.Util.ACEEnsurePoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
                 end
                 con.TPG_BilledPoints = math.floor(con.ACEPoints or 0)
 

@@ -133,8 +133,9 @@ end
     schedule the whole vote's lifecycle with `timer.Simple`.
 
     Candidates are drawn without replacement from the maps in
-    `TPG.Voting.MapLists.Open` and `.Urban` that this server has installed
-    (never the current one), per `TPG.Config.mapVoteSlots` (default `{ open = 3,
+    `TPG.Voting.MapLists.Open` and `.Urban`, plus any map whose editor layout
+    is marked for the vote (`TPG.Maps.LayoutVoteMaps`), that this server has
+    installed (never the current one), per `TPG.Config.mapVoteSlots` (default `{ open = 3,
     urban = 2, bonus = 1 }`), each tagged with its category (1=Open, 2=Urban, 3=Bonus) so
     the vote screen can label the card. The bonus slot draws from whatever is
     left of BOTH pools after Open/Urban picks are removed, so it can never
@@ -165,10 +166,16 @@ function TPG.Voting.StartMapVote()
 
     local slots = TPG.Config.mapVoteSlots or { open = 3, urban = 2, bonus = 1 }
 
-    local function installed(list)
-        local out = {}
-        for _, name in ipairs(list) do
-            if name ~= game.GetMap() and file.Exists("maps/" .. name .. ".bsp", "GAME") then
+    -- Maps set up with the map editor and marked for the vote join the
+    -- hardcoded lists, so a layout built in game can be voted for without a
+    -- code change.
+    local layoutMaps = TPG.Maps.LayoutVoteMaps and TPG.Maps.LayoutVoteMaps() or { open = {}, urban = {} }
+
+    local function installed(list, extra)
+        local out, seen = {}, {}
+        for _, name in ipairs(table.Add(table.Copy(list), extra or {})) do
+            if not seen[name] and name ~= game.GetMap() and file.Exists("maps/" .. name .. ".bsp", "GAME") then
+                seen[name] = true
                 out[#out + 1] = name
             end
         end
@@ -176,7 +183,7 @@ function TPG.Voting.StartMapVote()
     end
 
     -- Open maps
-    local openMaps = installed(TPG.Voting.MapLists.Open)
+    local openMaps = installed(TPG.Voting.MapLists.Open, layoutMaps.open)
     for _ = 1, (slots.open or 0) do
         if #openMaps > 0 then
             local idx = math.random(1, #openMaps)
@@ -186,7 +193,7 @@ function TPG.Voting.StartMapVote()
     end
 
     -- Urban maps
-    local urbanMaps = installed(TPG.Voting.MapLists.Urban)
+    local urbanMaps = installed(TPG.Voting.MapLists.Urban, layoutMaps.urban)
     for _ = 1, (slots.urban or 0) do
         if #urbanMaps > 0 then
             local idx = math.random(1, #urbanMaps)

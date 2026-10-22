@@ -112,8 +112,8 @@ end
 -- pre-edit value (this is why linking GBUs post-spawn didn't move the number).
 -- Force the same rebuild the economy path already uses before reading.
 local function EnsureConPoints(con)
-    if _G.ACE_EnsureContraptionPoints then
-        ACE_EnsureContraptionPoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
+    if TPG.Util.ACEEnsurePoints then
+        TPG.Util.ACEEnsurePoints(con, con.GetACEBaseplate and con:GetACEBaseplate() or nil)
     end
 end
 

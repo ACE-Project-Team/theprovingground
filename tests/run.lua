@@ -34,6 +34,7 @@ local SUITES = {
     "test_gear",
     "test_weapons",
     "test_maps",
+    "test_layout",
     "test_utils",
     "test_structure",
     "test_e2sf_contract",

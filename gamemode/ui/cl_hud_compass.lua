@@ -83,7 +83,13 @@ function TPG.UI.BelowCompass()
     return y + h
 end
 
+-- Q-menu toggle (Utilities > The Proving Ground > Player). 0 hides the ladder.
+CreateClientConVar("tpg_hud_compass", "1", true, false,
+    "Show the compass heading ladder at the top of the HUD. 0 = hidden.", 0, 1)
+
 hook.Add("HUDPaint", "TPG_Compass", function()
+    if GetConVar("tpg_hud_compass"):GetInt() == 0 then return end
+
     local ply = LocalPlayer()
     if not IsValid(ply) or not ply:Alive() then return end
 
