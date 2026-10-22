@@ -219,6 +219,17 @@ function TPG.Util.TeamOf(ent)
     return nil
 end
 
+--- Display name of a player or a TPG bot, such as "Green AT" for a bot.
+-- Bots carry their name in the `TPG_BotName` network string.
+-- @tparam Entity ent
+-- @treturn string
+-- @realm shared
+function TPG.Util.Name(ent)
+    if not IsValid(ent) then return "" end
+    if ent:IsPlayer() then return ent:Nick() end
+    return ent:GetNWString("TPG_BotName", "Bot")
+end
+
 if SERVER then
     --- Living fighters on one team: its alive players, plus the test-mode NPC
     -- infantry on that team that are still standing.

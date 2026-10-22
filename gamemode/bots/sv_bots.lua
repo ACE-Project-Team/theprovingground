@@ -125,6 +125,13 @@ local ROLE_ORDER = { "at", "support", "rifleman" }
 local ROLE_LABEL = { rifleman = "Rifleman", support = "Support", at = "AT" }
 local TEAM_TAG   = { [TEAM_GREEN] = "Green", [TEAM_RED] = "Red" }
 
+-- Kill feed name for a bot, e.g. "Green AT". Players and everything else keep
+-- the stock name.
+local function botName(npc)
+    local label = ROLE_LABEL[npc.TPG_BotRole] or "Infantry"
+    return (TEAM_TAG[npc.TPG_BotTeam] or "Bot") .. " " .. label
+end
+
 -- Index is the difficulty level, 0 to 4.
 local PROFICIENCY = {
     WEAPON_PROFICIENCY_POOR,
@@ -262,11 +269,12 @@ end
 
 -- Spectators are nobody's target. Bots already hold them neutral, but CAI
 -- keeps anyone it hears who is not an ally in its enemy memory and engages
--- from there, so a spectator also gets FL_NOTARGET while off a team. Only a
--- flag set here is cleared here.
-local function applySpectators()
+-- from there, so a spectator also gets FL_NOTARGET while off a team. A player
+-- inside their own safezone cannot be hurt, so they get it too. Only a flag
+-- set here is cleared here.
+local function applyNoTarget()
     for _, ply in ipairs(player.GetAll()) do
-        if not TPG.Util.IsOnTeam(ply) then
+        if TPG.Protection.IsInSafezone(ply) then
             if not ply:IsFlagSet(FL_NOTARGET) then
                 ply:AddFlags(FL_NOTARGET)
                 ply.TPG_SpecNoTarget = true
@@ -280,7 +288,7 @@ end
 
 local function applyAll()
     pruneList()
-    applySpectators()
+    applyNoTarget()
     for _, npc in ipairs(TPG.Bots.list) do
         applyRelations(npc)
     end
@@ -767,6 +775,9 @@ local function zoneTick()
     local grace = TPG.Config.spawnProtectionTime or 5
     local capRadius = TPG.Util.MetersToUnits(TPG.Config.capDistanceMeters or 5)
 
+    -- Players walk in and out of their safezone faster than the relations pass.
+    applyNoTarget()
+
     for _, npc in ipairs(TPG.Bots.list) do
         if isAlive(npc) and not npc.TPG_Riding then
             local zone = TPG.Protection.GetSafezoneTeam(npc:GetPos())
@@ -988,6 +999,7 @@ function TPG.Bots.SpawnOne(teamId)
     npc.TPG_ProtectedUntil = CurTime() + (TPG.Config.spawnProtectionTime or 5)
     npc.TPG_BotTeam = teamId
     npc:SetNWInt("TPG_BotTeam", teamId)
+    npc:SetNWString("TPG_BotName", botName(npc))
     -- The fade spawnflag only reaches server ragdolls; bots/cl_corpses.lua
     -- fades the client-side ones.
     npc:SetNWBool("TPG_FadeCorpse", not cvCorpses:GetBool())
@@ -1035,13 +1047,6 @@ end
 function TPG.Bots.MapSupported()
     if file.Exists("maps/graphs/" .. game.GetMap() .. ".ain", "GAME") then return true end
     return istable(CAI) and navmesh ~= nil and isfunction(navmesh.IsLoaded) and navmesh.IsLoaded() == true
-end
-
--- Kill feed name for a bot, e.g. "Green AT". Players and everything else keep
--- the stock name.
-local function botName(npc)
-    local label = ROLE_LABEL[npc.TPG_BotRole] or "Infantry"
-    return (TEAM_TAG[npc.TPG_BotTeam] or "Bot") .. " " .. label
 end
 
 --- A bot's display name, its team and role, such as "Green AT".

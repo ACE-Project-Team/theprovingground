@@ -43,7 +43,7 @@ local function StateInfo(flag)
         local td = TPG.GetTeamData(flag:GetPossessTeam())
         local c  = flag:GetCarrier()
         local label = "HELD BY " .. (td and string.upper(td.name) or "?") ..
-            (IsValid(c) and ("  (" .. c:Nick() .. ")") or "")
+            (IsValid(c) and ("  (" .. TPG.Util.Name(c) .. ")") or "")
         return label, (td and td.color) or Color(255, 205, 40), state
     end
     return "DROPPED", Color(255, 200, 80), state

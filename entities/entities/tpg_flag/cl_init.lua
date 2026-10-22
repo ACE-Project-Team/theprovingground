@@ -93,7 +93,7 @@ function ENT:Draw()
     elseif state == self.STATE_CARRIED then
         local c = self:GetCarrier()
         local td = TPG.GetTeamData(self:GetPossessTeam())
-        status = "HELD" .. (IsValid(c) and (": " .. c:Nick()) or "")
+        status = "HELD" .. (IsValid(c) and (": " .. TPG.Util.Name(c)) or "")
         sCol = (td and td.color) or col
     else
         status, sCol = "DROPPED", Color(255, 200, 80)
