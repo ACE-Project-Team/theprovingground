@@ -37,6 +37,16 @@ One is picked at random each round:
 [*]Q-menu settings for players and admins: team, menus and HUD toggles for everyone, and round, map editor and server settings for admins.
 [/list]
 
+[h2]NPC bots (partial support)[/h2]
+Servers can fill out thin teams with NPC soldiers, with [b]tpg_bots_fill[/b] set to the team size wanted. Support is partial and still being worked on, so expect rough edges. Bots:
+[list]
+[*]capture and hold points, keeping part of the team in cover around a taken point while the rest pushes on;
+[*]carry ACE weapons, and a share of them carry AT4s for enemy armour;
+[*]run from live grenades, and react to ACE gunfire and explosions;
+[*]ride in vehicle seats their owner marks with the TPG E2 & Starfall functions, getting out at the exit point the owner sets.
+[/list]
+They work on their own, and fight better with the Combat AI addon installed. They only spawn on maps with an AI node graph, or a Combat AI navmesh. Bots don't drive vehicles or carry the CTF flag yet.
+
 [h2]Requirements[/h2]
 [list]
 [*][url=https://steamcommunity.com/sharedfiles/filedetails/?id=3333669763]Armored Combat Extended[/url]

@@ -1,5 +1,7 @@
 [img]https://raw.githubusercontent.com/ACE-Project-Team/tpg_e2sf/main/media/e2sf.gif[/img]
 
+Perfect for getting your contraption get ready for an upcoming TPG battle!
+
 [h1]TPG E2 & Starfall Team Functions[/h1]
 Expression 2 and Starfall functions for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3820591474]The Proving Ground[/url]: who is on your team, where they are, and what they are carrying.
 
@@ -20,6 +22,17 @@ It needs [url=https://steamcommunity.com/sharedfiles/filedetails/?id=160250458]W
 [/table]
 The per-player getters return "" for anyone who isn't your teammate.
 
+[h2]Bot seats (E2)[/h2]
+For TPG's NPC bots, which have partial support. Only the owner of a seat can mark it, and only bots on the owner's team ride in it.
+[table]
+[tr][th]Function[/th][th]Does[/th][/tr]
+[tr][td]E:tpgSetBotSeat(N)[/td][td]1 lets bots ride in seat E, 0 stops it; returns 1 if allowed[/td][/tr]
+[tr][td]E:tpgSetBotExit(V)[/td][td]where bots get out, as an offset from the seat (at most 250 units)[/td][/tr]
+[tr][td]E:tpgIsBotSeat()[/td][td]1 if bots may ride in E[/td][/tr]
+[tr][td]E:tpgBotInSeat()[/td][td]the bot riding in E, or nothing[/td][/tr]
+[/table]
+A player who takes a bot's seat gets it after a few seconds; the bot gets out.
+
 [h2]Starfall (tpg library, server)[/h2]
 [table]
 [tr][th]Function[/th][th]Returns[/th][/tr]
@@ -29,6 +42,10 @@ The per-player getters return "" for anyone who isn't your teammate.
 [tr][td]tpg.getRoster()[/td][td]array of { player, name, pos, primary, secondary, special, armor }[/td][/tr]
 [tr][td]ent:tpgGetLoadout()[/td][td]{ primary, secondary, special, armor }, {} for non-teammates[/td][/tr]
 [tr][td]ent:tpgIsTeammate()[/td][td]true if ent is on your team[/td][/tr]
+[tr][td]ent:tpgSetBotSeat(enabled)[/td][td]let bots ride in seat ent, or stop it; true if allowed[/td][/tr]
+[tr][td]ent:tpgSetBotExit(offset)[/td][td]where bots get out, as an offset from the seat[/td][/tr]
+[tr][td]ent:tpgIsBotSeat()[/td][td]true if bots may ride in ent[/td][/tr]
+[tr][td]ent:tpgBotInSeat()[/td][td]the bot riding in ent, or nil[/td][/tr]
 [/table]
 
 [h2]Building chips in sandbox[/h2]
