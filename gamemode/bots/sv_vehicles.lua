@@ -5,10 +5,12 @@
     tpg_e2sf addon). A bot on the same team whose goal is far away boards a
     free marked seat nearby, rides inside the vehicle, and gets out near its
     goal, or when a player takes the seat and stays in it for
-    `tpg_bots_seat_grace` seconds.
+    `tpg_bots_seat_grace` seconds. A bot boards at the seat's exit point, so
+    the exit point is also the vehicle's door.
 
-    The riding bot itself is hidden; a look-alike prop with the matching
-    player model sits in the seat instead (`TPG_Lookalike` on the bot).
+    The riding bot itself and its weapon are hidden; a look-alike prop with
+    the matching player model sits in the seat instead (`TPG_Lookalike` on the
+    bot).
     Damage to the seat reaches the rider, as it reaches a seated player.
 
     A riding bot gets no movement orders: sv_bots.lua and sv_cai.lua skip it,
@@ -20,7 +22,9 @@
     sat down in a seat that had a rider).
 
     State on the bot: `TPG_Riding` (the seat it rides in), `TPG_BoardingSeat`
-    (the seat it is walking to), and `TPG_DismountReason` (why it got out last).
+    (the seat it is walking to), `TPG_BoardPos` (the spot it is walking to),
+    `TPG_HiddenWeapon` (its weapon while riding), and `TPG_DismountReason`
+    (why it got out last).
 
     A timer, `TPG_BotsVehicles`, runs the boarding and dismount checks every
     half second.
@@ -42,7 +46,7 @@ local TICK          = 0.5
 local MAX_EXIT      = 250   -- exit offsets are clamped to this length
 local TRIP_MIN      = 3000  -- a goal further away than this is worth a ride
 local BOARD_RANGE   = 700   -- seats this close to the bot can be boarded
-local BOARD_REACH   = 90    -- the bot mounts once this close to its seat
+local BOARD_REACH   = 90    -- the bot mounts once this close to its seat or the seat's exit spot
 local BOARD_TIMEOUT = 20    -- give up walking to a seat after this many seconds
 local BOARD_RESEND  = 2     -- how often the walk to a seat is re-issued
 local ARRIVE_RANGE  = 1500  -- an exit this close to the goal counts as arrived
@@ -314,12 +318,15 @@ local function release(npc)
     npc:SetMoveType(MOVETYPE_STEP)
     npc:RemoveEFlags(EFL_NO_THINK_FUNCTION)
     npc:RemoveFlags(FL_NOTARGET)
+    if IsValid(npc.TPG_HiddenWeapon) then npc.TPG_HiddenWeapon:SetNoDraw(false) end
+    npc.TPG_HiddenWeapon = nil
     return seat
 end
 
 -- Hide a bot inside a seat.
 local function mount(npc, seat)
     npc.TPG_BoardingSeat = nil
+    npc.TPG_BoardPos = nil
     npc.TPG_Riding = seat
     seat.TPG_Rider = npc
 
@@ -332,6 +339,13 @@ local function mount(npc, seat)
     npc:SetSchedule(SCHED_IDLE_STAND)
     npc:AddFlags(FL_NOTARGET)
     addLookalike(npc, seat)
+
+    -- The weapon is drawn on its own and would float where a standing NPC holds it.
+    local wep = npc:GetActiveWeapon()
+    if IsValid(wep) then
+        wep:SetNoDraw(true)
+        npc.TPG_HiddenWeapon = wep
+    end
 end
 
 --- Put a riding bot out of its seat, at the seat's exit point where it can
@@ -357,6 +371,29 @@ end
 -- @realm server
 function TPG.Bots.Vehicles.IsRiding(npc)
     return IsValid(npc) and IsValid(npc.TPG_Riding)
+end
+
+--- Where bots walk to board this seat: the standing spot they would get out
+-- at, which is the seat's exit point when it has a usable one.
+-- @tparam Entity seat
+-- @treturn ?Vector The spot, or nil for an invalid seat.
+-- @realm server
+function TPG.Bots.Vehicles.BoardPos(seat)
+    if not IsValid(seat) then return nil end
+    return findExit(seat, nil)
+end
+
+--- The bot walking to this seat to board it, if any. At most one bot heads
+-- for a seat at a time.
+-- @tparam Entity seat
+-- @treturn ?Entity The bot, or nil.
+-- @realm server
+function TPG.Bots.Vehicles.Boarder(seat)
+    if not IsValid(seat) then return nil end
+    for _, npc in ipairs(TPG.Bots.list) do
+        if IsValid(npc) and npc.TPG_BoardingSeat == seat then return npc end
+    end
+    return nil
 end
 
 --- Mark or unmark a seat on the owner's vehicle as a bot seat. Unmarking
@@ -443,6 +480,7 @@ end
 local function boarderTick(npc, now)
     if IsValid(npc:GetEnemy()) or not wantsRide(npc) then
         npc.TPG_BoardingSeat = nil
+        npc.TPG_BoardPos = nil
         return
     end
 
@@ -456,14 +494,22 @@ local function boarderTick(npc, now)
         npc.TPG_BoardingSeat = seat
         npc.TPG_BoardStart = now
         npc.TPG_BoardSentAt = nil
+        npc.TPG_BoardPos = nil
     end
     if not seat then return end
 
-    if npc:GetPos():Distance(seat:GetPos()) <= BOARD_REACH then
+    -- A seat deep inside a contraption cannot be walked up to, so the bot
+    -- heads for the spot it would get out at and boards from there. The spot
+    -- is worked out again with each walk order, as the vehicle may move.
+    local pos = npc:GetPos()
+    local door = npc.TPG_BoardPos
+    if pos:Distance(seat:GetPos()) <= BOARD_REACH or (door and pos:Distance(door) <= BOARD_REACH) then
         mount(npc, seat)
     elseif now >= (npc.TPG_BoardSentAt or 0) + BOARD_RESEND then
+        door = findExit(seat, npc)
+        npc.TPG_BoardPos = door
         npc.TPG_BoardSentAt = now
-        npc:SetLastPosition(seat:GetPos())
+        npc:SetLastPosition(door)
         npc:SetSchedule(SCHED_FORCED_GO_RUN)
     end
 end
