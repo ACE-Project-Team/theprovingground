@@ -79,4 +79,6 @@ ln -s "<garrysmod>/gamemodes/theprovingground/addons/tpg_e2sf" "<garrysmod>/addo
 The addon is its own repository: commit and push changes to it there, then commit the updated
 submodule here. Anything it reads from TPG is pinned by `tests/test_e2sf_contract.lua`.
 
+For best NPC experience get this addon: https://steamcommunity.com/sharedfiles/filedetails/?id=3760260083
+
 WIP
