@@ -44,6 +44,14 @@ it("makes an empty layout from nothing", function()
     expect.truthy(data.settings)
 end)
 
+it("keeps hidden list types and drops ids that cannot hide", function()
+    local data = TPG.Layout.Normalize({ hidden = { koth = true, spawn = true, bogus = true, "cp" } })
+    expect.truthy(data.hidden.koth)
+    expect.truthy(data.hidden.cp)
+    expect.nils(data.hidden.spawn)
+    expect.nils(data.hidden.bogus)
+end)
+
 describe("layout: Apply")
 
 it("replaces only what the layout has", function()
@@ -65,6 +73,25 @@ it("replaces only what the layout has", function()
     expect.eq(config[GAMEMODE_CP].objectives[2].name, "Bridge")
     expect.eq(#config[GAMEMODE_KOTH].objectives, kothBefore)
     expect.eq(config.ctfFlag, Vector(5, 5, 5))
+end)
+
+it("empties a mode's objectives when the layout hides its list", function()
+    local config = cfg()
+    local cpBefore = #config[GAMEMODE_CP].objectives
+
+    TPG.Layout.Apply(config, TPG.Layout.Normalize({ hidden = { koth = true } }))
+
+    expect.eq(#config[GAMEMODE_KOTH].objectives, 0)
+    expect.eq(#config[GAMEMODE_CP].objectives, cpBefore)
+end)
+
+it("lets a placed point win over its type's hidden flag", function()
+    local config = cfg()
+    TPG.Layout.Apply(config, TPG.Layout.Normalize({
+        hidden = { koth = true },
+        points = { { type = "koth", pos = { x = 9, y = 9, z = 9 } } },
+    }))
+    expect.eq(#config[GAMEMODE_KOTH].objectives, 1)
 end)
 
 it("puts settings where the round reads them", function()

@@ -10,6 +10,8 @@
         points    list of { type, team, pos = {x,y,z}, name }
         settings  { points, weight, props, safezoneRadius, winsToMapVote,
                     capCP, capKOTH, displayName, voteList }
+        hidden    { cp, koth, rush } -> true, for a type whose built-in
+                  objective list the layout overrides with nothing
 
     `type` is one of the ids in @{TPG.Layout.Types}. `team` is `"green"` or
     `"red"` and only means something on a spawn. Teams are stored as names, not
@@ -102,6 +104,14 @@ function TPG.Layout.GetType(id, team)
     end
 end
 
+-- The type an id belongs to, but only when it is a list type (its `mode`
+-- holds an `objectives` list). The single types - the CTF flag and the two
+-- spawns - cannot be hidden, so they are deliberately not returned here.
+local function listType(id)
+    local t = TPG.Layout.GetType(id)
+    if t and t.mode and not t.single then return t end
+end
+
 --- The @{TPG.Layout.Settings} entry for a key.
 -- @tparam string key
 -- @treturn ?table
@@ -142,8 +152,17 @@ function TPG.Layout.Normalize(data)
         end
     end
 
+    -- The map form { koth = true } is what is written; an array { "koth" }
+    -- decodes the id as the value instead, so both are read.
+    local hidden = {}
+    for k, v in pairs(istable(data.hidden) and data.hidden or {}) do
+        local id = v == true and k or (isnumber(k) and v or nil)
+        if isstring(id) and listType(id) then hidden[id] = true end
+    end
+
     data.points   = points
     data.settings = istable(data.settings) and data.settings or {}
+    data.hidden   = hidden
     data.version  = 2
     return data
 end
@@ -169,6 +188,9 @@ end
       * any `cp`, `koth` or `rush` point replaces that mode's whole objective
         list with the layout's, in the layout's order (Rush plays an authored
         list in order instead of shuffling it, see `TPG.Rush.BuildStages`);
+      * a `hidden` list type replaces that mode's objective list with
+        nothing - it is how the last point of a type can be removed without
+        the map's own points silently coming back;
       * a `ctf` point becomes `config.ctfFlag`, the flag's fixed home.
 
     @tparam table config A merged map config, before `TPG.Maps.LimitMult`.
@@ -210,8 +232,9 @@ function TPG.Layout.Apply(config, data)
         end
     end
 
+    local hidden = data.hidden or {}
     for id, list in pairs(lists) do
-        if #list > 0 then
+        if #list > 0 or hidden[id] then
             local mode = TPG.Layout.GetType(id).mode
             config[mode] = config[mode] or {}
             config[mode].objectives = list

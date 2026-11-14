@@ -110,7 +110,9 @@ local function buildRows(data, base)
                 rows[#rows + 1] = { key = t.key, order = 1, pos = base.ctfFlag, name = t.label, builtin = true }
             end
         else
-            local block = base[t.mode]
+            -- A hidden list shows no rows at all: the layout overrode the
+            -- map's own points with nothing, so there is nothing to remove.
+            local block = not data.hidden[t.id] and base[t.mode] or nil
             for n, o in ipairs(block and block.objectives or {}) do
                 rows[#rows + 1] = {
                     key = t.key, order = n, pos = o.pos,
@@ -337,8 +339,10 @@ function TPG.MapEdit.Place(ply, key, pos)
     edited(ply, key)
 end
 
---- Remove the placed point of a type nearest a position (within 300 units),
--- for an admin.
+--- Remove the point of a type nearest a position (within 300 units), for an
+-- admin. The map's built-in points are copied into the layout first (the way
+-- `resolve` does for panel rows), so a built-in KOTH hill or control point
+-- can be removed with the tool too.
 -- @tparam Player ply
 -- @tparam string key A @{TPG.Layout.Types} key; only points of this type go.
 -- @tparam Vector pos
@@ -347,15 +351,19 @@ function TPG.MapEdit.RemoveNearest(ply, key, pos)
     local t = typeByKey(key)
     if not t then return end
 
+    if not t.single then TPG.Maps.ImportBuiltin(t.id) end
     local idx = TPG.Maps.FindNearest(pos, 300, t.id, t.team)
     if not idx then
-        say(ply, "No placed " .. string.lower(t.label) .. " within range. Built-in points are removed from the editor (tpg_mapedit).", Color(255, 200, 80))
+        say(ply, "No " .. string.lower(t.label) .. " within 300 units.", Color(255, 200, 80))
         return
     end
 
     local label = pointLabel(idx)
     TPG.Maps.RemovePoint(idx)
     say(ply, "Removed " .. label .. ".")
+    if TPG.Maps.IsHidden(t.id) then
+        say(ply, "That was the last " .. string.lower(t.label) .. " - the map's built-in list stays hidden too. Clear the type in the editor to bring it back.", Color(255, 200, 80))
+    end
     edited(ply, key)
 end
 
@@ -422,6 +430,10 @@ function TPG.MapEdit.Preview(ply, modeName)
     TPG.Maps.LoadCustom()
     TPG.Maps.Load()
 
+    if (mode == GAMEMODE_CP or mode == GAMEMODE_KOTH) and #TPG.Maps.GetObjectives(mode) == 0 then
+        say(ply, "No " .. (mode == GAMEMODE_CP and "control points" or "KOTH hills") .. " on this map - a point-ownership round cannot score.", Color(255, 120, 120))
+        return
+    end
     if mode == GAMEMODE_CTF and not TPG.CTF.IsSupported() then
         say(ply, "CTF needs a KOTH hill or a CTF flag point on this map.", Color(255, 120, 120))
         return
@@ -500,6 +512,10 @@ function ACTIONS.remove(ply, args)
     local label = pointLabel(idx)
     TPG.Maps.RemovePoint(idx)
     say(ply, "Removed " .. label .. ".")
+    local t = typeByKey(args.row.key)
+    if t and TPG.Maps.IsHidden(t.id) then
+        say(ply, "That was the last " .. string.lower(t.label) .. " - the map's built-in list stays hidden too. Clear the type to bring it back.", Color(255, 200, 80))
+    end
     edited(ply, args.row.key)
 end
 

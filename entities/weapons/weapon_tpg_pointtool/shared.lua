@@ -11,7 +11,7 @@
         Right click    next type (Shift: previous); cancels a move. Rush
                        stages and the CTF flag are optional and only come
                        up with "Advanced types" ticked in the editor
-        Reload (R)     remove the nearest placed point of the selected type
+        Reload (R)     remove the nearest point of the selected type
         Shift + R      open the map editor
 
     While it is out, every point in the layout is drawn in the world with its
@@ -154,7 +154,8 @@ function SWEP:SecondaryAttack()
     end
 end
 
---- Removes the nearest placed point of the selected type within 300 units.
+--- Removes the nearest point of the selected type within 300 units. Built-in
+-- points are copied into the layout first, so they can be removed too.
 -- With Shift held it opens the map editor instead. Server side only, since
 -- singleplayer never runs Reload on the client. Throttled to once per 0.4s.
 -- @realm shared

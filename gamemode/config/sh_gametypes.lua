@@ -113,7 +113,15 @@ local WEIGHTS = {
 }
 
 -- Whether a mode can run on this map at all. Anything absent can always run.
+-- CP and KOTH are gated on having objectives to own: a layout can hide a
+-- list entirely, and a round with no point to hold can never be won.
 local SUPPORTED = {
+    [GAMEMODE_CP] = function()
+        return TPG.Maps and TPG.Maps.GetObjectives and #TPG.Maps.GetObjectives(GAMEMODE_CP) > 0
+    end,
+    [GAMEMODE_KOTH] = function()
+        return TPG.Maps and TPG.Maps.GetObjectives and #TPG.Maps.GetObjectives(GAMEMODE_KOTH) > 0
+    end,
     [GAMEMODE_CTF] = function()
         return TPG.CTF and TPG.CTF.IsSupported and TPG.CTF.IsSupported() or false
     end,

@@ -94,23 +94,30 @@ local function countType(data, ptype)
     return n
 end
 
+-- The running map's authored config block for a list type, if it has one.
+-- Singles (the CTF flag, the spawns) have no list to copy or hide, so this
+-- is nil for them and for unknown ids.
+local function authoredBlock(ptype)
+    local t = TPG.Layout.GetType(ptype)
+    local authored = TPG.Maps.Configs[game.GetMap()]
+    return t and t.mode and authored and authored[t.mode] or nil
+end
+
 --- Copy the map's built-in points for a category into the layout.
--- Does nothing if the layout already has points of that type, or if the map
--- has no entry in `TPG.Maps.Configs` (the generic defaults are not worth
--- copying: they are one point at the map origin). Only list types (`cp`,
--- `koth`, `rush`) have anything to copy.
+-- Does nothing if the layout already has points of that type, hides that
+-- type's built-in list, or if the map has no entry in `TPG.Maps.Configs`
+-- (the generic defaults are not worth copying: they are one point at the
+-- map origin). Only list types (`cp`, `koth`, `rush`) have anything to copy.
 -- @tparam string ptype `"cp"`, `"koth"` or `"rush"`.
 -- @treturn number How many points were copied.
 -- @realm server
 function TPG.Maps.ImportBuiltin(ptype)
     local data = getData()
-    local t = TPG.Layout.GetType(ptype)
-    local authored = TPG.Maps.Configs[game.GetMap()]
-    if not (t and t.mode and authored) or countType(data, ptype) > 0 then return 0 end
+    local block = authoredBlock(ptype)
+    if not block or countType(data, ptype) > 0 or data.hidden[ptype] then return 0 end
 
-    local block = authored[t.mode]
     local n = 0
-    for _, o in ipairs(block and block.objectives or {}) do
+    for _, o in ipairs(block.objectives or {}) do
         table.insert(data.points, { type = ptype, pos = vToT(o.pos), name = o.name })
         n = n + 1
     end
@@ -154,13 +161,31 @@ function TPG.Maps.AddPoint(ptype, team, pos, name)
         end
     end
 
-    local imported = t.single and 0 or TPG.Maps.ImportBuiltin(ptype)
+    local imported = 0
+    if not t.single then
+        if data.hidden[ptype] then
+            -- A hidden list means "none of the map's own": the new point
+            -- alone becomes the list, so nothing is copied in with it.
+            data.hidden[ptype] = nil
+        else
+            imported = TPG.Maps.ImportBuiltin(ptype)
+        end
+    end
+
     table.insert(data.points, record)
     TPG.Maps.SaveCustom()
     return #data.points, imported
 end
 
 --- Remove the point at an index and save.
+--
+-- Removing the last point of a list type keeps that type overridden - to an
+-- empty list - instead of silently bringing the map's own points back (the
+-- authored ones, or the generic defaults on an unconfigured map): that is
+-- the difference between "remove this hill" and "clear every hill", and it
+-- is what makes a lone built-in KOTH hill removable at all. The editor's
+-- Clear action is the way to bring a hidden list back.
+--
 -- @tparam number index
 -- @treturn ?table The removed record, or nil if there was none.
 -- @realm server
@@ -170,6 +195,12 @@ function TPG.Maps.RemovePoint(index)
     if not removed then return nil end
 
     table.remove(data.points, index)
+
+    local t = TPG.Layout.GetType(removed.type)
+    if t and t.mode and not t.single and countType(data, removed.type) == 0 then
+        data.hidden[removed.type] = true
+    end
+
     TPG.Maps.SaveCustom()
     return removed
 end
@@ -295,6 +326,8 @@ function TPG.Maps.SetSetting(key, value)
 end
 
 --- Delete placed points for the running map and save. Settings are kept.
+-- Clears the type's hidden flag too, so the map's own built-in list applies
+-- again - the counterpart to @{TPG.Maps.RemovePoint}'s empty-override.
 -- @tparam[opt] string ptype Only this type; nil deletes every point.
 -- @param[opt] team With `ptype = "spawn"`, only this team's spawn.
 -- @realm server
@@ -304,7 +337,9 @@ function TPG.Maps.ClearPoints(ptype, team)
 
     if not ptype then
         data.points = {}
+        data.hidden = {}
     else
+        data.hidden[ptype] = nil
         for i = #data.points, 1, -1 do
             local pt = data.points[i]
             if pt.type == ptype and (not teamName or pt.team == teamName) then
@@ -328,6 +363,17 @@ end
 -- @realm server
 function TPG.Maps.CountPoints()
     return #getData().points
+end
+
+--- Is a list type hidden by the running map's layout? A hidden type keeps
+-- its built-in objectives out of play - the mode has no points of it until
+-- the layout places one - which is how removing the last of a type stays
+-- removed instead of the map's own coming back.
+-- @tparam string ptype A @{TPG.Layout.Types} id, e.g. `"koth"`.
+-- @treturn boolean
+-- @realm server
+function TPG.Maps.IsHidden(ptype)
+    return getData().hidden[ptype] == true
 end
 
 -- ── Resolvers ───────────────────────────────────────────────────────────────

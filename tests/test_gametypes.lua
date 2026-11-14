@@ -145,6 +145,29 @@ it("never rolls a mode this map cannot host", function()
     supportNone()
 end)
 
+it("never rolls a point mode the map has no objectives for", function()
+    -- A layout can hide a whole list; rolling it would start a round that
+    -- cannot be won. Stub the objective read rather than the map config so
+    -- the gate itself is what is exercised.
+    local realGetObjectives = TPG.Maps.GetObjectives
+    TPG.Maps.GetObjectives = function() return {} end
+    support(false, false)
+
+    math.randomseed(5)
+    local counts = {}
+    for _ = 1, 400 do
+        local picked = TPG.SelectRandomGameType()
+        counts[picked] = (counts[picked] or 0) + 1
+    end
+
+    TPG.Maps.GetObjectives = realGetObjectives
+    supportNone()
+
+    expect.nils(counts[GAMEMODE_CP], "CP rolled with no control points")
+    expect.nils(counts[GAMEMODE_KOTH], "KOTH rolled with no hill")
+    expect.truthy((counts[GAMEMODE_DM] or 0) > 0, "DM should still roll")
+end)
+
 it("can roll the gated modes when the map supports them", function()
     supportAll()
 
