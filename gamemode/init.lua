@@ -50,6 +50,7 @@ AddCSLuaFile("core/sh_admin_settings.lua")
 AddCSLuaFile("objectives/sh_controlpoint.lua")
 AddCSLuaFile("maps/sh_layout.lua")
 AddCSLuaFile("maps/_loader.lua")
+AddCSLuaFile("player/sh_wearables.lua")
 
 -- Client player systems
 AddCSLuaFile("player/cl_movement.lua")
@@ -92,6 +93,7 @@ include("core/sv_ulx_compat.lua")
 
 include("player/sv_spawning.lua")
 include("player/sv_loadout.lua")
+include("player/sv_wearables.lua")
 include("player/sv_teams.lua")
 include("player/sv_repair.lua")
 include("player/sv_protection.lua")
@@ -107,6 +109,7 @@ include("systems/sv_underdog.lua")
 include("systems/sv_stats.lua")
 include("systems/sv_duplication.lua")
 include("systems/sv_vehicles.lua")
+include("systems/sv_vehiclekill.lua")
 include("systems/sv_commendations.lua")
 
 include("objectives/sv_objectives.lua")

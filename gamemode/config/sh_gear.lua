@@ -120,6 +120,13 @@ TPG.Gear.Armor = {
     [4] = { cost = 1200, cooldown = 300 },   -- Juggernaut (and it can't use seats)
 }
 
+-- The full suit (ACE vest + helmet) is not a slot pick: `tpg_suit` buys it
+-- once and it covers the player for `rounds` rounds no matter how often they
+-- die inside the run. Priced just under the XM25 (500) -- protection, not a
+-- weapon. Only sold while the per-player economy runs; lives/cooldown pricing
+-- does not fit a purchase measured in rounds.
+TPG.Gear.Suit = { cost = 450, rounds = 10 }
+
 --- Stable identifier for one item, used as the cooldown key on both realms.
 -- @tparam string kind `"armor"` or `"weapon"` (anything else is treated as a
 --  weapon).

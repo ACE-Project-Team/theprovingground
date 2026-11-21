@@ -41,6 +41,7 @@ TPG.Commands = TPG.Commands or {}
 -- @realm shared
 TPG.Commands.List = {
     { name = "tpg_team",           help = "Join a team: tpg_team green | red | spec" },
+    { name = "tpg_suit",           help = "Buy the ACE suit: vest + helmet for 10 rounds." },
     { name = "tpg_admin_restart",  help = "Admin: restart the current round." },
     { name = "tpg_admin_endround", help = "Admin: end the round (arg1 = winning team id)." },
     { name = "tpg_admin_scramble", help = "Admin: scramble the teams immediately (no vote)." },

@@ -205,6 +205,12 @@ hook.Add("Think", "TPG_ProtectionThink", function()
             TPG.Repair.Update(ply, inSafezone)
         end
 
+        -- Timed ammo resupply, same deal: the in-zone answer is already
+        -- computed, so accumulating the wait costs one field write.
+        if TPG.Loadout and TPG.Loadout.ResupplyTick then
+            TPG.Loadout.ResupplyTick(ply, inSafezone)
+        end
+
         -- Drowning check
         if not ply:InVehicle() and ply:WaterLevel() >= 2 then
             ply:Kill()

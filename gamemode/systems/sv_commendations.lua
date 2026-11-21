@@ -112,6 +112,64 @@ local KILL_FRAC_CONFIG = {
     [GAMEMODE_RUSH] = "rushKillTicketFrac",
 }
 
+--[[--
+    Drain a kill's worth of tickets from `victim`'s team.
+
+    Shared by the player-death path below and the vehicle-kill ledger
+    (systems/sv_vehiclekill.lua): both price the loss off a fielded ACE point
+    total, scale it by the mode's per-kill fraction (DM drains the whole thing,
+    CTF/Rush a configured slice, everything else nothing), and multiply by the
+    low-population factor so small rounds don't crawl.
+
+    `points` is deliberately a parameter rather than a re-read of
+    `TPG.PropTracking.GetPlayerUsage(victim)`: the vehicle-kill path pays out
+    for a tank the victim may no longer be driving, and the player-death path
+    already has the usage snapshot in hand.
+
+    @tparam Player victim Whose team's tickets drain.
+    @tparam number points Fielded ACE points the loss is priced on.
+    @treturn number Tickets actually drained (0 when the mode doesn't drain on
+     kills).
+    @realm server
+]]
+function TPG.Commendations.DrainKillTickets(victim, points)
+    local gameType = TPG.GetGameType(TPG.State.gameType)
+    local killFrac = 0
+    if gameType.useDeathTickets then
+        killFrac = 1
+    else
+        local key = KILL_FRAC_CONFIG[TPG.State.gameType]
+        if key then killFrac = TPG.Config[key] or 0 end
+    end
+    if killFrac <= 0 then return 0 end
+
+    -- Base loss scales with what the victim was fielding. That used to be
+    -- tonnage; it is now ACE points, which price armour, guns, crew and
+    -- fuel rather than just steel -- see killTicketRefPoints in the config
+    -- for the calibration that keeps an MBT worth what it was worth.
+    --
+    -- Points can be stale by up to one tpg_points_refresh_interval (they
+    -- are the expensive read, so PropTracking does not force a rebuild
+    -- every 2s). A kill scored against a build that has just lost half its
+    -- components therefore drains what the build was worth a moment ago,
+    -- which is the intended reading anyway: you killed the whole thing.
+    local refPoints = TPG.Config.killTicketRefPoints or 5000
+    local refLoss   = TPG.Config.killTicketRefLoss or 30
+    local baseLoss  = math.max(points * refLoss / math.max(refPoints, 1), 1)
+
+    -- Dynamic, player-based scaling: the fewer players on the teams, the
+    -- more each kill is worth, so a 4-player round doesn't crawl. Capped at
+    -- dmTicketMaxMult so it never gets punishing.
+    local active = #team.GetPlayers(TEAM_GREEN) + #team.GetPlayers(TEAM_RED)
+    local refPlayers = TPG.Config.dmTicketRefPlayers or 8
+    local maxMult    = TPG.Config.dmTicketMaxMult or 2.0
+    local mult       = math.Clamp(refPlayers / math.max(active, 1), 1, maxMult)
+
+    local loss = math.max(math.ceil(baseLoss * mult * killFrac), 1)
+    TPG.State.AddScore(victim:Team(), -loss)
+    return loss
+end
+
 hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, _inflictor, attacker)
     if victim == attacker then return end
     if not IsValid(attacker) or not attacker:IsPlayer() then return end
@@ -154,41 +212,6 @@ hook.Add("PlayerDeath", "TPG_TrackKills", function(victim, _inflictor, attacker)
     -- modes below add a SMALLER version on top of their own scoring, so fighting
     -- matters between captures while the objective stays decisive. Every mode
     -- absent from this table drains nothing on a kill.
-    local gameType = TPG.GetGameType(TPG.State.gameType)
-    local killFrac = 0
-    if gameType.useDeathTickets then
-        killFrac = 1
-    else
-        local key = KILL_FRAC_CONFIG[TPG.State.gameType]
-        if key then killFrac = TPG.Config[key] or 0 end
-    end
-
-    if killFrac > 0 then
-        local victimTeam = victim:Team()
-        local victimUsage = TPG.PropTracking.GetPlayerUsage(victim)
-
-        -- Base loss scales with what the victim was fielding. That used to be
-        -- tonnage; it is now ACE points, which price armour, guns, crew and
-        -- fuel rather than just steel -- see killTicketRefPoints in the config
-        -- for the calibration that keeps an MBT worth what it was worth.
-        --
-        -- Points can be stale by up to one tpg_points_refresh_interval (they
-        -- are the expensive read, so PropTracking does not force a rebuild
-        -- every 2s). A kill scored against a build that has just lost half its
-        -- components therefore drains what the build was worth a moment ago,
-        -- which is the intended reading anyway: you killed the whole thing.
-        local refPoints = TPG.Config.killTicketRefPoints or 5000
-        local refLoss   = TPG.Config.killTicketRefLoss or 30
-        local baseLoss  = math.max((victimUsage.points or 0) * refLoss / math.max(refPoints, 1), 1)
-
-        -- Dynamic, player-based scaling: the fewer players on the teams, the
-        -- more each kill is worth, so a 4-player round doesn't crawl. Capped at
-        -- dmTicketMaxMult so it never gets punishing.
-        local active = #team.GetPlayers(TEAM_GREEN) + #team.GetPlayers(TEAM_RED)
-        local refPlayers = TPG.Config.dmTicketRefPlayers or 8
-        local maxMult    = TPG.Config.dmTicketMaxMult or 2.0
-        local mult       = math.Clamp(refPlayers / math.max(active, 1), 1, maxMult)
-
-        TPG.State.AddScore(victimTeam, -math.max(math.ceil(baseLoss * mult * killFrac), 1))
-    end
+    local victimUsage = TPG.PropTracking.GetPlayerUsage(victim)
+    TPG.Commendations.DrainKillTickets(victim, victimUsage.points or 0)
 end)

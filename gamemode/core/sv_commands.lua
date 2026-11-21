@@ -185,6 +185,19 @@ concommand.Add("tpg_rekit", function(ply)
     ply:Kill()
 end)
 
+-- Buy the ACE wearable suit (vest + helmet) for a run of rounds.
+concommand.Add("tpg_suit", function(ply)
+    if not (TPG.Wearables and TPG.Wearables.BuySuit) then return end
+
+    local ok, why = TPG.Wearables.BuySuit(ply)
+    if ok then
+        TPG.Util.ChatMessage(ply, "[TPG] Suit bought - vest and helmet for " ..
+            TPG.Gear.Suit.rounds .. " rounds.", Color(0, 255, 0))
+    elseif why then
+        TPG.Util.ChatMessage(ply, "[TPG] " .. why, Color(255, 200, 0))
+    end
+end)
+
 -- Easy vehicle entry
 concommand.Add("tpg_easyentry", function(ply, _cmd, _args)
     if TPG.Vehicles and TPG.Vehicles.EasyEntry then

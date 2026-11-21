@@ -49,6 +49,18 @@ TPG.Config = {
     killTicketRefPoints = 5000,   -- points on a reference MBT
     killTicketRefLoss   = 30,     -- tickets that MBT drains (was 60000kg / 2000)
 
+    -- Vehicle-kill ledger (systems/sv_vehiclekill.lua): a contraption is
+    -- doomed once it loses vehicleKillMassFrac of its peak mass while enemy
+    -- damage is fresh, and a doomed contraption pays its kill to the attacker
+    -- whenever it ends -- shot down or undone, same credit. conKillWindow is
+    -- how many seconds enemy hits (and the doom itself) stay fresh for.
+    conKillWindow        = 30,
+    vehicleKillMassFrac  = 0.5,
+    vehicleKillAssistFrac = 0.15,  -- min share of total enemy damage to count as an assist
+    vehicleKillAssistPay  = 0.25,  -- share of the kill reward each assist pays
+    vehicleAmmoBigCal     = 50,    -- mm: main-gun ammo band; losing it all is a mission kill
+    vehicleAmmoMidCal     = 15,    -- mm: secondary band; losing it on a big tank is an assist
+
     -- DM overtime: deaths are DM's only ticket drain, so two passive teams made
     -- a round literally endless (and spawn camping stalled it on purpose).
     -- After dmOvertimeStart seconds BOTH teams bleed tickets, and the bleed
@@ -73,6 +85,15 @@ TPG.Config = {
     -- class (many workshop ones use "weapon_medkit"); "" disables it. Skipped
     -- silently if the class isn't installed.
     underdogMedkitClass    = "weapon_medkit",
+
+    -- Ammo pressure (systems work in player/sv_loadout.lua). Standing in your
+    -- own safezone for resupplyTime seconds tops every loadout weapon back up
+    -- to what the life spawned with. Each live NPC bot also grows that "full"
+    -- total by npcAmmoBonus of it, capped at npcAmmoBonusMax, so bot-heavy
+    -- rounds spawn with deeper reserves.
+    resupplyTime    = 15,
+    npcAmmoBonus    = 0.05,  -- +5% of the spawned ammo total per live bot
+    npcAmmoBonusMax = 0.6,   -- cap on the NPC ammo bonus (fraction of the total)
 
     -- Wait-for-players window at map start: the first round doesn't begin until
     -- loading players are in, so fast loaders can't burn team budget (or start

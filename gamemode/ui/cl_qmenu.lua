@@ -58,6 +58,11 @@ local function buildPlayer(pnl)
     button(pnl, "Manual", run("tpg_menu_manual"))
     button(pnl, "Map vote", run("tpg_menu_mapvote"))
 
+    pnl:Help("Gear")
+    button(pnl, "Buy suit - vest + helmet, " .. (TPG.Gear.Suit and TPG.Gear.Suit.cost or 450) ..
+        " pts / " .. (TPG.Gear.Suit and TPG.Gear.Suit.rounds or 10) .. " rounds",
+        run("tpg_suit"))
+
     pnl:Help("HUD")
     pnl:CheckBox("Compass", "tpg_hud_compass")
     pnl:CheckBox("Objective markers", "tpg_hud_objectives")

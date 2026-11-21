@@ -368,6 +368,11 @@ function TPG.Rounds.EndRound(winningTeam)
         TPG.Stats.OnRoundEnd(winningTeam)
     end
 
+    -- Bought suits run down one round per round, deaths notwithstanding.
+    if TPG.Wearables and TPG.Wearables.OnRoundEnd then
+        TPG.Wearables.OnRoundEnd()
+    end
+
     -- Check for map vote
     local totalWins = TPG.State.round.wins[TEAM_GREEN] + TPG.State.round.wins[TEAM_RED]
 

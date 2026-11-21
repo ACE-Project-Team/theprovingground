@@ -9,12 +9,12 @@
     Rating drives the rank ladder (`config/sh_ranks.lua`) and the skill-based
     team scramble (`player/sv_teams.lua`). Everyone starts at 1000.
 
-        kill           +10 (+ up to +20 scaled by the victim's vehicle value)
-        death           -4
-        teamkill       -15
-        CP capture     +15 (each player on the point)
-        flag delivery  +25
-        round result   Elo, see @{OnRoundEnd}
+        enemy kill     +-6 * (1 - expected) -- zero-sum Elo vs the victim
+        unearned death  -2 (suicide, world, bots, teamkilled)
+        teamkill       -20
+        CP capture     counted for the scramble's capper stat, no rating
+        flag delivery  counted for the scramble's capper stat, no rating
+        round result   Elo, see @{OnRoundEnd} (K decays from ~120 to 40)
 
     Bots are ignored outright: every accessor here returns nil for them, so
     nothing a bot does reaches the file.
@@ -338,6 +338,21 @@ function TPG.Stats.ResetAll()
 end
 
 -- ── Event hooks ─────────────────────────────────────────────────────────────
+-- Per-kill Elo weight. Each kill is a mini-match between killer and victim:
+-- the delta is zero-sum and scales with the rating gap, so farming players
+-- below you pays little and dying to them costs a lot. 6 keeps a busy round's
+-- total kill swing (~5 kills) comparable to the round result's K=40 -- the
+-- Elo below is meant to be the dominant term, and these are meant to be the
+-- seasoning, not the other way round.
+local KILL_ELO_K = 6
+
+-- Flat cost for a death nobody earned: suicide, world damage, falls, and
+-- being killed by your own team. Small enough not to matter, present so that
+-- dying to the map is never preferable to dying honestly.
+local DEATH_FLAT_COST = 2
+
+local TEAMKILL_RATING_COST = 20
+
 hook.Add("PlayerDeath", "TPG_StatsDeath", function(victim, _inflictor, attacker)
     -- A re-kit (the loadout menu's respawn button) isn't a death anyone earned,
     -- theirs or an enemy's, so it doesn't go on either record. See
@@ -347,42 +362,66 @@ hook.Add("PlayerDeath", "TPG_StatsDeath", function(victim, _inflictor, attacker)
     local ve = entry(victim)
     if ve then
         ve.deaths = ve.deaths + 1
-        -- Only lose rating to an actual enemy, not to drowning/falls/suicide.
-        if IsValid(attacker) and attacker:IsPlayer() and attacker ~= victim
-            and attacker:Team() ~= victim:Team() then
-            addRating(ve, -4)
-        end
         dirty = true
     end
 
-    if not (IsValid(attacker) and attacker:IsPlayer()) or attacker == victim then return end
-    local ae = entry(attacker)
-    if not ae then return end
+    local byPlayer = IsValid(attacker) and attacker:IsPlayer() and attacker ~= victim
+    local teamkill = byPlayer and attacker:Team() == victim:Team()
 
-    if attacker:Team() == victim:Team() then
-        ae.teamkills = ae.teamkills + 1
-        addRating(ae, -15)
+    if teamkill then
+        local ae = entry(attacker)
+        if ae then
+            ae.teamkills = ae.teamkills + 1
+            addRating(ae, -TEAMKILL_RATING_COST)
+        end
+        -- The victim wasn't outplayed by an enemy, so they pay the flat
+        -- nobody-earned-it cost, not a kill Elo loss.
+        if ve then addRating(ve, -DEATH_FLAT_COST) end
         return
     end
 
-    ae.kills = ae.kills + 1
-    local vehValue = (TPG.ACE and TPG.ACE.GetPlayerPoints and TPG.ACE.GetPlayerPoints(victim)) or 0
-    addRating(ae, 10 + math.min(vehValue / 1000, 20))
+    if not byPlayer then
+        -- Suicide, world damage, drowning, a bot, an NPC. Same flat cost for
+        -- the same reason: nobody earned this death.
+        if ve then addRating(ve, -DEATH_FLAT_COST) end
+        return
+    end
+
+    -- An enemy kill. The old model paid the attacker flat +10 plus a bonus for
+    -- the victim's fielded vehicle value, which measured what the victim was
+    -- driving rather than how hard they were to beat -- and minted rating from
+    -- thin air (+10..+30 in, -4 out), so the whole ladder inflated. The
+    -- delta below is zero-sum and prices the VICTIM's rating instead: beating
+    -- a stronger player is worth more, whatever either side was driving.
+    local ae = entry(attacker)
+    if ae then
+        ae.kills = ae.kills + 1
+        local expected = 1 / (1 + 10 ^ (((ve and ve.rating or 1000) - (ae.rating or 1000)) / 400))
+        local delta = KILL_ELO_K * (1 - expected)
+        addRating(ae, delta)
+        if ve then addRating(ve, -delta) end
+    elseif ve then
+        -- Attacker has no record (bot/unsettled SteamID64): the death still
+        -- costs the flat amount.
+        addRating(ve, -DEATH_FLAT_COST)
+    end
 end)
 
---- Credit a control-point capture: +1 cap, +15 rating.
+--- Credit a control-point capture: +1 cap on the lifetime record.
 -- Called from `TPG.Objectives.OnCapture` once per player standing on the
--- point, so a contested cap pays everyone who held it.
+-- point, so a contested cap pays everyone who held it. No rating: objective
+-- play feeds the scramble's capper stat (scrambleCapperRate) instead, so the
+-- ladder measures winning and the draft still sees who stands on points.
 -- @tparam Player ply
 -- @realm server
 function TPG.Stats.OnCapture(ply)
     local e = entry(ply)
     if not e then return end
     e.caps = e.caps + 1
-    addRating(e, 15)
 end
 
---- Credit a flag delivery: +1 flag, +25 rating.
+--- Credit a flag delivery: +1 flag on the lifetime record, no rating (same
+-- reasoning as @{TPG.Stats.OnCapture}).
 -- Called from `TPG.CTF.OnCapture`, for the carrier only.
 -- @tparam Player ply
 -- @realm server
@@ -390,7 +429,6 @@ function TPG.Stats.OnFlagCapture(ply)
     local e = entry(ply)
     if not e then return end
     e.flags = e.flags + 1
-    addRating(e, 25)
 end
 
 --[[
@@ -409,6 +447,11 @@ end
     two systems improve together.
 ]]
 local ELO_K = 40
+-- Placement rounds: a new record moves faster until the ladder has seen them
+-- play, then settles to ELO_K. K = 40 + 80 * exp(-rounds/8): ~120 on the
+-- first round, ~85 after ten, ~40 for everyone else. It is the cheap half of
+-- a Glicko rating-deviation term, which this file does not carry.
+local ELO_PROVISIONAL_K = 80
 
 local function TeamAverageRating(teamId)
     local total, count = 0, 0
@@ -452,10 +495,11 @@ function TPG.Stats.OnRoundEnd(winningTeam)
                 local enemy = TPG.GetEnemyTeam(own)
                 local expected = 1 / (1 + 10 ^ (((avg[enemy] or 1000) - (avg[own] or 1000)) / 400))
                 local actual   = (own == winningTeam) and 1 or 0
+                local k        = ELO_K + ELO_PROVISIONAL_K * math.exp(-(e.rounds or 0) / 8)
 
                 e.rounds = e.rounds + 1
                 if actual == 1 then e.wins = e.wins + 1 end
-                addRating(e, ELO_K * (actual - expected))
+                addRating(e, k * (actual - expected))
             end
         end
     end

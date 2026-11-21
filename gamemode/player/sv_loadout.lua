@@ -283,6 +283,11 @@ function TPG.Loadout.Apply(ply)
     ply:SetNWInt("TPG_WalkSpeed", walkSpeed)
     ply:SetNWInt("TPG_RunSpeed", runSpeed)
 
+    -- The resupply floors for this life get rebuilt by the giving code below;
+    -- drop last life's (possibly different loadout, possibly different NPC
+    -- count) so a stale pool can't be topped up by Resupply.
+    TPG.State.GetPlayer(ply).ammoFull = nil
+
     -- Give weapons
     TPG.Loadout.GiveWeapon(ply, "Primary", primaryId)
     TPG.Loadout.GiveWeapon(ply, "Secondary", secondaryId)
@@ -327,6 +332,12 @@ function TPG.Loadout.Apply(ply)
         end
     end
 
+    -- ACE wearables (helmet/vest/suit) once the armor tier is final -- it
+    -- decides which helmet, if any, goes on.
+    if TPG.Wearables and TPG.Wearables.ApplyFor then
+        TPG.Wearables.ApplyFor(ply, armorId)
+    end
+
     local pState = TPG.State.GetPlayer(ply)
 
     --[[
@@ -360,34 +371,117 @@ function TPG.Loadout.Apply(ply)
     TPG.Util.PlaySound(ply, "acf_extra/tankfx/gnomefather/rack.wav")
 end
 
+--[[
+    Extra rounds when the field is full of NPCs.
+
+    A rifleman burns through his spawn load killing bots long before the round
+    ends. Each live bot adds npcAmmoBonus of the weapon's "full" total on top
+    of it, capped at npcAmmoBonusMax: with the defaults (0.05 / 0.6) a dozen
+    bots means carrying 60% more of everything. Both the spawn top-up and the
+    base resupply read the same number, so the recorded "full" already includes
+    the bonus -- resupply never needs to recompute it.
+]]
+local function NpcAmmoBonus(ply, base)
+    local bots = TPG.Bots and TPG.Bots.list and #TPG.Bots.list or 0
+    if bots <= 0 or base <= 0 then return 0 end
+
+    local frac = math.min(bots * (TPG.Config.npcAmmoBonus or 0),
+        TPG.Config.npcAmmoBonusMax or 0)
+    return math.ceil(base * frac)
+end
+
+--[[
+    Remember the per-ammo-type "full" total a spawn handed out.
+
+    Resupply tops the player back up to this later -- the configured floor for
+    classes that have one, otherwise whatever the weapon actually shipped with
+    (plus the NPC bonus). Recorded per ammo TYPE, not per weapon, because ammo
+    pools are shared: the three ACE mines all draw from one pool, and refilling
+    each class separately would triple it.
+]]
+local function RecordAmmoFull(ply, wep, total)
+    if not IsValid(wep) then return end
+    local ammoType = wep:GetPrimaryAmmoType()
+    if ammoType < 0 then return end
+
+    local pState = TPG.State.GetPlayer(ply)
+    if not pState.ammoFull then pState.ammoFull = {} end
+    pState.ammoFull[ammoType] = math.max(pState.ammoFull[ammoType] or 0, total)
+end
+
 -- Raise the player's clip + reserve of a weapon's primary ammo to the total
 -- configured in TPG.WeaponConfig.AmmoTopUp, or -- for any Special-slot weapon
 -- without an explicit entry -- to the SpecialAmmoMin floor. Launchers commonly
 -- ship with DefaultClip = 1, including ones from add-on packs we can't list by
--- class; the category floor catches those too.
-local function TopUpAmmo(ply, category, class, wep)
+-- class; the category floor catches those too. Returns the rounds actually
+-- given so the resupply bookkeeping can report a real top-up.
+--[[
+    Give a weapon and measure how much ammo the give actually shipped.
+
+    `ply:Give` leaves the engine to grant the SWEP's default clip + reserve,
+    and GetAmmoCount AFTER the give also counts whatever reserve the player
+    still carried from a previous life -- StripWeapons does not clear the ammo
+    inventory. Reading the post-give total as "what this weapon ships with"
+    therefore compounds leftovers into every re-apply (the recorded "full"
+    crept upward every respawn until this was measured live). The shipped
+    figure is the DELTA across the give, plus the loaded magazine.
+]]
+local function GiveMeasured(ply, class)
+    local stored   = weapons.GetStored(class)
+    local ammoName = stored and stored.Primary and stored.Primary.Ammo
+    local ammoType = ammoName and game.GetAmmoID(ammoName) or -1
+    local before   = ammoType >= 0 and ply:GetAmmoCount(ammoType) or 0
+
+    local wep = ply:Give(class)
+    if not IsValid(wep) then return wep, 0 end
+
+    local shipped = 0
+    if ammoType >= 0 then
+        shipped = math.max(wep:Clip1(), 0) + (ply:GetAmmoCount(ammoType) - before)
+    end
+    return wep, shipped
+end
+
+local function TopUpAmmo(ply, category, class, wep, shipped)
     local cfg = TPG.WeaponConfig
     local target = cfg.AmmoTopUp and cfg.AmmoTopUp[class]
     if not target and category == "Special" then
         target = cfg.SpecialAmmoMin
     end
-    if not target then return end
+
+    if not IsValid(wep) then wep = ply:GetWeapon(class) end
+    if not IsValid(wep) then return 0 end
+
+    local ammoType = wep:GetPrimaryAmmoType()
+    if ammoType < 0 then return 0 end
 
     -- Losing hard? The underdog carries a couple of extra rockets.
-    if TPG.Underdog and TPG.Underdog.GetAmmoBonus and target > 1 then
+    if target and TPG.Underdog and TPG.Underdog.GetAmmoBonus and target > 1 then
         target = target + TPG.Underdog.GetAmmoBonus(ply)
     end
 
-    if not IsValid(wep) then wep = ply:GetWeapon(class) end
-    if not IsValid(wep) then return end
+    --[[
+        "Full" is whatever the weapon ships with or the floor, whichever is
+        bigger, grown by the NPC bonus. Floored classes get the same treatment
+        as everything else: a 6-round AT-4 floor with a dozen bots on the map
+        becomes 9-10. Weapons with no floor at all (every primary) still get
+        the bonus on their shipped load -- infantry ammo is exactly the thing
+        that runs out against NPCs.
+    ]]
+    local base = math.max(shipped or 0, target or 0)
+    local full = base + NpcAmmoBonus(ply, base)
 
-    local ammoType = wep:GetPrimaryAmmoType()
-    if ammoType < 0 then return end
+    if full <= 0 then return 0 end
+    RecordAmmoFull(ply, wep, full)
 
+    -- Top UP to the recorded total: a reserve the player still carries from a
+    -- previous life counts toward it, so the give may shrink to nothing.
     local have = math.max(wep:Clip1(), 0) + ply:GetAmmoCount(ammoType)
-    if have < target then
-        ply:GiveAmmo(target - have, ammoType, true)
+    local given = math.max(full - have, 0)
+    if given > 0 then
+        ply:GiveAmmo(given, ammoType, true)
     end
+    return given
 end
 
 --[[
@@ -406,6 +500,10 @@ local function SetExactAmmo(ply, wep, total, loaded)
 
     local ammoType = wep:GetPrimaryAmmoType()
     if ammoType < 0 then return end
+
+    -- The exact total scales with NPC presence like any floor does.
+    total = total + NpcAmmoBonus(ply, total)
+    RecordAmmoFull(ply, wep, total)
 
     ply:RemoveAmmo(ply:GetAmmoCount(ammoType), ammoType)
     ply:GiveAmmo(math.max(total - (loaded or 0), 0), ammoType, true)
@@ -427,7 +525,7 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
 
     -- Single weapon
     if weapon.class then
-        TopUpAmmo(ply, category, weapon.class, ply:Give(weapon.class))
+        TopUpAmmo(ply, category, weapon.class, GiveMeasured(ply, weapon.class))
         return true
     end
 
@@ -435,14 +533,14 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
     if weapon.multipleClasses then
         local first
         for _, class in ipairs(weapon.multipleClasses) do
-            local given = ply:Give(class)
+            local given, shipped = GiveMeasured(ply, class)
             if not IsValid(first) then first = given end
 
             -- An exact total replaces the top-up entirely: topping each class up
             -- first and then trimming the pool would just be the same arithmetic
             -- done twice.
             if not weapon.exactAmmo then
-                TopUpAmmo(ply, category, class, given)
+                TopUpAmmo(ply, category, class, given, shipped)
             end
         end
 
@@ -454,7 +552,7 @@ function TPG.Loadout.GiveWeapon(ply, category, weaponId)
 
     -- Fallback weapon (e.g., disposable AT when no special selected)
     if weapon.fallbackClass then
-        TopUpAmmo(ply, category, weapon.fallbackClass, ply:Give(weapon.fallbackClass))
+        TopUpAmmo(ply, category, weapon.fallbackClass, GiveMeasured(ply, weapon.fallbackClass))
         return true
     end
 
@@ -478,4 +576,79 @@ function TPG.Loadout.ApplyArmor(ply, armorId)
     ply:SetHealth(armor.health)
     ply:SetMaxHealth(armor.health)
     ply:SetArmor(armor.armor)
+end
+--[[--
+    Refill a player's carried ammo to the "full" totals this life spawned
+    with.
+
+    Walks the held weapons, reads each one's primary ammo type, and tops the
+    pool up to `pState.ammoFull` (recorded by the giving code: configured floor
+    or shipped load, whichever was bigger, plus the NPC bonus). Weapon lookups
+    are avoided entirely -- one `GetWeapons` call, one ammo read per weapon --
+    and the whole thing only runs when `ResupplyTick` decides it's due, so the
+    cost is a few table reads every resupplyTime seconds per parked player,
+    not per tick.
+
+    Weapons that weren't part of the recorded loadout (pickups, tools,
+    grenades, the consolation AT tube) have no recorded full and are skipped,
+    which also keeps resupply from minting ammo for things the loadout never
+    issued.
+
+    @tparam Player ply
+    @treturn number Rounds actually given (0 when already full).
+    @realm server
+]]
+function TPG.Loadout.Resupply(ply)
+    local pState = TPG.State.GetPlayer(ply)
+    local full = pState.ammoFull
+    if not full then return 0 end
+
+    local given = 0
+    for _, wep in ipairs(ply:GetWeapons()) do
+        if IsValid(wep) then
+            local ammoType = wep:GetPrimaryAmmoType()
+            local total = ammoType >= 0 and full[ammoType]
+            if total then
+                local have = math.max(wep:Clip1(), 0) + ply:GetAmmoCount(ammoType)
+                if have < total then
+                    ply:GiveAmmo(total - have, ammoType, true)
+                    given = given + total - have
+                end
+            end
+        end
+    end
+    return given
+end
+
+--[[--
+    Accumulate time-in-safezone and fire the resupply when it's due.
+
+    Called every tick from `TPG_ProtectionThink`, which already knows the
+    player is alive, on a team, and inside their own zone -- the expensive part
+    is shared. Inside the zone this is one table read and one field write per
+    tick; `Resupply` itself only runs when the wait elapses. Leaving the zone
+    for a tick resets the clock.
+
+    @tparam Player ply
+    @tparam boolean inSafezone Whether the player is in their team's zone.
+    @realm server
+]]
+function TPG.Loadout.ResupplyTick(ply, inSafezone)
+    local pState = TPG.State.GetPlayer(ply)
+    if not inSafezone then
+        if pState.resupplyFor then pState.resupplyFor = nil end
+        return
+    end
+
+    local waited = (pState.resupplyFor or 0) + FrameTime()
+    if waited < (TPG.Config.resupplyTime or 15) then
+        pState.resupplyFor = waited
+        return
+    end
+
+    pState.resupplyFor = nil
+    if TPG.Loadout.Resupply(ply) > 0 then
+        TPG.Util.ChatMessage(ply, "[TPG] Resupplied ammo.", Color(0, 255, 0))
+        TPG.Util.PlaySound(ply, "items/ammo_pickup.wav")
+    end
 end

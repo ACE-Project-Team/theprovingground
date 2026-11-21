@@ -381,11 +381,53 @@ hook.Add("PlayerDeath", "TPG_EconomyKillReward", function(victim, _inflictor, at
     ECON.Notify(attacker, ECON.GetMoney(attacker) - before, "kill")
 end)
 
+--[[--
+    Pay out a vehicle kill with no player death behind it.
+
+    `systems/sv_vehiclekill.lua` fires `TPG_VehicleKilled` when a doomed
+    contraption ends -- deleted wrecks count the same as shot-up ones, so the
+    attacker can't be denied the reward by an undo. Same reward curve as a
+    frag; `value` is the victim's fielded point total at kill time.
+
+    @tparam Player killer
+    @tparam number value Fielded ACE points the kill is priced on.
+    @realm server
+]]
+function TPG.Economy.VehicleKillReward(killer, value)
+    if not ECON.Active then return end
+    if not IsValid(killer) or not killer:IsPlayer() then return end
+
+    local before = ECON.GetMoney(killer)
+    ECON.Reward(killer, killReward(value or 0), "vehicle kill")
+    ECON.Notify(killer, ECON.GetMoney(killer) - before, "vehicle kill")
+end
+
+--[[--
+    Pay an assist on a vehicle kill: the killer gets the full reward above,
+    each meaningful helper gets `vehicleKillAssistPay` of it so a two-man
+    takedown doesn't leave the second gun empty-handed.
+
+    @tparam Player assist A contributor below the kill share.
+    @tparam number value Fielded ACE points the kill is priced on.
+    @realm server
+]]
+function TPG.Economy.VehicleKillAssistReward(assist, value)
+    if not ECON.Active then return end
+    if not IsValid(assist) or not assist:IsPlayer() then return end
+
+    local share = killReward(value or 0) * (TPG.Config.vehicleKillAssistPay or 0.25)
+    local before = ECON.GetMoney(assist)
+    ECON.Reward(assist, share, "vehicle assist")
+    ECON.Notify(assist, ECON.GetMoney(assist) - before, "vehicle assist")
+end
+
 -- ── Income: killing a test-mode bot (gamemode/bots/sv_bots.lua) ──────────────
 -- Bots carry no vehicle value, so the payout is the base kill reward, scaled
 -- down by this so bots are not a farm. Bot kills never reach the stats or
--- commendation hooks, since those only run for player deaths.
-local cvBotReward = CreateConVar("tpg_bots_reward_scale", "0.5", { FCVAR_ARCHIVE },
+-- commendation hooks, since those only run for player deaths. 0.1 because a
+-- lobby full of bots was paying out like a player kill streak: at 0.5 each
+-- bot was worth half a kill, and bots die far easier than players.
+local cvBotReward = CreateConVar("tpg_bots_reward_scale", "0.1", { FCVAR_ARCHIVE },
     "Share of the normal kill reward paid for killing a test-mode bot.")
 
 hook.Add("TPG_BotKilled", "TPG_EconomyBotReward", function(npc, attacker)
