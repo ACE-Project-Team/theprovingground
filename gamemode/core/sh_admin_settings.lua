@@ -39,6 +39,8 @@ TPG.AdminSettings.List = {
     { name = "tpg_weapons_base_only",       type = "bool",   group = "Gameplay", rank = "admin",      label = "ACE weapons only" },
 
     { name = "tpg_bots_fill",               type = "int",    group = "Bots",     rank = "superadmin", label = "Fighters per team", min = 0, max = 16, decimals = 0 },
+    { name = "tpg_bots_green",              type = "int",    group = "Bots",     rank = "superadmin", label = "NPCs on Green (-1 = auto)", min = -1, max = 16, decimals = 0 },
+    { name = "tpg_bots_red",                type = "int",    group = "Bots",     rank = "superadmin", label = "NPCs on Red (-1 = auto)", min = -1, max = 16, decimals = 0 },
     { name = "tpg_bots_difficulty",         type = "int",    group = "Bots",     rank = "superadmin", label = "Difficulty", min = 0, max = 4, decimals = 0 },
     { name = "tpg_bots_at_ratio",           type = "number", group = "Bots",     rank = "superadmin", label = "Anti-tank share", min = 0, max = 1, decimals = 2 },
     { name = "tpg_bots_armor_points",       type = "int",    group = "Bots",     rank = "superadmin", label = "Armor points", min = 0, max = 100000, decimals = 0 },
@@ -50,6 +52,7 @@ TPG.AdminSettings.List = {
     { name = "tpg_bots_cai_wallbang",       type = "bool",   group = "Bots",     rank = "superadmin", label = "Bots shoot through walls (Combat AI)" },
 
     { name = "tpg_collection_min_maps",     type = "int",    group = "Server",   rank = "superadmin", label = "Map collection reminder below", min = 0, max = 64, decimals = 0 },
+    { name = "tpg_mapvote_enabled",         type = "bool",   group = "Server",   rank = "superadmin", label = "Allow map voting" },
 }
 
 --- Find the allow-list entry for a convar name.

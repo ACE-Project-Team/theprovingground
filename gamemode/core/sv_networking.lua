@@ -149,15 +149,16 @@ timer.Create("TPG_TeamPositions", 0.2, 0, TPG.Net.SyncTeamPositions)
 
 --- Broadcast live vote counts per candidate. Each count is clamped to 255
 -- (8-bit field) before sending, so a candidate can't overflow the field on a
--- very large server.
--- @tparam table counts List of vote counts, index-aligned with the candidate
---  list already sent via @{tpg.net.SyncMapVote}.
+-- very large server. Index 0 is the "stay on this map" pseudo-candidate, sent
+-- first, so the wire holds `#counts + 1` values.
+-- @tparam table counts Vote counts, index-aligned with the candidate list
+--  already sent via @{tpg.net.SyncMapVote}, plus `counts[0]` for "stay".
 -- @realm server
 function TPG.Net.SyncVoteTally(counts)
     net.Start("TPG_SyncVoteTally")
-        net.WriteUInt(#counts, 4)
-        for _, c in ipairs(counts) do
-            net.WriteUInt(math.min(c, 255), 8)
+        net.WriteUInt(#counts + 1, 4)
+        for i = 0, #counts do
+            net.WriteUInt(math.min(counts[i] or 0, 255), 8)
         end
     net.Broadcast()
 end

@@ -17,12 +17,13 @@
     server resolves via `TPG.Voting.CastMapVote` -- the click sends only the
     card's position in the candidate list, not the map name, so a stale or
     reordered `TPG.UI.State.mapVote` would vote for the wrong map without any
-    error. Voting marks the chosen card and closes the menu a moment later, so
-    the player sees their pick land and then gets the game back; the close
-    button is there for anyone who would rather not vote at all. The menu also
-    closes itself 3 seconds after `TPG.UI.State.voteEnd` passes, via a `Think`
-    check rather than a scheduled close, so it disappears even if the server's
-    own end-of-vote broadcast is lost.
+    error. A "stay on this map" card rides at the end as index 0. Voting marks
+    the chosen card and closes the menu a moment later, so the player sees
+    their pick land and then gets the game back; the close button is there for
+    anyone who would rather not vote at all. While the vote is still live the
+    menu reopens through `tpg_rtv` (F2 menu button or `!rtv` in chat), which
+    also lets a player change their pick. The menu refuses to open once
+    `TPG.UI.State.voteEnd` has passed.
 
     @module tpg.menu.voting
     @realm client
@@ -33,9 +34,12 @@ local CATEGORY_NAMES = { [0] = "Map", [1] = "Open Map", [2] = "Urban Map", [3] =
 local function OpenMapVoteMenu()
     local maps = TPG.UI.State.mapVote or {}
     if #maps == 0 then return end
+    -- The candidate list stays cached after the window closes, so without
+    -- this check a late `tpg_menu_mapvote` would reopen a dead vote.
+    if CurTime() >= (TPG.UI.State.voteEnd or 0) then return end
 
     local cardW, cardH, pad = 230, 300, 12
-    local count = #maps
+    local count = #maps + 1 -- the "stay on this map" card rides at the end
     local frameW = math.min(count * cardW + (count + 1) * pad, ScrW() - 40)
     local frameH = cardH + 96
 
@@ -138,6 +142,48 @@ local function OpenMapVoteMenu()
                 if IsValid(frame) then frame:Close() end
             end)
         end
+    end
+
+    -- "Stay" card: index 0 on the wire, same feedback shape as a map card but
+    -- no preview or budgets - it just keeps the current map.
+    local stay = vgui.Create("DButton", canvas)
+    stay:SetText("")
+    stay:SetSize(cardW, cardH)
+    stay:SetPos(#maps * (cardW + pad), 0)
+
+    stay.Paint = function(_, w, h)
+        draw.RoundedBox(6, 0, 0, w, h, voted == 0 and Color(30, 45, 32) or Color(25, 25, 30, 255))
+        if voted == 0 then
+            surface.SetDrawColor(120, 230, 120)
+            surface.DrawOutlinedRect(0, 0, w, h, 2)
+        end
+
+        draw.RoundedBox(4, 6, 6, w - 12, 120, Color(40, 45, 40))
+        draw.SimpleText("STAY", "DermaLarge", w / 2, 66,
+            Color(160, 220, 160), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+
+        draw.SimpleText("Keep", "DermaDefault", 10, 132, Color(255, 220, 80))
+        draw.SimpleText(game.GetMap(), "DermaDefaultBold", 10, 148, color_white)
+        draw.SimpleText("Same map, same layout,", "DermaDefault", 10, 176, Color(170, 170, 170))
+        draw.SimpleText("no changelevel.", "DermaDefault", 10, 194, Color(170, 170, 170))
+
+        local votes = (TPG.UI.State.voteTally or {})[0] or 0
+        draw.RoundedBox(4, 6, h - 36, w - 12, 28, voted == 0 and Color(50, 80, 50) or Color(40, 40, 50))
+        draw.SimpleText(voted == 0 and ("Your vote - " .. votes) or ("Votes: " .. votes),
+            "DermaDefaultBold", w / 2, h - 22,
+            Color(120, 230, 120), TEXT_ALIGN_CENTER, TEXT_ALIGN_CENTER)
+    end
+
+    stay.DoClick = function()
+        if voted then return end
+        voted = 0
+
+        LocalPlayer():EmitSound("common/weapon_select.wav")
+        RunConsoleCommand("tpg_votemap", 0)
+
+        timer.Simple(0.4, function()
+            if IsValid(frame) then frame:Close() end
+        end)
     end
 
 end

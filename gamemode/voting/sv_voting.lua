@@ -18,6 +18,9 @@
 
 TPG.Voting = TPG.Voting or {}
 
+local cvMapVote = CreateConVar("tpg_mapvote_enabled", "1", { FCVAR_ARCHIVE },
+    "Allow the RTV/end-of-round map vote. Off keeps the server on this map; only a server-console changelevel moves it.")
+
 -- Map lists
 TPG.Voting.MapLists = {
     Open = {
@@ -49,6 +52,18 @@ TPG.Voting.MapLists = {
     @realm server
 ]]
 function TPG.Voting.RockTheVote(ply)
+    if not cvMapVote:GetBool() then
+        TPG.Util.ChatMessage(ply, "[TPG] Map voting is disabled on this server.", Color(255, 200, 0))
+        return
+    end
+
+    -- A map vote is already open: RTV is moot, so it re-opens that player's
+    -- menu instead -- this is the way back in after closing the vote screen.
+    if TPG.State.voting.active then
+        ply:ConCommand("tpg_menu_mapvote")
+        return
+    end
+
     local pState = TPG.State.GetPlayer(ply)
     pState.votes.rtv = true
 
@@ -153,10 +168,29 @@ end
 
     @realm server
 ]]
+-- Hand control back to the round loop when the map stays: an end-of-round
+-- vote still owes the server a next round, a mid-round RTV just carries on.
+local function resumeOnCurrentMap()
+    if not TPG.State.round.active then
+        TPG.State.round.wins[TEAM_GREEN] = 0
+        TPG.State.round.wins[TEAM_RED] = 0
+        timer.Simple(10, function() TPG.Rounds.Setup() end)
+    end
+end
+
 function TPG.Voting.StartMapVote()
     -- One vote at a time: its timers are unnamed, so a second call would stack
     -- a second countdown and a second changelevel.
     if TPG.State.voting.active then return end
+
+    -- Map voting disabled by the admin: no menu, no tally, the game keeps
+    -- going here. Only a server-console changelevel switches maps.
+    if not cvMapVote:GetBool() then
+        TPG.Util.ChatBroadcast("[TPG] Map voting is disabled - staying on " ..
+            game.GetMap() .. ".", Color(0, 255, 255))
+        resumeOnCurrentMap()
+        return
+    end
 
     -- Generate map choices. Each entry carries its category (1=Open, 2=Urban,
     -- 3=Bonus) so the vote screen can label it. Only maps this server has
@@ -218,11 +252,7 @@ function TPG.Voting.StartMapVote()
             game.GetMap() .. ".", Color(0, 255, 255))
         -- From the round-end flow, start the next round as EndRound would have.
         -- A rock-the-vote mid-round just carries on.
-        if not TPG.State.round.active then
-            TPG.State.round.wins[TEAM_GREEN] = 0
-            TPG.State.round.wins[TEAM_RED] = 0
-            timer.Simple(10, function() TPG.Rounds.Setup() end)
-        end
+        resumeOnCurrentMap()
         return
     end
 
@@ -230,6 +260,12 @@ function TPG.Voting.StartMapVote()
     TPG.State.voting.endTime = CurTime() + TPG.Config.mapVoteTime
     TPG.State.voting.votes = {}
     TPG.State.voting.maps = maps
+
+    -- Leftover picks from the previous vote would phantom-tally into this one
+    -- until everyone re-votes.
+    for _, ply in ipairs(player.GetAll()) do
+        TPG.State.GetPlayer(ply).votes.map = nil
+    end
 
     -- Sync to clients
     if TPG.Net and TPG.Net.SyncMapVote then
@@ -285,6 +321,16 @@ end
 ]]
 function TPG.Voting.CastMapVote(ply, mapIndex)
     if not TPG.State.voting.active then return end
+    if mapIndex == 0 then
+        TPG.State.GetPlayer(ply).votes.map = 0
+        TPG.Util.ChatBroadcast(
+            "[TPG] " .. ply:Nick() .. " voted to stay on " .. game.GetMap(),
+            Color(0, 0, 255)
+        )
+        TPG.Voting.BroadcastTally()
+        return
+    end
+
     local choice = TPG.State.voting.maps[mapIndex]
     if not choice then return end
 
@@ -303,12 +349,12 @@ end
 -- send the tally to all clients.
 -- @realm server
 function TPG.Voting.BroadcastTally()
-    local counts = {}
+    local counts = { [0] = 0 }
     for i = 1, #TPG.State.voting.maps do counts[i] = 0 end
 
     for _, ply in ipairs(player.GetAll()) do
         local v = TPG.State.GetPlayer(ply).votes.map
-        if v and counts[v] then counts[v] = counts[v] + 1 end
+        if v ~= nil and counts[v] ~= nil then counts[v] = counts[v] + 1 end
     end
 
     if TPG.Net and TPG.Net.SyncVoteTally then
@@ -332,7 +378,7 @@ end
 function TPG.Voting.TallyVotes()
     TPG.State.voting.active = false
 
-    local votes = {}
+    local votes = { [0] = 0 }
     for i = 1, #TPG.State.voting.maps do
         votes[i] = 0
     end
@@ -341,12 +387,13 @@ function TPG.Voting.TallyVotes()
         local pState = TPG.State.GetPlayer(ply)
         local vote = pState.votes.map
 
-        if vote and votes[vote] then
+        if vote ~= nil and votes[vote] ~= nil then
             votes[vote] = votes[vote] + 1
         end
     end
 
-    -- Find winner
+    -- Find winner. Same `>=` tie-break as before among the map candidates;
+    -- "stay" is checked last so it keeps any tie, including nobody voting.
     local bestMap = 1
     local bestVotes = 0
 
@@ -355,6 +402,12 @@ function TPG.Voting.TallyVotes()
             bestVotes = voteCount
             bestMap = i
         end
+    end
+
+    if votes[0] >= bestVotes then
+        TPG.Util.ChatBroadcast("[TPG] Staying on " .. game.GetMap() .. ".", Color(0, 255, 0))
+        resumeOnCurrentMap()
+        return
     end
 
     local winningMap = TPG.State.voting.maps[bestMap]

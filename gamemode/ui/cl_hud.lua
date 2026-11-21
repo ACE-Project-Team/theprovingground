@@ -90,7 +90,7 @@ end)
 net.Receive("TPG_SyncVoteTally", function()
     local count = net.ReadUInt(4)
     local tally = {}
-    for i = 1, count do
+    for i = 0, count - 1 do
         tally[i] = net.ReadUInt(8)
     end
     TPG.UI.State.voteTally = tally

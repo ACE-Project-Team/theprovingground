@@ -81,7 +81,8 @@
 
     Convars: `tpg_bots_fill`, `tpg_bots_test` (command), `tpg_bots_difficulty`,
     `tpg_bots_at_ratio`, `tpg_bots_respawn_delay`, `tpg_bots_drops`,
-    `tpg_bots_corpses`, `tpg_bots_friendly_fire` (this file),
+    `tpg_bots_corpses`, `tpg_bots_friendly_fire`, `tpg_bots_green`,
+    `tpg_bots_red` (this file),
     `tpg_bots_armor_points` (sv_threat.lua),
     `tpg_bots_reward_scale` (sv_economy.lua), `tpg_bots_cai_wallbang`
     (sv_cai.lua, Combat AI only), `tpg_bots_seat_grace` (sv_vehicles.lua).
@@ -155,6 +156,10 @@ local cvCorpses = CreateConVar("tpg_bots_corpses", "0", { FCVAR_ARCHIVE },
     "Dead bots leave ragdolls that stay.")
 local cvFriendly = CreateConVar("tpg_bots_friendly_fire", "0", { FCVAR_ARCHIVE },
     "Players can hurt the bots on their own team.")
+local cvGreen = CreateConVar("tpg_bots_green", "-1", { FCVAR_ARCHIVE },
+    "Exact NPC count on the green team (-1 = defer to fill/test mode, 0+ = force count).")
+local cvRed = CreateConVar("tpg_bots_red", "-1", { FCVAR_ARCHIVE },
+    "Exact NPC count on the red team (-1 = defer to fill/test mode, 0+ = force count).")
 
 local nextSpawn     = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
 local nextRelations = 0
@@ -206,9 +211,28 @@ local function proficiency()
     return PROFICIENCY[level + 1]
 end
 
--- How many bots a team should have right now. Fill mode counts the players
--- already on the team; otherwise it is the fixed test count.
+-- The team's own count convar, -1 when unset.
+local function teamConvar(teamId)
+    if teamId == TEAM_GREEN then return cvGreen:GetInt() end
+    return cvRed:GetInt()
+end
+
+-- Any bot source asking for NPCs right now: a fixed test count, fill mode,
+-- or a per-team count on either side.
+local function anySource()
+    return TPG.Bots.perTeam > 0 or cvFill:GetInt() > 0
+        or cvGreen:GetInt() >= 0 or cvRed:GetInt() >= 0
+end
+
+-- How many bots a team should have right now. A set per-team count wins;
+-- otherwise fill mode counts the players already on the team, and failing
+-- both it is the fixed test count.
 local function targetFor(teamId)
+    local per = teamConvar(teamId)
+    if per >= 0 then
+        return TPG.Util.Clamp(per, 0, MAX_PER_TEAM)
+    end
+
     local fill = cvFill:GetInt()
     if fill > 0 then
         return TPG.Util.Clamp(fill - team.NumPlayers(teamId), 0, MAX_PER_TEAM)
@@ -854,7 +878,7 @@ local function removeOne(teamId)
 end
 
 brain = function()
-    if TPG.Bots.perTeam <= 0 and cvFill:GetInt() <= 0 then
+    if not anySource() then
         stopBrain()
         TPG.Bots.RemoveAll()
         return
@@ -924,7 +948,7 @@ brain = function()
         local target = targetFor(teamId)
         local alive  = countAlive(teamId)
 
-        if cvFill:GetInt() > 0 and alive > target then
+        if (cvFill:GetInt() > 0 or teamConvar(teamId) >= 0) and alive > target then
             removeOne(teamId)
         elseif alive < target and now >= nextSpawn[teamId] and canSpawn() then
             nextSpawn[teamId] = now + SPAWN_GAP
@@ -1021,15 +1045,16 @@ function TPG.Bots.RemoveAll()
 end
 
 --- Set bots per team. 0 removes every bot and stops the brain, unless fill
--- mode (`tpg_bots_fill`) is on, which takes precedence. Anything else starts
--- the brain and fills both teams up to that count.
+-- mode (`tpg_bots_fill`) or a per-team count (`tpg_bots_green`,
+-- `tpg_bots_red`) is on, which takes precedence. Anything else starts the
+-- brain and fills both teams up to that count.
 -- @tparam number n Bots per team, clamped to 0..16.
 -- @realm server
 function TPG.Bots.SetCount(n)
     n = TPG.Util.Clamp(math.floor(tonumber(n) or 0), 0, MAX_PER_TEAM)
     TPG.Bots.perTeam = n
 
-    if n == 0 and cvFill:GetInt() <= 0 then
+    if n == 0 and not anySource() then
         stopBrain()
         TPG.Bots.RemoveAll()
         return
@@ -1068,18 +1093,21 @@ function GM:GetDeathNoticeEntityName(ent)
     return self.BaseClass.GetDeathNoticeEntityName(self, ent)
 end
 
--- Fire the start-up state, so a server that boots with fill on runs the
--- brain without waiting for a convar change.
-if cvFill:GetInt() > 0 then startBrain() end
+-- Fire the start-up state, so a server that boots with a bot source on runs
+-- the brain without waiting for a convar change.
+if anySource() then startBrain() end
 
-cvars.AddChangeCallback("tpg_bots_fill", function(_, _, new)
-    if (tonumber(new) or 0) > 0 then
+local function sourceChanged()
+    if anySource() then
         startBrain()
-    elseif TPG.Bots.perTeam <= 0 then
+    else
         stopBrain()
         TPG.Bots.RemoveAll()
     end
-end, "TPG_BotsFill")
+end
+cvars.AddChangeCallback("tpg_bots_fill", sourceChanged, "TPG_BotsFill")
+cvars.AddChangeCallback("tpg_bots_green", sourceChanged, "TPG_BotsGreen")
+cvars.AddChangeCallback("tpg_bots_red", sourceChanged, "TPG_BotsRed")
 
 cvars.AddChangeCallback("tpg_bots_difficulty", function()
     local prof = proficiency()
@@ -1105,7 +1133,7 @@ hook.Add("PostCleanupMap", "TPG_Bots", function()
     nextSpawn = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
 
     timer.Simple(0.5, function()
-        if TPG.Bots.perTeam > 0 or cvFill:GetInt() > 0 then topUp() end
+        if anySource() then topUp() end
     end)
 end)
 
@@ -1179,7 +1207,13 @@ concommand.Add("tpg_bots_test", function(ply, _, args)
 
     TPG.Bots.SetCount(want)
 
-    local fill = cvFill:GetInt()
+    local g, r, fill = cvGreen:GetInt(), cvRed:GetInt(), cvFill:GetInt()
+    if g >= 0 or r >= 0 then
+        report(ply, string.format("[TPG] NPC test mode: per-team counts are set (green %d, red %d), which override the count of %d",
+            g, r, TPG.Bots.perTeam))
+        return
+    end
+
     if fill > 0 then
         report(ply, string.format("[TPG] NPC test mode: fill mode is on (tpg_bots_fill %d), which overrides the count of %d",
             fill, TPG.Bots.perTeam))

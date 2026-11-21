@@ -212,6 +212,16 @@ concommand.Add("tpg_rtv", function(ply, _cmd, _args)
     end
 end)
 
+-- `!rtv` in chat does the same: casts an RTV vote, or re-opens the vote menu
+-- while a map vote is already running. The message still echoes so everyone
+-- sees who is voting.
+hook.Add("PlayerSay", "TPG_ChatCommands", function(ply, text)
+    if string.lower(string.Trim(text)) == "!rtv"
+        and TPG.Voting and TPG.Voting.RockTheVote then
+        TPG.Voting.RockTheVote(ply)
+    end
+end)
+
 -- Vote scramble
 concommand.Add("tpg_scramble", function(ply, _cmd, _args)
     if TPG.Voting and TPG.Voting.VoteScramble then
