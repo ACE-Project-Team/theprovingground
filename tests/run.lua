@@ -41,6 +41,7 @@ local SUITES = {
     "test_vehiclekill",
     "test_voting",
     "test_wearables",
+    "test_protection",
 }
 
 ----------------------------------------------------------------- registry

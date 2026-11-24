@@ -251,6 +251,32 @@ hook.Add("PlayerSpawnedProp", "TPG_PropRestriction", function(ply, _model, ent) 
 hook.Add("PlayerSpawnedSENT", "TPG_SENTRestriction", function(ply, ent) RestrictSpawning(ply, ent) end)
 hook.Add("PlayerSpawnedVehicle", "TPG_VehicleRestriction", function(ply, ent) RestrictSpawning(ply, ent) end)
 
+--[[
+    Ownership for spawned props, claimed at creation.
+
+    AdvDupe2 fires PlayerSpawnedProp for every prop_physics it pastes, but
+    NadmodPP does not claim from that hook - it claims SENTs, vehicles and
+    SWEPs from theirs and relies on cleanup.Add for props, which the
+    duplicator path never calls (undo.Finish only registers the undo entry).
+    A pasted plate therefore stays ownerless until the paster touches it,
+    and ownerless entities never reach TPG's ACE permission mode: ACE falls
+    back to DefaultCanDamage before the safezone check runs
+    (sv_ace_permission.lua). A plate inside spawn could be shot apart while
+    the acf_gun next to it - a SENT, claimed at spawn - was untouchable.
+
+    Claiming at spawn makes the prop owned the moment it exists, which also
+    plugs the same window on the kinetic-shove path and stops an enemy from
+    touch-claiming your build before you do.
+]]
+local function ClaimSpawnedEnt(ply, _model, ent)
+    if not IsValid(ent) or not ent.CPPIGetOwner or not ent.CPPISetOwner then return end
+    if IsValid(ent:CPPIGetOwner()) then return end
+    ent:CPPISetOwner(ply)
+end
+
+hook.Add("PlayerSpawnedProp",   "TPG_PropClaim",   ClaimSpawnedEnt)
+hook.Add("PlayerSpawnedEffect", "TPG_EffectClaim", ClaimSpawnedEnt)
+
 -- Weapons come from the loadout menu, never from the spawn menu. Both routes
 -- are blocked: PlayerGiveSWEP is "give me one", PlayerSpawnSWEP is "drop one on
 -- the ground for anyone to pick up" -- only the first was covered before.
