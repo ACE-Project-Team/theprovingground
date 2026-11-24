@@ -82,7 +82,7 @@
     Convars: `tpg_bots_fill`, `tpg_bots_test` (command), `tpg_bots_difficulty`,
     `tpg_bots_at_ratio`, `tpg_bots_respawn_delay`, `tpg_bots_drops`,
     `tpg_bots_corpses`, `tpg_bots_friendly_fire`, `tpg_bots_green`,
-    `tpg_bots_red` (this file),
+    `tpg_bots_red`, `tpg_bots_spawn_batch`, `tpg_bots_spawn_tries` (this file),
     `tpg_bots_armor_points` (sv_threat.lua),
     `tpg_bots_reward_scale` (sv_economy.lua), `tpg_bots_cai_wallbang`
     (sv_cai.lua, Combat AI only), `tpg_bots_seat_grace` (sv_vehicles.lua).
@@ -160,6 +160,10 @@ local cvGreen = CreateConVar("tpg_bots_green", "-1", { FCVAR_ARCHIVE },
     "Exact NPC count on the green team (-1 = defer to fill/test mode, 0+ = force count).")
 local cvRed = CreateConVar("tpg_bots_red", "-1", { FCVAR_ARCHIVE },
     "Exact NPC count on the red team (-1 = defer to fill/test mode, 0+ = force count).")
+local cvSpawnBatch = CreateConVar("tpg_bots_spawn_batch", "3", { FCVAR_ARCHIVE },
+    "Bots spawned per brain tick while filling teams (lower = softer spike on the initial wave).")
+local cvSpawnTries = CreateConVar("tpg_bots_spawn_tries", "8", { FCVAR_ARCHIVE },
+    "Spot candidates tested per NPC spawn attempt before it waits for the next tick.")
 
 local nextSpawn     = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
 local nextRelations = 0
@@ -170,6 +174,91 @@ local function randomOffset(radius)
     local angle = math.Rand(0, math.pi * 2)
     local dist  = math.Rand(0, radius)
     return Vector(math.cos(angle) * dist, math.sin(angle) * dist, 0)
+end
+
+-- ── Spawn spots ─────────────────────────────────────────────────────────────
+-- A bot hull, traced at candidate spots to reject positions inside world
+-- geometry or props.
+local HULL_MIN = Vector(-16, -16, 0)
+local HULL_MAX = Vector(16, 16, 72)
+
+-- Validated spots per team, probed incrementally by the brain's warmup and
+-- rebuilt once a round. A prop pasted mid-round can still land a bot inside
+-- one, but that is rare enough not to revalidate every spawn.
+local spawnSpots = { [TEAM_GREEN] = {}, [TEAM_RED] = {} }
+local spotDraw   = { [TEAM_GREEN] = {}, [TEAM_RED] = {} }
+local spotCursor = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
+
+local SPOT_TARGET = MAX_PER_TEAM * 2
+local SPOT_PROBES = 5 -- candidates tested per team per brain tick while warming
+
+local function clearSpots()
+    spawnSpots = { [TEAM_GREEN] = {}, [TEAM_RED] = {} }
+    spotDraw   = { [TEAM_GREEN] = {}, [TEAM_RED] = {} }
+    spotCursor = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
+end
+
+-- A candidate spot on the ground near `base`, or nil when there is no ground
+-- below it or the NPC hull would start inside something.
+local function candidateAt(base)
+    local xy = base + randomOffset(SPAWN_SPREAD)
+    local tr = util.TraceLine({
+        start  = xy + Vector(0, 0, 64),
+        endpos = xy + Vector(0, 0, -256),
+        mask   = MASK_SOLID_BRUSHONLY,
+    })
+    if not tr.Hit then return nil end
+
+    local pos = tr.HitPos + Vector(0, 0, 8)
+    local hull = util.TraceHull({
+        start  = pos,
+        endpos = pos,
+        mins   = HULL_MIN,
+        maxs   = HULL_MAX,
+        mask   = MASK_PLAYERSOLID,
+    })
+    if hull.Hit then return nil end
+    return pos
+end
+
+-- Probe a few candidates each tick until the team's cache holds SPOT_TARGET
+-- validated spots. Runs once a round: cleared when the round ends.
+local function warmSpots(teamId)
+    if #spawnSpots[teamId] >= SPOT_TARGET then return end
+    local base = TPG.State.GetSpawn(teamId)
+    if not base then return end
+
+    for _ = 1, SPOT_PROBES do
+        if #spawnSpots[teamId] >= SPOT_TARGET then return end
+        local pos = candidateAt(base)
+        if pos then spawnSpots[teamId][#spawnSpots[teamId] + 1] = pos end
+    end
+end
+
+-- Where the next bot stands: a validated cache entry when the cache has one,
+-- else a live candidate. Cache draws are a shuffled round-robin so the first
+-- wave spreads out instead of stacking on one spot.
+local function pickSpot(teamId, base)
+    local spots = spawnSpots[teamId]
+    if #spots > 0 then
+        local draw = spotDraw[teamId]
+        if spotCursor[teamId] >= #draw then
+            for i = 1, #spots do draw[i] = i end
+            for i = #draw, 2, -1 do
+                local j = math.random(i)
+                draw[i], draw[j] = draw[j], draw[i]
+            end
+            spotCursor[teamId] = 0
+        end
+        spotCursor[teamId] = spotCursor[teamId] + 1
+        return spots[draw[spotCursor[teamId]]]
+    end
+
+    for _ = 1, cvSpawnTries:GetInt() do
+        local pos = candidateAt(base)
+        if pos then return pos end
+    end
+    return nil
 end
 
 local function caiPresent()
@@ -877,6 +966,29 @@ local function removeOne(teamId)
     pick:Remove()
 end
 
+-- One spawning sweep: prune surplus, then create up to `budget` new bots
+-- across both teams, each behind that team's spawn gap. The shared entry
+-- point for the brain tick and the explicit top-up, so the initial fill
+-- (0 -> 16) spreads over ticks instead of spiking one frame.
+local function spawnPass(now, budget)
+    local made = 0
+    for _, teamId in ipairs(TEAMS) do
+        if made >= budget then break end
+        local target = targetFor(teamId)
+        local alive  = countAlive(teamId)
+
+        if (cvFill:GetInt() > 0 or teamConvar(teamId) >= 0) and alive > target then
+            removeOne(teamId)
+        elseif alive < target and now >= nextSpawn[teamId] and canSpawn() then
+            nextSpawn[teamId] = now + SPAWN_GAP
+            if TPG.Bots.SpawnOne(teamId) then
+                made = made + 1
+            end
+        end
+    end
+    return made
+end
+
 brain = function()
     if not anySource() then
         stopBrain()
@@ -891,6 +1003,7 @@ brain = function()
     -- clears them. perTeam is kept, and the top-up refills at the next round.
     if not TPG.State.round.active then
         if #TPG.Bots.list > 0 then TPG.Bots.RemoveAll() end
+        clearSpots()
         return
     end
 
@@ -901,6 +1014,7 @@ brain = function()
     end
 
     for _, teamId in ipairs(TEAMS) do
+        warmSpots(teamId)
         planTeam(teamId, aliveBots(teamId), now)
     end
 
@@ -944,30 +1058,16 @@ brain = function()
         end
     end
 
-    for _, teamId in ipairs(TEAMS) do
-        local target = targetFor(teamId)
-        local alive  = countAlive(teamId)
-
-        if (cvFill:GetInt() > 0 or teamConvar(teamId) >= 0) and alive > target then
-            removeOne(teamId)
-        elseif alive < target and now >= nextSpawn[teamId] and canSpawn() then
-            nextSpawn[teamId] = now + SPAWN_GAP
-            TPG.Bots.SpawnOne(teamId)
-        end
-    end
+    spawnPass(now, math.max(cvSpawnBatch:GetInt(), 1))
 end
 
--- Spawn bots up to each team's target right now, without waiting for the brain.
+-- Kick the fill right now rather than waiting for the next brain tick. Same
+-- per-tick batch budget as the brain, so an explicit top-up does not spike
+-- either; the brain finishes the wave over the next ticks.
 local function topUp()
     if not TPG.State.round.active then return end
     if not canSpawn() then return end
-
-    for _, teamId in ipairs(TEAMS) do
-        local missing = targetFor(teamId) - countAlive(teamId)
-        for _ = 1, missing do
-            TPG.Bots.SpawnOne(teamId)
-        end
-    end
+    spawnPass(CurTime(), math.max(cvSpawnBatch:GetInt(), 1))
 end
 
 --- Spawn one infantry NPC for a team at its spawn point.
@@ -980,14 +1080,10 @@ function TPG.Bots.SpawnOne(teamId)
     local base = TPG.State.GetSpawn(teamId)
     if not base then return nil end
 
-    -- Scatter the spawn a little, then drop it onto the ground beneath.
-    local xy  = base + randomOffset(SPAWN_SPREAD)
-    local tr  = util.TraceLine({
-        start  = xy + Vector(0, 0, 64),
-        endpos = xy + Vector(0, 0, -256),
-        mask   = MASK_SOLID_BRUSHONLY,
-    })
-    local pos = (tr.Hit and tr.HitPos or xy) + Vector(0, 0, 8)
+    -- Validated spot only: cache draw first, live candidates as fallback.
+    -- A nil return just means "try again next tick".
+    local pos = pickSpot(teamId, base)
+    if not pos then return nil end
 
     local className = (teamId == TEAM_GREEN) and "npc_citizen" or "npc_combine_s"
     local npc = ents.Create(className)
@@ -1131,6 +1227,7 @@ end)
 hook.Add("PostCleanupMap", "TPG_Bots", function()
     TPG.Bots.list = {}
     nextSpawn = { [TEAM_GREEN] = 0, [TEAM_RED] = 0 }
+    clearSpots()
 
     timer.Simple(0.5, function()
         if anySource() then topUp() end
